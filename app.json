@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Expert Mobile",
+    "slug": "expert-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#F7F4EE"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.expertadvsa.mobile"
+    },
+    "android": {
+      "package": "com.expertadvsa.mobile"
+    }
+  }
+}
