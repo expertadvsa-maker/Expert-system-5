@@ -328,7 +328,7 @@ export default function ClientPortal() {
             { id: 'overview', label: 'ملخص المشروع', icon: Activity },
             { id: 'financial', label: 'المركز المالي', icon: Wallet },
             { id: 'media', label: 'المعرض والتحديثات', icon: ImageIcon },
-            { id: 'support', label: 'الدعم والصيانة', icon: Wrench },
+            ...(project?.status === 'completed' ? [{ id: 'support', label: 'الدعم والصيانة', icon: Wrench }] : []),
             { id: 'chat', label: 'التواصل المباشر', icon: MessageSquare },
           ].map(tab => (
             <button
@@ -441,30 +441,70 @@ export default function ClientPortal() {
                     <Clock className="w-6 h-6 text-indigo-500" /> الجدول الزمني للمراحل
                   </h2>
                   <div className="relative border-r-2 border-slate-100 pr-6 space-y-8">
-                     {project.milestones?.map((m: ProjectMilestone, i: number) => (
-                        <div key={i} className="relative">
-                           <div className={`absolute -right-[35px] top-1 w-6 h-6 rounded-full flex items-center justify-center ring-4 ring-white ${
-                             m.status === 'completed' ? 'bg-emerald-500 text-white' : 
-                             m.status === 'in-progress' ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-400'
-                           }`}>
-                              {m.status === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : <span className="text-[10px] font-black">{i + 1}</span>}
-                           </div>
-                           <div className={`p-5 rounded-3xl border ${
-                             m.status === 'in-progress' ? 'bg-blue-50/50 border-blue-100 shadow-sm' : 
-                             'bg-slate-50 border-slate-100'
-                           }`}>
-                             <div className="flex items-center justify-between gap-4">
-                               <h3 className={`font-black text-base ${m.status === 'completed' ? 'text-slate-800' : m.status === 'in-progress' ? 'text-blue-900' : 'text-slate-500'}`}>{m.title}</h3>
-                               <span className={`px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap ${
-                                 m.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 
-                                 m.status === 'in-progress' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'
-                               }`}>
-                                 {m.status === 'completed' ? 'مكتمل' : m.status === 'in-progress' ? 'جاري العمل' : 'معلق'}
-                               </span>
+                     {project.milestones?.map((m: ProjectMilestone, i: number) => {
+                        const isCompleted = m.status === 'completed';
+                        const isInProgress = m.status === 'in-progress';
+                        const isPending = m.status === 'pending';
+                        
+                        return (
+                          <motion.div 
+                            key={i} 
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            className="relative"
+                          >
+                             {/* Connector Line (unless last item) */}
+                             {i !== project.milestones.length - 1 && (
+                               <div className={`absolute -right-[23px] top-8 w-[2px] h-[calc(100%+1rem)] ${isCompleted ? 'bg-emerald-500' : 'bg-slate-200'} transition-colors duration-500`} />
+                             )}
+                             
+                             {/* Icon / Dot */}
+                             <div className={`absolute -right-[35px] top-3 w-6 h-6 rounded-full flex items-center justify-center ring-4 ring-white z-10 transition-all duration-500 ${
+                               isCompleted ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200' : 
+                               isInProgress ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-200 animate-pulse' : 
+                               'bg-slate-200 text-slate-400'
+                             }`}>
+                                {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : isInProgress ? <Activity className="w-3 h-3" /> : <span className="text-[10px] font-black">{i + 1}</span>}
                              </div>
-                           </div>
-                        </div>
-                     ))}
+                             
+                             {/* Card */}
+                             <div className={`p-5 rounded-2xl border transition-all duration-300 ${
+                               isInProgress ? 'bg-indigo-50/50 border-indigo-200 shadow-md transform scale-[1.02]' : 
+                               isCompleted ? 'bg-white border-emerald-100 shadow-sm' :
+                               'bg-slate-50 border-slate-100 opacity-70'
+                             }`}>
+                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                 <div>
+                                   <h3 className={`font-black text-base ${isCompleted ? 'text-slate-800' : isInProgress ? 'text-indigo-900' : 'text-slate-500'}`}>
+                                     {m.title}
+                                   </h3>
+                                   {(m.dueDate || m.date) && (
+                                     <div className="flex items-center gap-4 mt-2">
+                                       {m.dueDate && (
+                                         <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                           <Clock className="w-3 h-3" /> مخطط: {new Date(m.dueDate).toLocaleDateString('ar-SA')}
+                                         </span>
+                                       )}
+                                       {m.date && isCompleted && (
+                                         <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                                           <CheckCircle2 className="w-3 h-3" /> التنفيذ: {new Date(m.date).toLocaleDateString('ar-SA')}
+                                         </span>
+                                       )}
+                                     </div>
+                                   )}
+                                 </div>
+                                 <span className={`px-3 py-1 rounded-full text-[10px] font-black whitespace-nowrap self-start sm:self-center ${
+                                   isCompleted ? 'bg-emerald-100 text-emerald-700' : 
+                                   isInProgress ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-100' : 'bg-slate-200 text-slate-500'
+                                 }`}>
+                                   {isCompleted ? 'مكتمل' : isInProgress ? 'جاري العمل الآن' : 'معلق'}
+                                 </span>
+                               </div>
+                             </div>
+                          </motion.div>
+                        );
+                     })}
                      {(!project.milestones || project.milestones.length === 0) && (
                        <p className="text-sm font-bold text-slate-400 py-4">لم يتم تحديد مراحل للمشروع حتى الآن.</p>
                      )}
@@ -697,22 +737,25 @@ export default function ClientPortal() {
                   </div>
 
                   {/* Chat Messages */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6" ref={chatScrollRef}>
+                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#efeae2]" ref={chatScrollRef} style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cubes.png")', backgroundSize: '100px' }}>
                     {clientChats.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                        <MessageSquare className="w-12 h-12 mb-3 text-slate-200" />
-                        <p className="font-bold text-sm">لا توجد رسائل حتى الآن.</p>
-                        <p className="text-xs mt-1">يمكنك بدء المحادثة بكتابة رسالتك بالأسفل.</p>
+                      <div className="h-full flex flex-col items-center justify-center text-slate-500 bg-white/50 rounded-3xl mx-4 backdrop-blur-sm p-8 text-center border border-white/60 shadow-sm">
+                        <MessageSquare className="w-12 h-12 mb-3 text-indigo-300" />
+                        <p className="font-black text-sm text-slate-700">مرحباً بك في المحادثة المباشرة 👋</p>
+                        <p className="text-xs mt-2 font-bold leading-relaxed">نحن هنا للإجابة على جميع استفساراتك حول المشروع.<br/>اكتب رسالتك بالأسفل وسنرد عليك في أقرب وقت.</p>
                       </div>
                     ) : (
                       clientChats.map((msg, i) => {
                         const isClient = msg.senderRole === 'client';
                         return (
-                          <div key={msg.id || i} className={`flex ${isClient ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] rounded-2xl p-4 ${isClient ? 'bg-indigo-600 text-white rounded-tl-none' : 'bg-slate-100 text-slate-800 rounded-tr-none'}`}>
-                               <p className="text-sm font-bold leading-relaxed">{msg.content}</p>
-                               <div className={`text-[9px] mt-2 font-bold ${isClient ? 'text-indigo-200' : 'text-slate-400'}`}>
-                                 {new Date(msg.createdAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                          <div key={msg.id || i} className={`flex ${isClient ? 'justify-start' : 'justify-end'}`}>
+                            <div className={`relative max-w-[85%] rounded-2xl p-3 shadow-sm ${isClient ? 'bg-white text-slate-800 rounded-tr-sm' : 'bg-[#e1fed3] text-slate-800 rounded-tl-sm'}`}>
+                               {/* Tail */}
+                               <div className={`absolute top-0 w-3 h-3 ${isClient ? '-right-2 bg-white' : '-left-2 bg-[#e1fed3]'} mask-chat-tail`} style={{ clipPath: isClient ? 'polygon(0 0, 0% 100%, 100% 0)' : 'polygon(0 0, 100% 100%, 100% 0)' }} />
+                               <p className="text-sm font-bold leading-relaxed relative z-10">{msg.content}</p>
+                               <div className="flex items-center gap-1 text-[9px] mt-1 font-bold justify-end text-slate-400">
+                                 <span>{new Date(msg.createdAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</span>
+                                 {!isClient && <CheckCircle2 className="w-3 h-3 text-blue-500" />}
                                </div>
                             </div>
                           </div>
@@ -722,17 +765,17 @@ export default function ClientPortal() {
                   </div>
 
                   {/* Chat Input */}
-                  <div className="p-4 bg-white border-t border-slate-100">
+                  <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200">
                      <form onSubmit={(e) => { e.preventDefault(); handleSendChat(); }} className="relative flex items-center gap-2">
                        <input 
                          type="text"
                          value={chatInput}
                          onChange={e => setChatInput(e.target.value)}
                          placeholder="اكتب رسالتك هنا..."
-                         className="flex-1 bg-slate-50 border-none rounded-xl h-14 px-4 font-bold text-sm focus:ring-2 focus:ring-indigo-500 pr-12"
+                         className="flex-1 bg-white border border-slate-200 shadow-sm rounded-full h-12 px-6 font-bold text-sm focus:ring-2 focus:ring-emerald-500 outline-none pr-6 pl-14"
                          disabled={isSendingChat}
                        />
-                       <Button type="submit" disabled={isSendingChat || !chatInput.trim()} className="absolute right-2 w-10 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center p-0">
+                       <Button type="submit" disabled={isSendingChat || !chatInput.trim()} className="absolute left-1.5 w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center p-0 shadow-md transition-all">
                          {isSendingChat ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 -ml-1" />}
                        </Button>
                      </form>
