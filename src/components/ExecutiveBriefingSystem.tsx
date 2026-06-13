@@ -677,7 +677,9 @@ export default function ExecutiveBriefingSystem({ goToTab }: { goToTab?: (tab: s
       utterance.rate = speechRate;
       
       const voices = window.speechSynthesis.getVoices();
-      let matchedVoice = voices.find(v => v.lang.toLowerCase().startsWith('ar') && (v.name.includes('Premium') || v.name.includes('Natural') || v.name.includes('Online')));
+      let matchedVoice = voices.find(v => v.lang.toLowerCase() === 'ar-sa' && (v.name.includes('Premium') || v.name.includes('Natural') || v.name.includes('Online')));
+      if (!matchedVoice) matchedVoice = voices.find(v => v.lang.toLowerCase() === 'ar-sa');
+      if (!matchedVoice) matchedVoice = voices.find(v => v.lang.toLowerCase().startsWith('ar') && (v.name.includes('Premium') || v.name.includes('Natural') || v.name.includes('Online')));
       if (!matchedVoice) matchedVoice = voices.find(v => v.lang.toLowerCase().startsWith('ar'));
       if (matchedVoice) {
          utterance.voice = matchedVoice;
@@ -766,7 +768,8 @@ export default function ExecutiveBriefingSystem({ goToTab }: { goToTab?: (tab: s
            utterance.lang = 'ar-SA';
            utterance.rate = speed;
            const voices = window.speechSynthesis.getVoices();
-           const matchedVoice = voices.find(v => v.lang.toLowerCase().startsWith('ar'));
+           let matchedVoice = voices.find(v => v.lang.toLowerCase() === 'ar-sa');
+           if (!matchedVoice) matchedVoice = voices.find(v => v.lang.toLowerCase().startsWith('ar'));
            if (matchedVoice) utterance.voice = matchedVoice;
            utterance.onend = () => { const next = idx + 1; setSpeechIndex(next); resumeChunk(next); };
            window.speechSynthesis.speak(utterance);
