@@ -83,6 +83,7 @@ export interface Project {
   endDate?: string;
   deliveryDate?: string;
   budget?: number;
+  projectValue?: number;
   depositAmount?: number;
   depositStatus?: 'pending' | 'paid';
   photoUrls?: string[];

@@ -100,6 +100,7 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
     title: '',
     description: '',
     budget: 0,
+    projectValue: 0,
     clientName: '',
     clientPhone: '',
     clientEmail: '',
@@ -170,6 +171,7 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
           title: extracted.title || prev.title,
           description: extracted.description || prev.description,
           budget: extracted.budget || prev.budget,
+          projectValue: extracted.projectValue || prev.projectValue,
           clientName: extracted.clientName || prev.clientName,
           clientPhone: extracted.clientPhone || prev.clientPhone,
           clientEmail: extracted.clientEmail || prev.clientEmail,
@@ -254,6 +256,7 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
               title: result.title || prev.title,
               description: result.description || prev.description,
               budget: result.budget || prev.budget,
+              projectValue: result.projectValue || prev.projectValue,
               clientName: result.clientName || prev.clientName,
               clientPhone: result.clientPhone || prev.clientPhone,
               clientEmail: result.clientEmail || prev.clientEmail,
@@ -397,6 +400,7 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
         title: '', 
         description: '', 
         budget: 0, 
+        projectValue: 0,
         clientName: '', 
         clientPhone: '', 
         clientEmail: '',
@@ -468,7 +472,7 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
   const stats = useMemo(() => {
     const active = projects.filter(p => p.status === 'active').length;
     const completed = projects.filter(p => p.status === 'completed').length;
-    const totalBudget = projects.reduce((acc, curr) => acc + (curr.budget || 0), 0);
+    const totalBudget = projects.reduce((acc, curr) => acc + (curr.projectValue ?? curr.budget ?? 0), 0);
     return { active, completed, totalBudget };
   }, [projects]);
 
@@ -1040,7 +1044,27 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label className="font-black text-slate-500 text-[11px] uppercase tracking-wider pr-1">إجمالي قيمة العقد (ر.س) *</Label>
+                          <Label className="font-black text-slate-500 text-[11px] uppercase tracking-wider pr-1">قيمة المشروع للعميل (ر.س) *</Label>
+                          <div className="relative">
+                            <Input 
+                              type="text"
+                              inputMode="numeric"
+                              value={newProject.projectValue}
+                              onChange={e => {
+                                 const val = e.target.value.replace(/[^0-9]/g, '');
+                                 setNewProject({...newProject, projectValue: Number(val)});
+                              }}
+                              className={`h-14 rounded-xl bg-slate-50 border-transparent transition-all font-black text-xl text-emerald-600 shadow-inner pr-12 ${
+                                highlightedFields.projectValue ? 'ring-2 ring-emerald-500/50 bg-emerald-50/50 border-emerald-500/20' : 'focus:border-emerald-500/20 focus:bg-white'
+                              }`}
+                            />
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 font-black text-xs">SAR</div>
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-400 pr-1">القيمة المالية الكلية المدونة في العقد الأصلي ليراها العميل.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="font-black text-slate-500 text-[11px] uppercase tracking-wider pr-1">الميزانية الداخلية المخصصة (ر.س) *</Label>
                           <div className="relative">
                             <Input 
                               type="text"
@@ -1050,13 +1074,13 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
                                  const val = e.target.value.replace(/[^0-9]/g, '');
                                  setNewProject({...newProject, budget: Number(val)});
                               }}
-                              className={`h-14 rounded-xl bg-slate-50 border-transparent transition-all font-black text-xl text-emerald-600 shadow-inner pr-12 ${
-                                highlightedFields.budget ? 'ring-2 ring-emerald-500/50 bg-emerald-50/50 border-emerald-500/20' : 'focus:border-emerald-500/20 focus:bg-white'
+                              className={`h-14 rounded-xl bg-slate-50 border-transparent transition-all font-black text-xl text-amber-600 shadow-inner pr-12 ${
+                                highlightedFields.budget ? 'ring-2 ring-amber-500/50 bg-amber-50/50 border-amber-500/20' : 'focus:border-amber-500/20 focus:bg-white'
                               }`}
                             />
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 font-black text-xs">SAR</div>
                           </div>
-                          <p className="text-[10px] font-bold text-slate-400 pr-1">القيمة المالية الكلية المدونة في العقد الأصلي.</p>
+                          <p className="text-[10px] font-bold text-slate-400 pr-1">الميزانية الداخلية المخصصة لتنفيذ المشروع (لا تظهر للعميل).</p>
                         </div>
                         
                         <div className="space-y-2">
@@ -1642,9 +1666,9 @@ const ProjectGridCard = React.memo(({ project, onSelect }: { project: Project, o
 
           <div className="pt-5 border-t border-slate-50 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">الميزانية التقديرية</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">قيمة المشروع</p>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-xl font-black text-slate-900 tracking-tight">{project.budget?.toLocaleString()}</span>
+                <span className="text-xl font-black text-slate-900 tracking-tight">{(project.projectValue ?? project.budget ?? 0).toLocaleString()}</span>
                 <span className="text-[9px] font-bold text-slate-400 uppercase">SAR</span>
               </div>
             </div>
@@ -1697,9 +1721,9 @@ const ProjectListCard = React.memo(({ project, onSelect }: { project: Project, o
 
            {/* Budget */}
            <div className="lg:w-[15%] text-center">
-              <p className="text-[9px] font-black text-slate-300 lg:hidden uppercase mb-1">الميزانية</p>
+              <p className="text-[9px] font-black text-slate-300 lg:hidden uppercase mb-1">قيمة المشروع</p>
               <div className="flex items-baseline justify-center gap-1">
-                 <span className="text-xl font-black text-slate-900">{project.budget?.toLocaleString()}</span>
+                 <span className="text-xl font-black text-slate-900">{(project.projectValue ?? project.budget ?? 0).toLocaleString()}</span>
                  <span className="text-[9px] font-bold text-slate-400">SAR</span>
               </div>
            </div>

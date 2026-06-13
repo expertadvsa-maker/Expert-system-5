@@ -302,7 +302,7 @@ export default function ClientPortal() {
 
   if (!project) return null;
 
-  const totalInvoices = project?.budget || 0;
+  const totalInvoices = project?.projectValue ?? project?.budget ?? 0;
   const totalPaid = project?.payments?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0;
   const balance = totalInvoices - totalPaid;
 

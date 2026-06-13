@@ -604,9 +604,9 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
     const paidIncomes = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
     // To prevent double-counting installments that are also recorded as transactions in paidIncomes:
     const paid = (project.depositAmount || 0) + paidIncomes;
-    const balance = (project.budget || 0) - paid;
+    const balance = (project.projectValue ?? project.budget ?? 0) - paid;
     const expenses = transactions.filter(t => t.type === 'expense' || t.type === 'purchase').reduce((acc, curr) => acc + curr.amount, 0);
-    const netProfit = (project.budget || 0) - expenses;
+    const netProfit = (project.projectValue ?? project.budget ?? 0) - expenses;
     return { paid, balance, expenses, netProfit };
   }, [project, transactions]);
 
@@ -1468,11 +1468,20 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                         <div className="absolute -top-12 -right-12 w-64 h-64 bg-primary/30 blur-[100px] rounded-full" />
                         <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-accent/20 blur-[100px] rounded-full" />
                         <div className="relative z-10 space-y-8">
-                           <div>
-                              <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">ميزانية المشروع المعتمدة</p>
-                              <div className="flex items-baseline gap-2">
-                                 <span className="text-5xl font-black tracking-tighter">{project.budget?.toLocaleString()}</span>
-                                 <span className="text-sm font-bold text-slate-500">SAR</span>
+                           <div className="flex flex-wrap items-center justify-between gap-8">
+                              <div>
+                                 <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">قيمة عقد المشروع (للعميل)</p>
+                                 <div className="flex items-baseline gap-2">
+                                    <span className="text-5xl font-black tracking-tighter">{(project.projectValue ?? project.budget ?? 0).toLocaleString()}</span>
+                                    <span className="text-sm font-bold text-slate-500">SAR</span>
+                                 </div>
+                              </div>
+                              <div className="text-left border-r border-slate-800 pr-8">
+                                 <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">الميزانية الداخلية (للتنفيذ)</p>
+                                 <div className="flex items-baseline gap-2">
+                                    <span className="text-3xl font-black tracking-tighter text-amber-400">{(project.budget ?? 0).toLocaleString()}</span>
+                                    <span className="text-xs font-bold text-slate-500">SAR</span>
+                                 </div>
                               </div>
                            </div>
                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
