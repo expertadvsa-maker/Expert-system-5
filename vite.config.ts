@@ -16,6 +16,9 @@ export default defineConfig(({mode}) => {
       host: '0.0.0.0',
       port: 5173,
       hmr: process.env.DISABLE_HMR !== 'true',
+      watch: {
+        ignored: ['**/baileys_auth_info/**', '**/uploads/**']
+      },
       proxy: {
         '/api_public': {
           target: 'https://aliphia.com/v1',
@@ -33,6 +36,11 @@ export default defineConfig(({mode}) => {
               }
             });
           }
+        },
+        '/api/whatsapp': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+          secure: false
         }
       }
     },

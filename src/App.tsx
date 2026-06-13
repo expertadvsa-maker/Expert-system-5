@@ -62,7 +62,8 @@ import {
   Database,
   Paintbrush,
   LayoutGrid,
-  ExternalLink
+  ExternalLink,
+  Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -104,6 +105,7 @@ import Expenses from "./components/Expenses";
 import Archive from "./components/Archive";
 import AssetsManagement from "./components/AssetsManagement";
 import Gallery from "./components/Gallery";
+import ReportsGallery from "./components/ReportsGallery";
 import BankingAndVault from "./components/BankingAndVault";
 
 import Subcontractors from "./components/Subcontractors";
@@ -112,6 +114,7 @@ import SalesRepDashboard from "./components/SalesRepDashboard";
 import PrivateJobsWorkspace from "./components/PrivateJobsWorkspace";
 import SalesRepsManagement from "./components/SalesRepsManagement";
 import SalesRepProfile from "./components/SalesRepProfile";
+import { GlobalSearch } from "./components/GlobalSearch";
 
 const scrollbarStyles = `
   .no-scrollbar::-webkit-scrollbar {
@@ -208,6 +211,7 @@ function AppContent() {
   const [isOffline, setIsOffline] = useState(false);
   const [settingsSubTab, setSettingsSubTab] = useState<string>("");
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -468,6 +472,10 @@ function AppContent() {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsGlobalSearchOpen(true);
+      }
       if (e.altKey && (e.key === "h" || e.key === "H" || e.key === "ا")) {
         e.preventDefault();
         setActiveTab(profile?.role === "sales_rep" ? "rep_dashboard" : "dashboard");
@@ -521,7 +529,7 @@ function AppContent() {
     // Initial splash screen timeout
     const timer = setTimeout(() => {
       setIsInitialLoading(false);
-    }, 2000);
+    }, 500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -651,7 +659,8 @@ function AppContent() {
           subItems: [
             { id: "analytics", label: "التحليلات", roles: ["manager"] },
             { id: "archive", label: "الأرشيف", roles: ["manager"] },
-            { id: "gallery", label: "المعرض", roles: ["manager", "supervisor", "employee"] },
+            { id: "gallery", label: "الوسائط", roles: ["manager", "supervisor", "employee"] },
+            { id: "reports_gallery", label: "التقارير المحفوظة", roles: ["manager"] },
           ]
         }
       ]
@@ -1226,81 +1235,102 @@ function AppContent() {
   if (!user) {
     return (
       <div
-        className="min-h-screen bg-slate-50 flex items-center justify-center relative overflow-hidden text-right select-none p-4"
+        className="min-h-screen flex items-center justify-center relative overflow-hidden text-right select-none p-4 bg-slate-900"
         dir="rtl"
         style={{ fontFamily: "'Cairo', sans-serif" }}
       >
+        {/* Animated Dynamic Background Elements */}
+        <div className="absolute inset-0 w-full h-full overflow-hidden">
+          <div className="absolute -top-32 -left-32 w-96 h-96 bg-emerald-500 rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-pulse" style={{ animationDuration: '8s' }} />
+          <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-blue-600 rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-pulse" style={{ animationDuration: '10s', animationDelay: '2s' }} />
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full max-w-4xl max-h-4xl bg-teal-500/10 rounded-full mix-blend-screen filter blur-[120px] opacity-30" />
+          {/* subtle dot grid pattern */}
+          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
+        </div>
+
         {/* Unified Center Login Form */}
-        <div className="relative z-10 w-full max-w-md">
+        <div className="relative z-10 w-full max-w-[420px]">
           <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="w-full bg-white rounded-[2rem] border border-slate-200/80 p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.03)]"
+            initial={{ opacity: 0, scale: 0.95, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.6, type: "spring", bounce: 0.4 }}
+            className="w-full bg-slate-900/40 backdrop-blur-2xl rounded-[2.5rem] border border-white/10 p-10 md:p-12 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] relative overflow-hidden group"
           >
+            {/* Top highlight line */}
+            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent"></div>
+            
             {/* Logo */}
-            <div className="flex flex-col items-center mb-10 text-center">
-              <div className="mb-6 relative">
-                <div className="absolute inset-0 bg-teal-500/10 blur-xl rounded-full scale-110 animate-pulse" />
-                <img
-                  src={sysSettings.logoUrl}
-                  alt="Logo"
-                  className="w-20 h-20 object-contain rounded-2xl relative z-10 shadow-md border border-slate-200 bg-white p-1.5"
-                />
-              </div>
+            <div className="flex flex-col items-center mb-10 text-center relative z-10">
+              <motion.div 
+                whileHover={{ scale: 1.05, rotate: 5 }}
+                className="mb-6 relative"
+              >
+                <div className="absolute inset-0 bg-gradient-to-tr from-emerald-400 to-blue-500 blur-xl rounded-full scale-110 opacity-40 group-hover:opacity-70 transition-opacity duration-500" />
+                <div className="relative z-10 bg-slate-800/80 p-4 rounded-3xl shadow-xl border border-white/10 backdrop-blur-md">
+                  <img
+                    src={sysSettings.logoUrl}
+                    alt="Logo"
+                    className="w-16 h-16 object-contain rounded-xl"
+                  />
+                </div>
+              </motion.div>
               
-              <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
-                تسجيل الدخول للمنصة
+              <h1 className="text-3xl font-black text-white tracking-tight mb-3">
+                مرحباً بك مجدداً
               </h1>
-              <p className="text-slate-500 font-semibold text-xs mt-3 leading-relaxed max-w-xs px-2">
-                سجل الدخول باستخدام حساب الشركة للبدء.
+              <p className="text-slate-400 font-medium text-sm leading-relaxed max-w-[260px] mx-auto">
+                سجل الدخول للمنصة للوصول إلى مساحة العمل الخاصة بك
               </p>
 
               {window !== window.top && (
-                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-xs w-full">
-                  <p className="font-bold mb-2">إشعار هام: أنت تعرض التطبيق داخل المحرر.</p>
-                  <p className="mb-3">لتسجيل الدخول بأمان وبدون أخطاء، يرجى فتح التطبيق في نافذة مستقلة عبر الزر أدناه:</p>
-                  <a href={window.location.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition">
-                    <ExternalLink className="w-4 h-4" />
-                    فتح في نافذة جديدة
-                  </a>
+                <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-blue-100 text-xs w-full backdrop-blur-md text-right">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-blue-500/20 rounded-lg shrink-0">
+                      <ExternalLink className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="font-bold mb-1 text-sm text-blue-300">عرض داخل المحرر</p>
+                      <p className="mb-3 text-blue-200/80">يرجى فتح التطبيق في نافذة مستقلة لتسجيل الدخول بأمان.</p>
+                      <a href={window.location.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-all w-full justify-center shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                        فتح في نافذة مستقلة
+                      </a>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-6 relative z-10">
               <Button
                 onClick={handleLogin}
-                className="w-full h-13 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-black flex items-center justify-center gap-3 transition-all hover:shadow-[0_10px_25px_rgba(0,0,0,0.02)] active:scale-98 group border border-slate-200 shadow-sm cursor-pointer"
+                className="w-full h-14 bg-white/5 hover:bg-white/10 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-4 transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95 border border-white/10 cursor-pointer overflow-hidden relative group/btn"
               >
-                <div className="p-1 rounded-lg transition-transform group-hover:scale-105 duration-200">
-                  <svg className="w-5 h-5 animate-pulse" viewBox="0 0 24 24" fill="none">
+                <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-500"></div>
+                <div className="bg-white/10 p-2 rounded-xl transition-transform group-hover/btn:scale-110 duration-300 backdrop-blur-sm border border-white/5 relative z-10">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22c-.22-.67-.35-1.37-.35-2.09z" fill="#FBBC05"/>
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
                   </svg>
                 </div>
-                <span>الدخول من خلال حساب Google</span>
+                <span className="relative z-10 tracking-wide font-bold">المتابعة باستخدام Google</span>
               </Button>
               
-              <div className="bg-amber-500/[0.04] p-4.5 rounded-xl border border-amber-500/15">
-                <p className="text-[10px] text-center text-amber-800 font-bold leading-relaxed">
-                  الوصول مقيد. هذا النظام مخصص للاستخدام الداخلي عبر حسابات الشركة المصرحة.
-                </p>
+              <div className="bg-slate-900/50 p-4 rounded-2xl border border-white/5">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                    هذا النظام محمي بطبقات تشفير متقدمة. يقتصر الوصول على الموظفين المصرح لهم فقط.
+                  </p>
+                </div>
               </div>
-            </div>
-
-            <div className="mt-10 pt-6 border-t border-slate-100 flex flex-col items-center gap-3 text-slate-400 text-[10px] font-bold">
-              <div className="flex items-center gap-2">
-                 <ShieldCheck className="w-4 h-4 text-emerald-600/80" />
-                 <span className="text-slate-500">نظام مشفر ومؤمن بالكامل</span>
-              </div>
-              <p className="text-center font-bold mt-1 text-slate-400">
-                المملكة العربية السعودية © 2026
-              </p>
             </div>
           </motion.div>
+          
+          <div className="mt-8 text-center text-slate-500/80 text-[10px] font-bold tracking-wider uppercase">
+            المملكة العربية السعودية © 2026
+          </div>
         </div>
       </div>
     );
@@ -1376,7 +1406,7 @@ function AppContent() {
           </div>
         
         <div className="flex items-center gap-2">
-          <div className="relative">
+          <div className="relative z-[150]">
             <Button
               variant="ghost"
               size="icon"
@@ -1468,14 +1498,7 @@ function AppContent() {
                 const showFull = !isSidebarCollapsed;
 
                 return (
-                  <div key={group.id} className="mb-4">
-                    {group.title && showFull && (
-                      <div className={`px-5 mb-1.5 mt-3 text-[10px] font-black uppercase tracking-wider ${
-                        isSidebarLight ? 'text-slate-600/75' : 'text-white/45'
-                      }`}>
-                        {group.title}
-                      </div>
-                    )}
+                  <div key={group.id} className="mb-2">
                     <motion.div
                       animate={{
                         height: "auto",
@@ -1772,8 +1795,21 @@ function AppContent() {
             </div>
           </div>
 
-          {/* يسار = الإعلان + الجرس + البروفايل */}
+          {/* يسار = الإعلان + البحث + الجرس + البروفايل */}
           <div className="flex items-center gap-3">
+
+            {/* زر البحث */}
+            <button
+              onClick={() => setIsGlobalSearchOpen(true)}
+              className="hidden md:flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-400 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors w-48 lg:w-64"
+            >
+              <Search className="w-4 h-4 shrink-0" />
+              <span className="flex-1 text-right">ابحث في النظام...</span>
+              <div className="flex items-center gap-0.5" dir="ltr">
+                <span className="bg-white rounded px-1.5 py-0.5 text-[9px] shadow-sm">Ctrl</span>
+                <span className="bg-white rounded px-1.5 py-0.5 text-[9px] shadow-sm">K</span>
+              </div>
+            </button>
 
             {/* الإعلان */}
             {sysSettings.generalAnnouncement && (
@@ -1798,7 +1834,7 @@ function AppContent() {
             )}
 
             {/* الجرس */}
-            <div className="relative">
+            <div className="relative z-[150]">
               <button
                 className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors"
                 onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
@@ -1877,6 +1913,7 @@ function AppContent() {
                 {activeTab === "expenses" && <Expenses />}
                 {activeTab === "archive" && <Archive />}
                 {activeTab === "gallery" && <Gallery />}
+                {activeTab === "reports_gallery" && <ReportsGallery />}
                 {activeTab === "sales" && <Sales />}
                 {activeTab === "sales_reps" && (
                   <>
@@ -2326,6 +2363,11 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
+      <GlobalSearch 
+        isOpen={isGlobalSearchOpen} 
+        onClose={() => setIsGlobalSearchOpen(false)} 
+        onNavigate={setActiveTab} 
+      />
     </div>
   );
 }

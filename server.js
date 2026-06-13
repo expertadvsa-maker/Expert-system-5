@@ -113,6 +113,16 @@ app.get('/api/whatsapp/status', (req, res) => {
   });
 });
 
+app.post('/api/whatsapp/start', (req, res) => {
+  if (waStatus === 'disconnected' || !waSocket) {
+    waStatus = 'connecting';
+    connectToWhatsApp();
+    res.json({ success: true, message: 'Starting WhatsApp connection' });
+  } else {
+    res.json({ success: false, message: 'Already connected or connecting' });
+  }
+});
+
 app.post('/api/whatsapp/logout', async (req, res) => {
   if (waSocket) {
     try { await waSocket.logout(); } catch(e) {}

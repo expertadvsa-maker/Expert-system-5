@@ -29,11 +29,13 @@ import {
   Paperclip,
   UploadCloud,
   Trash2,
-  UsersRound
+  UsersRound,
+  Lock
 } from 'lucide-react';
 import { parseProjectFromText, analyzeProjectDocument } from '../lib/gemini';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { fetchAliphiaClients } from '../lib/aliphia';
+import { sendWhatsappMessage } from '../lib/whatsapp';
 import AliphiaClientSelector from './AliphiaClientSelector';
 import { 
   collection, 
@@ -228,8 +230,8 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
 
   // Location validation: Google Maps link
   const validateLocationLink = (link: string) => {
-    if (!link) return true;
-    return /^(https?:\/\/)?(www\.)?(google\.\w+\/maps|maps\.google\.\w+|maps\.app\.goo\.gl)/.test(link.trim());
+    if (!link) return false;
+    return /^(https?:\/\/)?(www\.)?(google\.\w+\/maps|maps\.google\.\w+|maps\.app\.goo\.gl|goo\.gl\/maps)/.test(link.trim());
   };
 
   const handleAnalyzeFile = async (fileId: string) => {
@@ -308,8 +310,13 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
       return;
     }
 
-    if (newProject.locationLink && !validateLocationLink(newProject.locationLink)) {
-      toast.error("يرجى تصحيح رابط موقع المشروع (يجب أن يكون رابطاً صالحاً لخرائط جوجل)");
+    if (!newProject.locationLink || !validateLocationLink(newProject.locationLink)) {
+      toast.error("يرجى إدخال وتصحيح رابط موقع المشروع (يجب أن يكون رابطاً صالحاً لخرائط جوجل)");
+      return;
+    }
+    
+    if (!newProject.clientPhone && !newProject.clientEmail) {
+      toast.error("عذراً، لا يمكن إضافة مشروع لعميل لا يمتلك رقم جوال أو بريد إلكتروني مسجل في النظام");
       return;
     }
 
@@ -376,6 +383,12 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
 
       toast.dismiss(toastId);
       toast.success("تم إنشاء المشروع بنجاح مع رفع المرفقات وتهيئة مراحل العمل الافتراضية");
+      
+      if (newProject.clientPhone && newProject.sendClientCreds) {
+        const clientMsg = `✨ *مرحباً بك ${newProject.clientName} في خبراء الرسم!*\n\nيسعدنا إخبارك بأنه تم إنشاء مشروعك الجديد بنجاح:\n📁 *المشروع:* ${newProject.title}\n\nحرصاً منا على راحتك، وفرنا لك بوابة إلكترونية مخصصة لتتمكن من متابعة تطورات المشروع وإدارة فواتيرك بكل شفافية وسهولة.\n\n🔑 *بيانات الدخول:* (يرجى تسجيل الدخول كـ "عميل")\n📧 *البريد الإلكتروني:* ${newProject.clientEmail || 'البريد الذي تم تزويدنا به'}\n🔒 *رمز المرور المؤقت:* ${newProject.clientPin}\n\n🌐 *رابط الدخول السريع:*\n${window.location.origin}\n\nنتمنى لك تجربة رائعة معنا!`;
+        await sendWhatsappMessage(newProject.clientPhone, clientMsg);
+      }
+      
       setIsAddOpen(false);
       setSelectedAliphiaClientId('');
 
@@ -964,7 +977,7 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="space-y-2">
+                        <div className="space-y-2 md:col-span-2">
                           <Label className="font-black text-slate-500 text-[11px] uppercase tracking-wider pr-1">عنوان المشروع *</Label>
                           <Input 
                             value={newProject.title}
@@ -972,17 +985,6 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
                             placeholder="مثال: لوحة واجهة محل - فرع السليمانية" 
                             className={`h-12 rounded-xl bg-slate-50 border-transparent transition-all font-bold text-sm shadow-inner ${
                               highlightedFields.title ? 'ring-2 ring-emerald-500/50 bg-emerald-50/50 border-emerald-500/20' : 'focus:border-primary/20 focus:bg-white'
-                            }`}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="font-black text-slate-500 text-[11px] uppercase tracking-wider pr-1">رقم العقد / المرجع</Label>
-                          <Input 
-                            value={newProject.contractNumber}
-                            onChange={e => setNewProject({...newProject, contractNumber: e.target.value})}
-                            placeholder="CN-2026-XXX" 
-                            className={`h-12 rounded-xl bg-slate-50 border-transparent transition-all font-bold text-sm shadow-inner ${
-                              highlightedFields.contractNumber ? 'ring-2 ring-emerald-500/50 bg-emerald-50/50 border-emerald-500/20' : 'focus:border-primary/20 focus:bg-white'
                             }`}
                           />
                         </div>
@@ -1363,8 +1365,12 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
                             toast.error("يرجى اختيار العميل أولاً");
                             return;
                           }
-                          if (newProject.locationLink && !validateLocationLink(newProject.locationLink)) {
-                            toast.error("يرجى تصحيح رابط موقع المشروع (يجب أن يكون رابطاً صالحاً لخرائط جوجل)");
+                          if (!newProject.clientPhone && !newProject.clientEmail) {
+                            toast.error("عذراً، لا يمكن إضافة مشروع لعميل لا يمتلك رقم جوال أو بريد إلكتروني مسجل في النظام");
+                            return;
+                          }
+                          if (!newProject.locationLink || !validateLocationLink(newProject.locationLink)) {
+                            toast.error("يرجى إدخال وتصحيح رابط موقع المشروع (يجب أن يكون رابطاً صالحاً لخرائط جوجل)");
                             return;
                           }
                         }

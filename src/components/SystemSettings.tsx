@@ -35,7 +35,8 @@ import {
   Eye,
   EyeOff,
   MessageCircle,
-  Smartphone
+  Smartphone,
+  Phone
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { 
@@ -59,6 +60,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { BankAccount } from '../types';
 import { useAuth } from '../lib/AuthContext';
 import { sendNotification } from '../lib/notifications';
+import { sendWhatsappMessage } from '../lib/whatsapp';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -96,6 +98,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTestingWhatsapp, setIsTestingWhatsapp] = useState(false);
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showHub, setShowHub] = useState<boolean>(true);
 
@@ -267,6 +270,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
       apiUrl: '',
       instanceId: '',
       token: '',
+      managerPhone: '',
       notifyClientNewProject: true,
       notifyClientInvoice: true,
       notifyEmployeeMeeting: true,
@@ -328,6 +332,30 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
       unsubBanks();
     };
   }, []);
+
+  const handleTestWhatsapp = async () => {
+    if (!settings.whatsappSettings?.managerPhone) {
+      toast.error('الرجاء إدخال رقم هاتف مدير النظام لاختبار الاتصال');
+      return;
+    }
+    setIsTestingWhatsapp(true);
+    try {
+      toast.info('جاري إرسال رسالة اختبار لمدير النظام...');
+      const success = await sendWhatsappMessage(
+        settings.whatsappSettings.managerPhone,
+        `*اختبار اتصال ناجح!* ✅\nهذه رسالة اختبار من نظام ${settings.companyName} للتأكد من عمل إشعارات الواتساب بشكل صحيح.`
+      );
+      if (success) {
+        toast.success('تم إرسال رسالة الاختبار بنجاح!');
+      } else {
+        toast.error('فشل إرسال رسالة الاختبار. يرجى التأكد من تشغيل السيرفر ومن صحة الرقم (بدون أصفار أو رمز دولي، مثلا: 966500000000)');
+      }
+    } catch (e: any) {
+      toast.error('حدث خطأ أثناء الاتصال بالخادم: ' + e.message);
+    } finally {
+      setIsTestingWhatsapp(false);
+    }
+  };
 
   const handleSaveSettings = async () => {
     setIsSubmitting(true);
@@ -540,24 +568,30 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (activeTab === 'whatsapp' && settings.whatsappSettings?.provider === 'wwebjs') {
+    if (activeTab === 'whatsapp' && settings.whatsappSettings?.enabled) {
       const fetchWaStatus = async () => {
         try {
-          const res = await fetch('/api/whatsapp/status');
+          const baseUrl = settings.whatsappSettings?.apiUrl?.replace(/\/$/, '') || '/api/whatsapp';
+          const res = await fetch(`${baseUrl}/status`);
           if (res.ok) {
             const data = await res.json();
             setWaLocalStatus(data.status);
             setWaQrData(data.qr);
+          } else {
+            console.error('WhatsApp API Error:', await res.text());
           }
-        } catch(e) {}
+        } catch(e) {
+          console.error('WhatsApp Local Server is not running or proxy failed:', e);
+          setWaLocalStatus('error');
+        }
       };
       fetchWaStatus();
-      interval = setInterval(fetchWaStatus, 3000);
+      interval = setInterval(fetchWaStatus, 1000);
     }
     return () => {
       if (interval) clearInterval(interval);
     }
-  }, [activeTab, settings.whatsappSettings?.provider]);
+  }, [activeTab, settings.whatsappSettings?.enabled]);
 
   if (loading) {
     return (
@@ -871,33 +905,34 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
                          </Button>
                       </div>
 
-                      <div className={`space-y-6 transition-all duration-500 ${!settings.whatsappSettings?.enabled ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
-                         {settings.whatsappSettings?.provider === 'wwebjs' ? (
-                             <div className="bg-white rounded-3xl p-6 border border-emerald-100 flex flex-col md:flex-row gap-8 items-center justify-between">
+                       <div className={`space-y-6 transition-all duration-500 ${!settings.whatsappSettings?.enabled ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+                             <div className="bg-white rounded-3xl p-6 border border-emerald-100 flex flex-col md:flex-row gap-8 items-center justify-between shadow-sm">
                                <div className="flex-1 space-y-4">
-                                 <h4 className="text-xl font-black text-emerald-900">ربط الواتساب مباشرة عبر السيرفر الداخلي</h4>
+                                 <h4 className="text-xl font-black text-emerald-900">ربط الواتساب مباشرة عبر السيرفر الداخلي (مجاني 100%)</h4>
                                  <p className="text-sm font-bold text-slate-500 leading-relaxed">
-                                   هذا الخيار يستخدم مكتبة Baileys ويقوم بربط الواتساب بالسيرفر الداخلي للبرنامج مجاناً.
-                                   لا تحتاج إلى أي مزود خارجي أو تكاليف إضافية (يعمل فقط بينما يكون السيرفر في وضع التشغيل).
+                                   هذا الخيار يستخدم مكتبة Baileys ويربط الواتساب بالسيرفر الداخلي للبرنامج مجاناً بشكل كامل.
+                                   يضمن لك الخصوصية التامة وعدم الاعتماد على أي خدمات خارجية. (تأكد من عمل السيرفر المحلي).
                                  </p>
                                  <div className="flex items-center gap-4">
-                                   <select 
-                                      className="h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                                      value={settings.whatsappSettings?.provider || 'evolution'}
-                                      onChange={e => setSettings({...settings, whatsappSettings: {...settings.whatsappSettings, provider: e.target.value}} as any)}
-                                   >
-                                      <option value="evolution">Evolution API</option>
-                                      <option value="greenapi">Green API</option>
-                                      <option value="ultramsg">UltraMsg</option>
-                                      <option value="wwebjs">WhatsApp Server Local (مجاني مباشر)</option>
-                                   </select>
+                                   <div className="flex-1 space-y-1.5">
+                                      <Label className="text-xs font-black text-emerald-800">رابط السيرفر (Backend URL)</Label>
+                                      <Input 
+                                        value={settings.whatsappSettings?.apiUrl || ''}
+                                        onChange={e => setSettings({...settings, whatsappSettings: {...settings.whatsappSettings, apiUrl: e.target.value}} as any)}
+                                        placeholder="مثال: http://localhost:8080 أو رابط استضافتك..."
+                                        className="h-10 bg-white border-emerald-200 focus:ring-emerald-500/20 rounded-xl text-left"
+                                        dir="ltr"
+                                      />
+                                      <p className="text-[9px] font-bold text-emerald-600">اتركه فارغاً إذا كنت تعمل محلياً (Localhost)</p>
+                                   </div>
                                    
                                    {waLocalStatus === 'connected' && (
                                      <Button 
                                        onClick={async () => {
-                                         if (window.confirm('هل أنت متأكد من تسجيل الخروج؟')) {
-                                           await fetch('/api/whatsapp/logout', { method: 'POST' });
-                                           toast.success('تم تسجيل الخروج من الواتساب');
+                                         if (window.confirm('هل أنت متأكد من تسجيل الخروج وفصل الواتساب؟')) {
+                                           const baseUrl = settings.whatsappSettings?.apiUrl?.replace(/\/$/, '') || '/api/whatsapp';
+                                           await fetch(`${baseUrl}/logout`, { method: 'POST' });
+                                           toast.success('تم تسجيل الخروج بنجاح');
                                          }
                                        }}
                                        className="h-12 border-none bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl font-black text-xs px-4"
@@ -911,7 +946,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
                                <div className="w-[200px] shrink-0 border-2 border-dashed border-emerald-200 rounded-3xl min-h-[200px] flex flex-col items-center justify-center p-4 bg-emerald-50/50">
                                  {waLocalStatus === 'connected' ? (
                                    <div className="flex flex-col items-center text-center gap-3">
-                                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shadow-inner">
                                        <span className="text-3xl">✅</span>
                                      </div>
                                      <span className="font-black text-emerald-800 text-sm">متصل وجاهز للإرسال</span>
@@ -919,68 +954,68 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
                                  ) : waLocalStatus === 'qr' && waQrData ? (
                                    <div className="flex flex-col items-center text-center gap-2">
                                      <img src={waQrData} alt="WhatsApp QR Code" className="w-full max-w-[160px] h-auto rounded-xl shadow-sm" />
-                                     <span className="text-[10px] font-bold text-slate-500">امسح الكود عبر تطبيق واتساب</span>
+                                     <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-full border border-slate-100 mt-1">امسح الكود عبر تطبيق واتساب</span>
+                                   </div>
+                                 ) : waLocalStatus === 'error' ? (
+                                   <div className="flex flex-col items-center text-center gap-3">
+                                     <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center shadow-inner">
+                                       <span className="text-3xl">❌</span>
+                                     </div>
+                                     <span className="font-black text-rose-800 text-sm">السيرفر المحلي لا يعمل</span>
+                                     <span className="text-[10px] text-slate-500 font-bold leading-tight">يرجى تشغيل <br/><code className="bg-rose-50 px-1 py-0.5 rounded text-rose-700">node server.js</code><br/> في الخلفية</span>
+                                   </div>
+                                 ) : waLocalStatus === 'disconnected' ? (
+                                   <div className="flex flex-col items-center text-center gap-3">
+                                     <div className="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center shadow-inner">
+                                       <span className="text-3xl">🔌</span>
+                                     </div>
+                                     <span className="font-black text-slate-800 text-sm">غير متصل بالواتساب</span>
+                                     <Button 
+                                       onClick={async () => {
+                                         setWaLocalStatus('connecting');
+                                         const baseUrl = settings.whatsappSettings?.apiUrl?.replace(/\/$/, '') || '/api/whatsapp';
+                                         await fetch(`${baseUrl}/start`, { method: 'POST' });
+                                       }}
+                                       className="h-9 px-4 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white"
+                                     >
+                                       بدء الاتصال (طلب باركود)
+                                     </Button>
                                    </div>
                                  ) : (
                                    <div className="flex flex-col items-center text-center gap-3">
                                      <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-                                     <span className="font-black text-emerald-800 text-sm">جاري التجهيز أو الانتظار...</span>
-                                     <span className="text-[10px] text-slate-500 font-bold">قد يستغرق بضع ثوانٍ للحصول على الباركود</span>
+                                     <span className="font-black text-emerald-800 text-sm">جاري التجهيز...</span>
+                                     <span className="text-[10px] text-slate-500 font-bold">انتظر قليلاً لجلب الباركود</span>
                                    </div>
                                  )}
                                </div>
                              </div>
-                           ) : (
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                   <Label className="text-xs font-black text-slate-600">رابط واجهة API (API URL)</Label>
-                                   <Input 
-                                      value={settings.whatsappSettings?.apiUrl || ''}
-                                      onChange={e => setSettings({...settings, whatsappSettings: {...settings.whatsappSettings, apiUrl: e.target.value}} as any)}
-                                      placeholder="مثال: https://api.ultra-msg.com/instance..."
-                                      className="h-12 bg-white rounded-2xl text-left"
-                                      dir="ltr"
-                                   />
-                                </div>
-                                <div className="space-y-2">
-                                   <Label className="text-xs font-black text-slate-600">مزود الخدمة المفضل</Label>
-                                   <select 
-                                      className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none"
-                                      value={settings.whatsappSettings?.provider || 'evolution'}
-                                      onChange={e => setSettings({...settings, whatsappSettings: {...settings.whatsappSettings, provider: e.target.value}} as any)}
-                                   >
-                                      <option value="evolution">Evolution API (مفتوح المصدر مجاني)</option>
-                                      <option value="greenapi">Green API</option>
-                                      <option value="ultramsg">UltraMsg</option>
-                                      <option value="wwebjs">WhatsApp Server Local (مجاني مباشر)</option>
-                                   </select>
-                                </div>
-                                <div className="space-y-2">
-                                   <Label className="text-xs font-black text-slate-600">رمز الدخول أو Token</Label>
-                                   <Input 
-                                      type="password"
-                                      value={settings.whatsappSettings?.token || ''}
-                                      onChange={e => setSettings({...settings, whatsappSettings: {...settings.whatsappSettings, token: e.target.value}} as any)}
-                                      placeholder="Token الخاص بواجهة الواتساب..."
-                                      className="h-12 bg-white rounded-2xl text-left"
-                                      dir="ltr"
-                                   />
-                                </div>
-                                <div className="space-y-2">
-                                   <Label className="text-xs font-black text-slate-600">رقم الجهاز / Instance ID</Label>
-                                   <Input 
-                                      value={settings.whatsappSettings?.instanceId || ''}
-                                      onChange={e => setSettings({...settings, whatsappSettings: {...settings.whatsappSettings, instanceId: e.target.value}} as any)}
-                                      placeholder="رقم أو معرّف الجهاز (لخدمة Green أو Evolution)..."
-                                      className="h-12 bg-white rounded-2xl text-left"
-                                      dir="ltr"
-                                   />
-                                </div>
-                             </div>
-                           )}
                          
                          <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm mt-8">
-                            <h4 className="text-sm font-black text-slate-900 border-b border-slate-100 pb-4 mb-4">اختيار الإشعارات التلقائية والصلاحيات</h4>
+                            <h4 className="text-sm font-black text-slate-900 border-b border-slate-100 pb-4 mb-4">إعدادات الإشعارات لمدير النظام</h4>
+                            <div className="space-y-1.5 mb-6">
+                              <Label className="text-xs font-black text-emerald-800">رقم هاتف مدير النظام (WhatsApp)</Label>
+                              <Input 
+                                value={settings.whatsappSettings?.managerPhone || ''}
+                                onChange={e => setSettings({...settings, whatsappSettings: {...settings.whatsappSettings, managerPhone: e.target.value}} as any)}
+                                placeholder="مثال: 966500000000"
+                                className="h-10 bg-white border-slate-200 focus:ring-emerald-500/20 rounded-xl text-left"
+                                dir="ltr"
+                              />
+                                <p className="text-[10px] font-bold text-slate-500">ستصله إشعارات فورية بالاعتمادات الجديدة، طلبات الشراء، وتحديثات المشاريع الهامة.</p>
+                                
+                                <Button 
+                                  onClick={handleTestWhatsapp} 
+                                  disabled={isTestingWhatsapp}
+                                  variant="outline" 
+                                  className="w-full mt-2 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl font-black text-xs h-10 gap-2"
+                                >
+                                  {isTestingWhatsapp ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+                                  إرسال رسالة اختبار لهذا الرقم
+                                </Button>
+                              </div>
+                            
+                            <h4 className="text-sm font-black text-slate-900 border-b border-slate-100 pb-4 mb-4">اختيار الإشعارات التلقائية والصلاحيات للعملاء والموظفين</h4>
                             
                             <div className="space-y-4">
                                <label className="flex items-center gap-4 cursor-pointer p-4 rounded-xl hover:bg-slate-50 transition-colors">

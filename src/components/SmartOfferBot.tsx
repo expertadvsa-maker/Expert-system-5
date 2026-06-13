@@ -17,6 +17,7 @@ import { fetchAliphiaClients, fetchAliphiaQuotations, fetchAliphiaInvoices, crea
 import { db } from '../lib/firebase';
 import { sendNotification } from '../lib/notifications';
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot } from 'firebase/firestore';
+import { sendWhatsappToManager } from '../lib/whatsapp';
 
 interface Item {
   name: string;
@@ -341,6 +342,9 @@ export default function SmartOfferBot() {
           total,
           pendingApproval: true
         } as any);
+
+        const waMsg = `🤖 *طلب اعتماد ${label} ذكي جديد*\n\n👤 *العميل:* ${selectedClient.name}\n💰 *المبلغ الإجمالي:* ${total.toLocaleString()} ر.س\n👨‍💼 *بواسطة المندوب:* ${profile?.name || 'غير معروف'}\n\nيرجى الدخول للنظام لمراجعة الطلب والموافقة عليه.`;
+        await sendWhatsappToManager(waMsg);
 
         toast.success('تم إرسال الطلب بنجاح بانتظار موافقة المدير!', { id: tid });
       } catch (err: any) {

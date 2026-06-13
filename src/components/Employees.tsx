@@ -45,6 +45,7 @@ import { logActivity } from '../lib/activity';
 import { exportToCSV } from '../lib/export';
 import { exportToPDF } from '../lib/pdfExport';
 import { softDelete } from '../lib/softDelete';
+import { sendWhatsappMessage } from '../lib/whatsapp';
 import PrintableReport from './PrintableReport';
 import ExportDateRangeDialog from './ExportDateRangeDialog';
 import {
@@ -278,6 +279,12 @@ export default function Employees({ onSelectEmployee, filterRole }: { onSelectEm
         'employee',
         profile?.uid || 'system'
       );
+      
+      if (formData.phone) {
+        const welcomeMessage = `🎉 *مرحباً بك ${formData.name} في فريق العمل!*\n\nلقد تم تسجيل بياناتك الوظيفية بنجاح:\n🏢 *القسم:* ${formData.dept}\n💰 *الراتب الأساسي:* ${formData.salary} ر.س\n📅 *تاريخ الانضمام:* ${new Date().toLocaleDateString('ar-SA')}\n${formData.iqamaNumber ? `🪪 *رقم الهوية/الإقامة:* ${formData.iqamaNumber}\n` : ''}\nيمكنك الدخول الآن إلى النظام لمتابعة مهامك باستخدام حساب جوجل الخاص بك المرتبط بالبريد الإلكتروني:\n📧 ${emailLower}\n\n🔗 *رابط الدخول السريع:*\n${window.location.origin}`;
+        await sendWhatsappMessage(formData.phone, welcomeMessage);
+      }
+      
       toast.success('تمت إضافة الموظف بنجاح');
       setIsDialogOpen(false);
       setFormData({ 

@@ -6,6 +6,7 @@ import { auth, db } from './firebase';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from './firestore-errors';
 import { UserProfile } from '../types';
+import { fetchAliphiaClients } from './aliphia';
 
 interface AuthContextType {
   user: User | null;
@@ -153,22 +154,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(user);
           } else {
             // No registered account in users collection
-            // Check fallback for designated system managers/owners - strictly the owner only
-            if (userEmail === 'expertadvsa@gmail.com') {
-              const adminProfile: UserProfile = {
-                id: 'system_admin_' + user.uid,
-                uid: user.uid,
-                name: user.displayName || 'المالك والمدير العام',
-                email: userEmail,
-                role: 'manager',
-              };
-              setProfile(adminProfile);
-              setUser(user);
-            } else {
-              await signOut(auth);
-              setUser(null);
-              setProfile(null);
-              toast.error('عذراً، هذا البريد الإلكتروني غير مسجل في النظام. يرجى التواصل مع المالك (expertadvsa@gmail.com) لإضافتك أولاً.');
+            
+            // Check if they are an Aliphia client
+            let isClient = false;
+            try {
+              const clients = await fetchAliphiaClients();
+              const matchedClient = clients.find((c: any) => c.email && c.email.toLowerCase().trim() === userEmail);
+              if (matchedClient) {
+                isClient = true;
+                const clientProfile: UserProfile = {
+                  id: 'client_' + matchedClient.id,
+                  uid: user.uid,
+                  name: matchedClient.name,
+                  email: userEmail,
+                  role: 'client' as any, // Cast as 'client' is an expected role
+                  phone: matchedClient.phone
+                };
+                setProfile(clientProfile);
+                setUser(user);
+              }
+            } catch (clientErr) {
+              console.error("Error checking Aliphia clients:", clientErr);
+            }
+
+            if (!isClient) {
+              // Check fallback for designated system managers/owners - strictly the owner only
+              if (userEmail === 'expertadvsa@gmail.com') {
+                const adminProfile: UserProfile = {
+                  id: 'system_admin_' + user.uid,
+                  uid: user.uid,
+                  name: user.displayName || 'المالك والمدير العام',
+                  email: userEmail,
+                  role: 'manager',
+                };
+                setProfile(adminProfile);
+                setUser(user);
+              } else {
+                await signOut(auth);
+                setUser(null);
+                setProfile(null);
+                toast.error('عذراً، هذا البريد الإلكتروني غير مسجل في النظام. يرجى التواصل مع المالك لإضافتك أولاً.');
+              }
             }
           }
         } catch (error) {

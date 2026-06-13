@@ -32,6 +32,7 @@ import { sendNotification } from '../lib/notifications';
 import { analyzeInvoice } from '../lib/gemini';
 import { softDelete } from '../lib/softDelete';
 import { normalizeArabic, calculateSimilarity } from '../lib/utils';
+import { sendWhatsappToManager } from '../lib/whatsapp';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -338,16 +339,13 @@ export default function Purchases() {
 
       // WhatsApp Logic
       const isSupervisor = profile.role === 'supervisor';
-      const managerPhone = "966500000000"; // Can be dynamic from settings later
-      const message = `طلب شراء جديد بانتظار الاعتماد:\nالبيان: ${formData.description}\nالمبلغ: ${formData.amount} ر.س\nبواسطة: ${profile.name}`;
-      const waLink = `https://wa.me/${managerPhone}?text=${encodeURIComponent(message)}`;
+      const projectName = projects.find(p => p.id === formData.projectId)?.title || 'عام/غير محدد';
+      const message = `🛒 *طلب شراء جديد بانتظار الاعتماد*\n\n📝 *البيان:* ${finalDescription}\n💰 *المبلغ المطلوب:* ${Number(formData.amount).toLocaleString('ar-SA')} ر.س\n📁 *المشروع:* ${projectName}\n👤 *مُقدم الطلب:* ${profile.name}\n\nيرجى الدخول للنظام للمراجعة والاعتماد.`;
+      
+      // إرسال إشعار للمدير تلقائياً عبر واتساب
+      await sendWhatsappToManager(message);
 
-      toast.success('تم إرسال الطلب للاعتماد المباشر', {
-        action: isSupervisor || isManager ? {
-          label: 'إخطار المدير (واتساب)',
-          onClick: () => window.open(waLink, '_blank')
-        } : undefined
-      });
+      toast.success('تم إرسال الطلب للاعتماد المباشر وإخطار المدير');
       setIsDialogOpen(false);
       setFormData({ amount: '', description: '', category: 'مواد وإنتاج', projectId: '', paymentMethod: 'cash', bankAccountId: '', attachmentBase64: '' });
     } catch (error) {

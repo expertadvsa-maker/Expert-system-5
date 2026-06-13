@@ -17,6 +17,7 @@ import { useAuth } from '../lib/AuthContext';
 import AliphiaClientSelector, { AliphiaClient } from './AliphiaClientSelector';
 import AliphiaStatusCard from './AliphiaStatusCard';
 import { createAliphiaDocument } from '../lib/aliphia';
+import { sendWhatsappMessage } from '../lib/whatsapp';
 
 interface Item {
   id: string;
@@ -167,6 +168,11 @@ Rules: qty and price must be numbers. If price unknown set to 0.` }
 
       setResult({ docNumber: String(docNum), pdfUrl, clientName: client.name, total });
       toast.success(`🎉 تم إنشاء ${label} بنجاح!`, { id: tid });
+      
+      if (client.phone) {
+        const docMsg = `📄 *تم إصدار ${label} جديد*\n\nأهلاً بك ${client.name}،\n\nيسعدنا إبلاغك بأنه تم إصدار ${label} خاص بك:\n🔢 *رقم المستند:* ${docNum}\n💰 *المبلغ الإجمالي:* ${total.toLocaleString('ar-SA')} ر.س\n\n${pdfUrl ? `🔗 *للاطلاع وتحميل المستند (PDF):*\n${pdfUrl}\n\n` : ''}نسعد دائماً بخدمتك! 🌟`;
+        await sendWhatsappMessage(client.phone, docMsg);
+      }
     } catch (err: any) {
       console.error(err);
       toast.error(`فشل: ${err.message || 'خطأ غير معروف'}`, { id: tid });

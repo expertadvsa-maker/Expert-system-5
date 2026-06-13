@@ -72,10 +72,6 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
     type: 'voice_briefing', nameAr: 'الموجز الصوتي', descriptionAr: 'استمع للتقرير الصوتي الذكي',
     icon: 'Volume2', category: 'smart', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'elevated', defaultColorScheme: 'rose'
   },
-  {
-    type: 'sticky_note', nameAr: 'ملاحظة لاصقة ذكية', descriptionAr: 'مساحة مخصصة لكتابة الملاحظات والأفكار السريعة لحفظها',
-    icon: 'Edit3', category: 'smart', defaultSize: 'md', availableSizes: ['sm', 'md', 'lg'], requiredRole: 'all', defaultColorScheme: 'amber'
-  },
   // ── Actions ──
   {
     type: 'quick_actions', nameAr: 'الوصول السريع', descriptionAr: 'أزرار التنقل السريع لأقسام المنصة',

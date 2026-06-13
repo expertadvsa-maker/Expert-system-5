@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { sendNotification } from '../lib/notifications';
 import { createAliphiaDocument } from '../lib/aliphia';
+import { sendWhatsappMessage } from '../lib/whatsapp';
 
 interface SalesRepsManagementProps {
   onSelectRep?: (id: string) => void;
@@ -218,6 +219,13 @@ export default function SalesRepsManagement({ onSelectRep }: SalesRepsManagement
       });
       
       toast.success('تمت إضافة المندوب بنجاح. سيتمكن من تسجيل الدخول ببريده الإلكتروني.');
+      
+      if (newRep.phone) {
+        const compDetails = newRep.compensationType === 'salary' ? `💰 *الراتب الأساسي:* ${newRep.baseSalary} ر.س` : `📈 *نسبة العمولة:* ${newRep.commissionRate}%`;
+        const welcomeMessage = `🎉 *مرحباً بك ${newRep.name} ضمن فريق المبيعات!*\n\nتم إعداد حسابك كمندوب مبيعات بنجاح:\n${compDetails}\n📅 *تاريخ الانضمام:* ${new Date().toLocaleDateString('ar-SA')}\n\nيمكنك تسجيل الدخول الآن لمتابعة عروض الأسعار ومبيعاتك من خلال حساب جوجل المرتبط ببريدك:\n📧 ${emailLower}\n\n🔗 *رابط الدخول السريع:*\n${window.location.origin}`;
+        await sendWhatsappMessage(newRep.phone, welcomeMessage);
+      }
+      
       setIsAddRepOpen(false);
       setNewRep({ name: '', email: '', phone: '', compensationType: 'salary', baseSalary: '', commissionRate: '' });
     } catch (error: any) {

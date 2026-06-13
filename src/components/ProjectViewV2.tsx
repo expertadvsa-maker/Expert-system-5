@@ -1,5 +1,8 @@
 import * as React from 'react';
 import { useState, useEffect, useMemo } from 'react';
+import { format, parseISO } from 'date-fns';
+import { arSA } from 'date-fns/locale';
+import { sendWhatsappToManager } from '../lib/whatsapp';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +45,8 @@ import {
   Star,
   Hash,
   Maximize,
-  Check
+  Check,
+  Lock
 } from 'lucide-react';
 import { 
   doc, 
@@ -672,6 +676,13 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
         milestones: newMilestones,
         status: nextStatus
       });
+      
+      const newlyCompleted = newMilestones.find(m => m.title === stageTitle)?.status === 'completed';
+      if (newlyCompleted) {
+        const waMsg = `✅ *إنجاز جديد في المشروع*\n\n📁 *المشروع:* ${project.title}\n🎯 *المرحلة المنجزة:* ${stageTitle}\n📊 *حالة المشروع الكلية:* ${nextStatus === 'completed' ? '🌟 مكتمل بالكامل' : '⏳ قيد التنفيذ'}\n\nيرجى مراجعة تفاصيل المشروع في النظام.`;
+        await sendWhatsappToManager(waMsg);
+      }
+
       toast.success("تم تحديث حالة المرحلة");
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `projects/${projectId}`, auth);
@@ -762,13 +773,9 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                     </DialogHeader>
                     <div className="space-y-5 mt-4">
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
+                          <div className="space-y-2 md:col-span-2">
                              <Label className="text-xs font-black text-slate-400">عنوان المشروع *</Label>
                              <Input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
-                          </div>
-                          <div className="space-y-2">
-                             <Label className="text-xs font-black text-slate-400">رقم العقد / المرجع</Label>
-                             <Input value={editForm.contractNumber || ''} onChange={e => setEditForm({...editForm, contractNumber: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
                           </div>
                        </div>
 
@@ -980,16 +987,6 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
 
                               <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
                                  <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-slate-400 shrink-0">
-                                    <Hash className="w-5 h-5" />
-                                 </div>
-                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-400">رقم العقد الوظيفي</span>
-                                    <span className="text-sm font-black text-slate-800 truncate">{project.contractNumber || '---'}</span>
-                                 </div>
-                              </div>
-
-                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
-                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-slate-400 shrink-0">
                                     <Layers className="w-5 h-5" />
                                  </div>
                                  <div className="flex flex-col min-w-0">
@@ -1021,18 +1018,40 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                                        <span className="text-[10px] font-bold text-slate-400 mt-1 max-w-[200px]">يمكن للعميل تسجيل الدخول والاطلاع على تقدم المشروع.</span>
                                     </div>
                                  </div>
-                                 
-                                 <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
-                                    <span className="text-lg font-mono font-bold text-slate-700 tracking-widest px-3">{project.clientPin}</span>
-                                    <Button 
-                                       onClick={() => {
-                                          navigator.clipboard.writeText(`مرحباً،\nيمكنك متابعة مشروعك عبر الرابط:\n${window.location.origin}/?clientPortal=true&projectId=${project.id}\nرمز الوصول الخاص بك: ${project.clientPin}`);
-                                          toast.success("تم نسخ الرابط والرمز للمشاركة");
-                                       }}
-                                       className="h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs px-4"
-                                    >
-                                       مشاركة
-                                    </Button>
+                                 <div className="flex flex-col gap-2 w-full sm:w-auto">
+                                    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 w-full">
+                                       <input 
+                                          readOnly 
+                                          value={`${window.location.origin}/?clientPortal=true&projectId=${project.id}`}
+                                          className="bg-transparent text-[10px] font-mono text-slate-500 px-2 w-full min-w-[150px] outline-none select-all"
+                                          dir="ltr"
+                                       />
+                                       <Button 
+                                          variant="ghost"
+                                          onClick={() => {
+                                             navigator.clipboard.writeText(`${window.location.origin}/?clientPortal=true&projectId=${project.id}`);
+                                             toast.success("تم نسخ رابط البوابة");
+                                          }}
+                                          className="h-8 rounded-xl bg-white hover:bg-slate-100 text-slate-600 font-black text-[10px] px-3 shadow-sm border border-slate-200 shrink-0"
+                                       >
+                                          نسخ الرابط
+                                       </Button>
+                                    </div>
+                                    <div className="flex items-center justify-between bg-amber-50 p-1.5 rounded-2xl border border-amber-100">
+                                       <div className="flex items-center gap-2 px-2">
+                                          <span className="text-[10px] font-bold text-amber-700/70">رمز الدخول:</span>
+                                          <span className="text-sm font-mono font-black text-amber-700 tracking-widest">{project.clientPin}</span>
+                                       </div>
+                                       <Button 
+                                          onClick={() => {
+                                             navigator.clipboard.writeText(`مرحباً،\nيسعدنا إبلاغك أنه يمكنك متابعة تقدم مشروعك لحظة بلحظة عبر بوابة العميل:\n\n🌐 الرابط: ${window.location.origin}/?clientPortal=true&projectId=${project.id}\n🔑 رمز الدخول الموحد: ${project.clientPin}\n\nشكراً لثقتكم بنا!`);
+                                             toast.success("تم نسخ رسالة الدعوة الشاملة");
+                                          }}
+                                          className="h-8 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] px-4 shrink-0 transition-all shadow-sm"
+                                       >
+                                          نسخ الرسالة كاملة
+                                       </Button>
+                                    </div>
                                  </div>
                               </div>
                            )}
@@ -1259,7 +1278,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                                                    {milestone.dueDate && (
                                                       <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
                                                          <Clock className="w-3 h-3" />
-                                                         مخطط: {new Date(milestone.dueDate).toLocaleDateString('ar-SA')}
+                                                         مخطط: {milestone.dueDate ? new Date(milestone.dueDate).toLocaleDateString('ar-SA') : 'غير محدد'}
                                                       </span>
                                                    )}
                                                 </div>
@@ -1295,7 +1314,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                                              <div className="flex items-center gap-4">
                                                 <p className="text-[10px] font-bold text-emerald-700 flex items-center gap-1.5">
                                                    <CheckSquare className="w-3.5 h-3.5" />
-                                                   تم التنفيذ في: {new Date(milestone.date).toLocaleDateString('ar-SA')}
+                                                   تم التنفيذ في: {milestone.date ? new Date(milestone.date).toLocaleDateString('ar-SA') : 'غير محدد'}
                                                 </p>
                                                 <div className="w-1 h-1 rounded-full bg-emerald-200" />
                                                 <p className="text-[10px] font-bold text-emerald-600">تم تحديث الإنجاز المالي</p>
