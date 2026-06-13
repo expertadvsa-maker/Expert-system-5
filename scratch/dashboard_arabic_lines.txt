@@ -1,0 +1,162 @@
+Line 58: if (h < 12) return 'صباح الخير';
+Line 59: if (h < 17) return 'مساء النور';
+Line 60: return 'مساء الخير';
+Line 197: toast.error('حدث عطل في تشغيل التقرير الصباحي المحفوظ');
+Line 201: toast.success('تشغيل فوري للتقرير المحفوظ ⚡ (لعدم حدوث تغييرات في النظام)', { duration: 4500 });
+Line 206: toast.info('جاري صياغة تقرير مباشر بلهجة عامية ومختصرة... 🧠', { duration: 4000 });
+Line 231: throw new Error(data.details || data.error || 'فشل جلب الموجز الصوتي من الخادم');
+Line 234: const generatedText = data.text || 'التقرير الصباحي جاهز.';
+Line 259: toast.error('حدث عطل في تشغيل ملف الصوت المولد');
+Line 263: toast.success('تم توليد التقرير بنجاح! جاري البدء في السرد 🎙️');
+Line 268: toast.error('أخفق تشغيل السرد الصوتي المباشر: ' + err.message);
+Line 296: inventoryAction: 'جرد مخازن', // 'جرد مخازن' | 'صرف مواد' | 'استلام بضاعة'
+Line 299: { d: 'السبت', v: 400 }, { d: 'الأحد', v: 300 }, { d: 'الاثنين', v: 500 },
+Line 300: { d: 'الثلاثاء', v: 278 }, { d: 'الأربعاء', v: 189 },
+Line 301: { d: 'الخميس', v: 390 }, { d: 'الجمعة', v: 349 },
+Line 317: setAiInsight('لا توجد مشاريع مسجلة حتى الآن. أضف أول مشروع من قسم المشاريع.');
+Line 363: al.push({ id: 'pur', text: `${stats.pendingInvoices} طلبات شراء تنتظر موافقتك`, type: 'amber', icon: ShoppingBag, tab: 'purchases' });
+Line 364: br.push({ id: 'b1', text: 'اعتماد طلبات الشراء المعلقة', done: false, icon: FileText });
+Line 367: al.push({ id: 'exp', text: 'المصروفات تجاوزت 80% من الدخل', type: 'red', icon: AlertTriangle, tab: 'financials' });
+Line 373: br.push({ id: 'b2', text: `متابعة ${ap.length} مشاريع نشطة`, done: false, icon: Briefcase });
+Line 377: al.push({ id: 'att', text: 'نسبة الحضور منخفضة اليوم', type: 'blue', icon: Users, tab: 'attendance_manager' });
+Line 378: br.push({ id: 'b3', text: 'مراجعة سجل الحضور والانصراف', done: false, icon: Clock });
+Line 381: br.push({ id: 'b4', text: 'تحليل الأداء الربحي للشهر', done: true, icon: CheckCircle });
+Line 514: toast.error('الرجاء كتابة عنوان المهمة');
+Line 519: const toastId = toast.loading('جاري حفظ المهمة في النظام وإرسال الإشعارات...');
+Line 542: createdByName: profile?.name || 'المدير',
+Line 589: title: 'تم إسناد مهمة جديدة لك',
+Line 590: message: `قام ${profile?.name || 'المدير'} بإسناد المهمة: "${taskForm.title}" إليك. تاريخ الاستحقاق: ${taskForm.dueDate || 'غير محدد'}.`,
+Line 599: toast.success('تمت إضافة المهمة التشغيلية بنجاح وتم إشعار الموظفين!', { id: toastId });
+Line 612: inventoryAction: 'جرد مخازن',
+Line 617: toast.error('حدث خطأ أثناء إضافة المهمة', { id: toastId });
+Line 658: toast.success(`تم تحديث حالة المهمة بنجاح إلى: ${nextStatus === 'completed' ? 'مكتملة' : 'قيد الانتظار'}`);
+Line 661: toast.error('حدث خطأ أثناء تغيير حالة المهمة');
+Line 670: toast.success('تم حذف المهمة بنجاح');
+Line 672: toast.error('فشل في حذف المهمة');
+Line 711: <h1 className="text-xl font-black text-slate-900">{profile?.name || 'المدير'}</h1>
+Line 727: <Bell className="w-4 h-4 text-amber-500" /> إعلان الإدارة
+Line 780: <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">الوصول السريع والمهام</p>
+Line 782: <ActionBtn icon={Plus}          label="مهمة عامة +" color="bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black shadow-sm" onClick={() => setIsTaskModalOpen(true)} />
+Line 790: dashboardPlayback === 'loading' ? "جاري الصياغة..." :
+Line 791: dashboardPlayback === 'playing' ? "إيقاف مؤقت ⏸️" :
+Line 792: dashboardPlayback === 'paused' ? "استئناف 🎙️" :
+Line 793: "سرد الموجز 🎙️"
+Line 803: <ActionBtn icon={HardHat}       label="العمالة"     color="bg-emerald-500 text-white"   onClick={() => goToTab('workers_management')} />
+Line 804: <ActionBtn icon={Scan}          label="مسح فاتورة"  color="bg-slate-900 text-white"     onClick={() => goToTab('camera')} />
+Line 805: <ActionBtn icon={Clock}         label="الحضور"      color="bg-blue-500 text-white"      onClick={() => goToTab('attendance_manager')} />
+Line 806: <ActionBtn icon={ShoppingCart}  label="المشتريات"   color="bg-amber-500 text-white"     onClick={() => goToTab('purchases')} />
+Line 807: <ActionBtn icon={Briefcase}     label="المشاريع"    color="bg-indigo-500 text-white"    onClick={() => goToTab('projects')} />
+Line 808: <ActionBtn icon={Wallet}        label="الماليات"    color="bg-teal-600 text-white"      onClick={() => goToTab('financials')} />
+Line 810: <ActionBtn icon={TrendingUp}  label="المبيعات"    color="bg-pink-500 text-white"      onClick={() => goToTab('sales')} />
+Line 811: <ActionBtn icon={Users}       label="الفريق"      color="bg-purple-500 text-white"    onClick={() => goToTab('employees')} />
+Line 812: <ActionBtn icon={Package}     label="المخزون"     color="bg-orange-500 text-white"    onClick={() => goToTab('inventory')} />
+Line 813: <ActionBtn icon={Banknote}    label="البنوك"      color="bg-cyan-600 text-white"      onClick={() => goToTab('banking')} />
+Line 821: <Section label="المالية" sub="آخر 90 يوم" />
+Line 824: label="الدخل الإجمالي" value={stats.income} sub="إجمالي الإيرادات"
+Line 829: label="المصروفات" value={totalExpenses} sub="شامل رواتب العمال"
+Line 834: label="صافي الربح" value={netBalance}
+Line 835: sub={netBalance >= 0 ? `هامش ${profitPct}%` : '⚠ تجاوز الدخل'}
+Line 842: label="طلبات معلقة" value={stats.pendingInvoices} sub="تنتظر الموافقة"
+Line 854: <Section label="التشغيل والموارد" />
+Line 857: label="عمال اليومية" value={stats.activeWorkers} sub="مسجلون في النظام"
+Line 862: label="المشاريع النشطة" value={stats.activeProjects} sub="قيد التنفيذ"
+Line 867: label="الفريق" value={stats.employeesCount} sub="موظف مسجل"
+Line 872: label="إجمالي المشتريات" value={stats.purchases} sub="آخر 90 يوم"
+Line 886: {/* 📋 المهام والعمليات العامة والتشغيلية */}
+Line 892: <p className="text-sm font-black text-slate-900">المهام والعمليات المشتركة</p>
+Line 894: {filteredGenTasks.filter(t => t.status === 'pending').length} معلقة
+Line 897: <p className="text-[10px] text-slate-400 mt-1">تتبع المهام المستقلة أو المرتبطة بالمشاريع والمشتريات والمخازن</p>
+Line 903: <Plus className="w-3.5 h-3.5" /> مهمة تشغيلية جديدة
+Line 907: {/* شريط البحث والتصفية */}
+Line 913: placeholder="ابحث بالاسم أو التفاصيل..."
+Line 921: { id: 'all', label: 'الكل' },
+Line 922: { id: 'pending', label: 'المعلقة' },
+Line 923: { id: 'completed', label: 'المكتملة' }
+Line 940: {/* قائمة المهام الفعالة */}
+Line 952: {/* زر الاختيار الدائري */}
+Line 976: {/* مستوى الأهمية */}
+Line 986: {task.priority === 'high' ? 'عاجلة' : task.priority === 'medium' ? 'متوسطة' : 'عادية'}
+Line 989: {/* أيقونة الارتباط (مشروع/مشتريات/مخزن) */}
+Line 992: <Briefcase className="w-2.5 h-2.5" /> مشروع: {task.linkedEntityName}
+Line 997: <ShoppingCart className="w-2.5 h-2.5" /> مورد: {task.linkedEntityName}
+Line 1002: <Package className="w-2.5 h-2.5" /> مخزن: {task.inventoryAction}
+Line 1007: عامة مستقلة
+Line 1020: {/* إسناد الموظفين + التواريخ */}
+Line 1026: <span>الاستحقاق: {task.dueDate}</span>
+Line 1029: <span className="text-[9px] text-slate-400">| بواسطة: {task.createdByName || 'النظام'}</span>
+Line 1032: {/* الموظفين المسندة إليهم */}
+Line 1041: title={emp?.name || 'موظف'}
+Line 1053: {/* زر الحذف */}
+Line 1058: title="حذف المهمة"
+Line 1068: <p className="text-xs font-black text-slate-600">لا توجد مهام تشغيلية حالياً</p>
+Line 1069: <p className="text-[10px] text-slate-400 max-w-[240px] mt-0.5">انقر على الزر بالأعلى أو في شريط الوصول السريع لإضافة مهمة عامة جديدة للفريق</p>
+Line 1079: <p className="text-sm font-black text-slate-900">آخر الحركات المالية</p>
+Line 1080: <p className="text-[10px] text-slate-400">العمليات المسجلة حديثاً</p>
+Line 1085: عرض الكل <ArrowLeft className="w-3 h-3" />
+Line 1104: <p className="text-xs font-bold text-slate-800 truncate">{tx.description || 'عملية مالية'}</p>
+Line 1113: <p className="text-[9px] text-slate-400 font-semibold">ر.س</p>
+Line 1119: <p className="text-xs font-bold">لا توجد حركات مالية</p>
+Line 1130: <p className="text-sm font-black text-slate-900">عمال اليومية</p>
+Line 1131: <p className="text-[10px] text-slate-400">آخر المسجلين</p>
+Line 1136: إدارة الكل <ArrowLeft className="w-3 h-3" />
+Line 1144: {(w.name?.[0] || '؟')}
+Line 1148: <p className="text-[10px] text-slate-400">{w.role || 'عامل يومي'}</p>
+Line 1150: <span className="text-xs font-black text-emerald-600 shrink-0">{w.dailyRate} ر.س/يوم</span>
+Line 1169: <p className="text-xs font-black">الذكاء الميداني</p>
+Line 1177: <span className="text-xs">جاري تحليل بيانات المشاريع...</span>
+Line 1181: {aiInsight || 'لا توجد بيانات كافية للتحليل الآن.'}
+Line 1188: فتح الموجز التنفيذي ←
+Line 1195: <p className="text-sm font-black text-slate-900">مؤشر الإنتاجية الأسبوعي</p>
+Line 1196: <p className="text-[10px] text-slate-400 mb-3">التوزيع التشغيلي</p>
+Line 1230: <p className="text-sm font-black text-slate-900">موجز اليوم</p>
+Line 1251: <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">روابط إدارية</p>
+Line 1254: { label: 'دفتر الأستاذ',   icon: Receipt,    tab: 'general_ledger', color: 'text-slate-700' },
+Line 1255: { label: 'الاعتمادات',      icon: CheckCircle, tab: 'approvals',     color: 'text-emerald-700' },
+Line 1256: { label: 'تقييم الأداء',    icon: Star,        tab: 'evaluation',    color: 'text-amber-700' },
+Line 1257: { label: 'التحليلات',       icon: BarChart2,   tab: 'analytics',     color: 'text-indigo-700' },
+Line 1258: { label: 'الأرشيف',         icon: Package,     tab: 'archive',       color: 'text-slate-600' },
+Line 1259: { label: 'إعدادات النظام',  icon: UserCheck,   tab: 'settings',      color: 'text-teal-700' },
+Line 1274: {/* ══ 🛠️ نافذة إنشاء مهمة عامة أو تشغيلية ذكية ══ */}
+Line 1282: إنشاء مهمة عامة / تشغيلية جديدة
+Line 1287: {/* عنوان المهمة */}
+Line 1289: <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">العنوان الأساسي للمهمة <span className="text-red-500">*</span></label>
+Line 1293: placeholder="مثال: طباعة وتركيب لوحة الكلادينج لفرع العليا"
+Line 1300: {/* وصف المهمة */}
+Line 1302: <label className="text-[10px] font-black text-slate-400 block">تفاصيل أو وصف المهمة</label>
+Line 1304: placeholder="أدخل تفاصيل التوجيه الميداني أو متطلبات الإنجاز المباشرة..."
+Line 1312: {/* إسناد الموظفين */}
+Line 1314: <label className="text-[10px] font-black text-slate-400 block">إسناد وتوجيه الموظفين (اختر موظف أو أكثر)</label>
+Line 1338: {emp.name} ({emp.role === 'manager' ? 'مدير' : emp.role === 'supervisor' ? 'مشرف' : 'موظف'})
+Line 1343: <p className="text-[10px] text-slate-400 p-1">لا يوجد موظفين مسجلين في النظام</p>
+Line 1349: {/* تاريخ الاستحقاق */}
+Line 1351: <label className="text-[10px] font-black text-slate-400 block">تاريخ الإنجاز المطلوب</label>
+Line 1360: {/* مستوى الأهمية */}
+Line 1362: <label className="text-[10px] font-black text-slate-400 block">مستوى الأهمية والسرعة</label>
+Line 1368: <option value="low">متدني / عادي</option>
+Line 1369: <option value="medium">متوسط الأهمية</option>
+Line 1370: <option value="high">عاجل جداً 🔥</option>
+Line 1375: {/* نوع أو جهة ارتباط المهمة */}
+Line 1377: <label className="text-[10px] font-black text-indigo-905 block">جهة ارتباط المهمة بالمنصة (التوجيه المتكامل)</label>
+Line 1383: <option value="none">عامة مستلقة (غير مرتبطة بقسم حالياً)</option>
+Line 1384: <option value="project">📁 تابعة لقسم المشاريع وإنجاز الأعمال ماديًا</option>
+Line 1385: <option value="purchases">🛒 تابعة للمشتريات والموردين والتوريد ماديًا</option>
+Line 1386: <option value="inventory">📦 تابعة لقسم المستودعات والمخازن ماديًا</option>
+Line 1389: {/* الحقول الشرطية الديناميكية */}
+Line 1392: {/* 1. مشاريع */}
+Line 1396: <label className="text-[9px] font-black text-slate-500 block">اختر المشروع المستهدف <span className="text-red-500">*</span></label>
+Line 1403: <option value="">-- اختر من قائمة المشاريع --</option>
+Line 1410: <label className="text-[9px] font-black text-slate-500 block">تأثير المهمة على تقدم المشروع (%)</label>
+Line 1423: {/* 2. مشتريات */}
+Line 1427: <label className="text-[9px] font-black text-slate-500 block">اختر المورد المستهدف <span className="text-red-500">*</span></label>
+Line 1434: <option value="">-- اختر من قائمة الموردين --</option>
+Line 1441: <label className="text-[9px] font-black text-slate-500 block">الميزانية التقديرية (ريال سعودي)</label>
+Line 1444: placeholder="مثال: 5500"
+Line 1453: {/* 3. مستودع */}
+Line 1457: <label className="text-[9px] font-black text-slate-500 block">نوع الإجراء المستودعي المستهدف</label>
+Line 1463: <option value="جرد مخازن">جرد الدوري للمخازن والمستودعات</option>
+Line 1464: <option value="صرف مواد">جدولة وصرف مواد لمشروع ميداني</option>
+Line 1465: <option value="استلام بضاعة">فرز واستلام بضاعة واردة</option>
+Line 1472: {/* أزرار الإرسال */}
+Line 1479: إلغاء
+Line 1488: <Loader2 className="w-3.5 h-3.5 animate-spin" /> جاري الحفظ والتسجيل...
+Line 1492: حفظ العمل وإسناد المهمة للفريق

@@ -1,0 +1,44 @@
+name: mobile_app
+description: Flutter mobile application for Expert System (خبراء الرسم).
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.1.0
+  provider: ^6.1.1
+  firebase_core: ^2.27.0
+  cloud_firestore: ^4.15.8
+  firebase_auth: ^4.17.8
+  http: ^1.2.0
+  audioplayers: ^6.4.0
+  image_picker: ^1.1.2
+  geolocator: ^12.0.0
+  local_auth: ^2.3.0
+  google_sign_in: ^6.2.2
+  shared_preferences: ^2.3.3
+  url_launcher: ^6.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo.jpg"
+  min_sdk_size: 21
+  web:
+    generate: true
+    image_path: "assets/logo.jpg"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/

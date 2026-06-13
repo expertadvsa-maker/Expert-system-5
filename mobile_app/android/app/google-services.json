@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "137723142708",
+    "project_id": "expert-system-3",
+    "storage_bucket": "expert-system-3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:137723142708:android:75580a4dfd5016e63da061",
+        "android_client_info": {
+          "package_name": "com.example.mobile_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "137723142708-1grpkit7kbnm8jn9j649be110ei4od2h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAyxNdLJ8zOICE_IOrcW8lPBJ2P4ipDTtg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "137723142708-1grpkit7kbnm8jn9j649be110ei4od2h.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

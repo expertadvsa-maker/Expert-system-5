@@ -1,0 +1,12 @@
+file:///app/applet/server.js:42
+import pino from 'pino';
+       ^^^^
+
+SyntaxError: Unexpected identifier 'pino'
+    at compileSourceTextModule (node:internal/modules/esm/utils:346:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:107:18)
+    at #translate (node:internal/modules/esm/loader:546:20)
+    at afterLoad (node:internal/modules/esm/loader:596:29)
+    at async ModuleJob._link (node:internal/modules/esm/module_job:162:19)
+
+Node.js v22.22.2
