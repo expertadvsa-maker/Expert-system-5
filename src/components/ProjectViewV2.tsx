@@ -146,6 +146,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
   const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [clientChats, setClientChats] = useState<any[]>([]);
+  const [receipts, setReceipts] = useState<any[]>([]);
   const chatScrollRef = React.useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -530,6 +531,14 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
       (err) => console.log('Client chats list disabled/empty or error')
     );
 
+    const unsubReceipts = onSnapshot(
+      query(collection(db, 'projects', projectId, 'receipts'), orderBy('uploadedAt', 'desc')),
+      (snapshot) => {
+        setReceipts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      },
+      (err) => console.log('Receipts list disabled/empty or error')
+    );
+
     return () => {
       unsubProject();
       unsubWorkers();
@@ -537,6 +546,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
       unsubUpdates();
       unsubTransactions();
       unsubClientChats();
+      unsubReceipts();
     };
   };
 
@@ -1681,6 +1691,73 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                            </div>
                         ))}
                      </div>
+
+                     {/* Uploaded Receipts Section */}
+                     <div className="mt-8">
+                       <h3 className="text-xl font-black text-slate-900 border-r-4 border-emerald-500 pr-3 mb-6">إيصالات التحويل المرفوعة (من العميل)</h3>
+                       {receipts.length === 0 ? (
+                         <div className="p-8 text-center bg-slate-50 rounded-[2rem] border border-slate-100 text-slate-400">
+                           <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                           <p className="font-bold text-sm">لا توجد إيصالات مرفوعة من العميل حتى الآن.</p>
+                         </div>
+                       ) : (
+                         <div className="space-y-4">
+                           {receipts.map(rec => (
+                             <div key={rec.id} className="p-5 bg-white border border-slate-100 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:shadow-sm transition-all">
+                               <div className="flex items-center gap-4">
+                                 <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                                   <FileCheck className="w-6 h-6" />
+                                 </div>
+                                 <div>
+                                   <p className="font-black text-slate-800 text-sm">{rec.fileName}</p>
+                                   <p className="text-xs font-bold text-slate-400 mt-1">{new Date(rec.uploadedAt).toLocaleDateString('ar-SA')} - {new Date(rec.uploadedAt).toLocaleTimeString('ar-SA')}</p>
+                                 </div>
+                               </div>
+                               <div className="flex items-center gap-3">
+                                 <Badge className={`rounded-lg px-3 py-1 font-black text-[10px] border-none ${
+                                   rec.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 
+                                   rec.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
+                                 }`}>
+                                   {rec.status === 'approved' ? 'معتمد' : rec.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
+                                 </Badge>
+                                 {rec.fileData && (
+                                   <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="rounded-xl h-9"
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = rec.fileData;
+                                        link.download = rec.fileName || 'receipt';
+                                        link.click();
+                                      }}
+                                   >
+                                     <Download className="w-4 h-4 ml-2" />
+                                     تحميل
+                                   </Button>
+                                 )}
+                                 {rec.status === 'pending' && (
+                                   <Button 
+                                     size="sm" 
+                                     onClick={async () => {
+                                       try {
+                                         await updateDoc(doc(db, 'projects', projectId, 'receipts', rec.id), { status: 'approved' });
+                                         toast.success('تم اعتماد الإيصال بنجاح');
+                                       } catch(e) {
+                                         toast.error('حدث خطأ');
+                                       }
+                                     }}
+                                     className="rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white h-9"
+                                   >
+                                     اعتماد
+                                   </Button>
+                                 )}
+                               </div>
+                             </div>
+                           ))}
+                         </div>
+                       )}
+                     </div>
                   </motion.div>
                )}
 
@@ -2172,7 +2249,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                        return (
                           <div key={i} className={`flex flex-col ${isMine ? 'items-start' : 'items-end'}`}>
                              <div className={`max-w-[80%] rounded-2xl p-3 ${isMine ? 'bg-amber-50 text-amber-900 rounded-tr-sm' : 'bg-slate-100 text-slate-800 rounded-tl-sm'}`}>
-                                <p className="text-xs font-bold leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                                <p className="text-xs font-bold leading-relaxed whitespace-pre-wrap">{msg.content || msg.text}</p>
                              </div>
                              <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[9px] font-bold text-slate-400">{msg.senderName}</span>
@@ -2200,7 +2277,8 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                            setClientMessage('');
                            try {
                              await addDoc(collection(db, 'projects', projectId, 'clientChats'), {
-                                text: msg,
+                                content: msg,
+                                text: msg, // Fallback for old messages if needed
                                 createdAt: serverTimestamp(),
                                 senderName: profile?.name || 'مدير المشروع',
                                 senderId: auth.currentUser?.uid || '',
@@ -2230,7 +2308,8 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                         setClientMessage('');
                         try {
                           await addDoc(collection(db, 'projects', projectId, 'clientChats'), {
-                             text: msg,
+                             content: msg,
+                             text: msg, // Fallback
                              createdAt: serverTimestamp(),
                              senderName: profile?.name || 'مدير المشروع',
                              senderId: auth.currentUser?.uid || '',

@@ -189,6 +189,17 @@ export default function ClientPortal() {
           uploadedAt: new Date().toISOString(),
           status: 'pending'
         });
+
+        // Send notification to Admin
+        await addDoc(collection(db, 'notifications'), {
+          title: 'إيصال تحويل جديد',
+          message: `قام العميل برفع إيصال تحويل جديد لمشروع: ${project.name}`,
+          type: 'info',
+          projectId: project.id,
+          isRead: false,
+          timestamp: new Date().toISOString()
+        });
+
         toast.success('تم رفع إيصال التحويل بنجاح، سيتم مراجعته من قبل الإدارة.');
       };
       reader.readAsDataURL(file);
@@ -291,8 +302,8 @@ export default function ClientPortal() {
 
   if (!project) return null;
 
-  const totalInvoices = invoices.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
-  const totalPaid = invoices.reduce((sum, inv) => sum + ((inv as any).paidAmount || 0), 0);
+  const totalInvoices = project?.budget || 0;
+  const totalPaid = project?.payments?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0;
   const balance = totalInvoices - totalPaid;
 
   return (
@@ -752,7 +763,7 @@ export default function ClientPortal() {
                             <div className={`relative max-w-[85%] rounded-2xl p-3 shadow-sm ${isClient ? 'bg-white text-slate-800 rounded-tr-sm' : 'bg-[#e1fed3] text-slate-800 rounded-tl-sm'}`}>
                                {/* Tail */}
                                <div className={`absolute top-0 w-3 h-3 ${isClient ? '-right-2 bg-white' : '-left-2 bg-[#e1fed3]'} mask-chat-tail`} style={{ clipPath: isClient ? 'polygon(0 0, 0% 100%, 100% 0)' : 'polygon(0 0, 100% 100%, 100% 0)' }} />
-                               <p className="text-sm font-bold leading-relaxed relative z-10">{msg.content}</p>
+                               <p className="text-sm font-bold leading-relaxed relative z-10 whitespace-pre-wrap">{msg.content || msg.text}</p>
                                <div className="flex items-center gap-1 text-[9px] mt-1 font-bold justify-end text-slate-400">
                                  <span>{new Date(msg.createdAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</span>
                                  {!isClient && <CheckCircle2 className="w-3 h-3 text-blue-500" />}
