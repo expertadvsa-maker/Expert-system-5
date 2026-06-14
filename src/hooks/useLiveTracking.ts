@@ -55,12 +55,18 @@ export function useLiveTracking() {
   }, [activeCompanyId]);
 
   useEffect(() => {
-    // Only track if logged in and geolocation is supported
-    if (!user?.uid || !activeCompanyId || !profile || !navigator.geolocation) {
+    // 🚀 Start tracking logic as soon as user is logged in
+    // This guarantees the browser asks for permission even if profile/company is still loading
+    if (!user?.uid || !navigator.geolocation) {
       return;
     }
 
     const updateLocation = async (lat: number, lng: number, speedMps: number | null) => {
+      if (!activeCompanyId || !profile) {
+        // We have location permission, but the app is still loading profile/company. Wait quietly.
+        return;
+      }
+
       try {
         const speedKmh = speedMps ? Math.round(speedMps * 3.6) : 0;
         const nowStr = new Date().toISOString();
