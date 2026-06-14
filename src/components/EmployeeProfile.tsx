@@ -416,7 +416,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 max-w-5xl mx-auto px-4">
-      {loggedInProfile?.uid === employeeId && (
+      {profile?.uid === employeeId && (
         <SmartAttendance />
       )}
       {/* Header Profile Section */}
@@ -467,7 +467,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
             </div>
 
             <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-4">
-              {loggedInProfile?.uid === employeeId ? (
+              {profile?.uid === employeeId ? (
                 <>
                   <Button onClick={() => setIsLeaveDialogOpen(true)} className="rounded-xl gap-2 font-black h-11 px-6 bg-blue-600 hover:bg-blue-700 shadow-md">
                     <Plane className="w-4 h-4" />
@@ -484,7 +484,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
                 </>
               ) : (
                 <>
-                  {(loggedInProfile?.role === 'manager' || loggedInProfile?.role === 'supervisor') && (
+                  {(profile?.role === 'manager' || profile?.role === 'supervisor') && (
                     <Button onClick={() => setIsNoteDialogOpen(true)} className="rounded-xl gap-2 font-black h-11 px-6 bg-primary hover:bg-zinc-800 shadow-md">
                       <Activity className="w-4 h-4" />
                       إضافة تحديث للملف
@@ -592,7 +592,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
         {/* Main Area: Tabs & Tables */}
         <div className="lg:col-span-2 space-y-6">
           <Tabs defaultValue="activity" className="w-full">
-            <TabsList className={`w-full max-w-2xl bg-slate-100 p-1 rounded-2xl grid ${loggedInProfile?.role === 'manager' ? 'grid-cols-6' : 'grid-cols-5'}`}>
+            <TabsList className={`w-full max-w-2xl bg-slate-100 p-1 rounded-2xl grid ${profile?.role === 'manager' ? 'grid-cols-6' : 'grid-cols-5'}`}>
               <TabsTrigger value="activity" className="rounded-xl font-bold py-2.5">
                 النشاطات
               </TabsTrigger>
@@ -602,7 +602,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
               <TabsTrigger value="leaves" className="rounded-xl font-bold py-2.5 text-xs">
                 الإجازات
               </TabsTrigger>
-              {loggedInProfile?.role === 'manager' && (
+              {profile?.role === 'manager' && (
                 <TabsTrigger value="finance" className="rounded-xl font-bold py-2.5 text-xs">
                   المالية
                 </TabsTrigger>
