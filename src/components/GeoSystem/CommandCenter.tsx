@@ -4,7 +4,7 @@ import { GeoZone, TrackerPoint, GeoAnomaly } from './types';
 import { GeoEngine } from './GeoEngine';
 import LiveMap from './LiveMap';
 import { db } from '../../lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, writeBatch, doc, deleteDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, writeBatch, doc, deleteDoc, getDocs, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { 
   Radar, 
@@ -39,10 +39,13 @@ export default function CommandCenter() {
     return dbProjects.map(proj => {
       let coords = proj.locationCoords;
       if (!coords && proj.locationLink) {
-        const atMatch = proj.locationLink.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-        const qMatch = proj.locationLink.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+        const atMatch = proj.locationLink.match(/(?:@|%40)(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/);
+        const qMatch = proj.locationLink.match(/q=(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/);
+        const directMatch = proj.locationLink.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+        
         if (atMatch) coords = { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
         else if (qMatch) coords = { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+        else if (directMatch) coords = { lat: parseFloat(directMatch[1]), lng: parseFloat(directMatch[2]) };
       }
       return { ...proj, dynamicCoords: coords };
     });
@@ -51,7 +54,7 @@ export default function CommandCenter() {
   const zones = useMemo(() => {
     const combined = [...dbZones];
     parsedProjects.forEach(proj => {
-      if (proj.dynamicCoords && proj.status !== 'completed' && proj.status !== 'closed') {
+      if (proj.dynamicCoords) {
         combined.push({
           id: proj.id,
           name: proj.title || proj.name || 'مشروع بدون اسم',
@@ -69,9 +72,7 @@ export default function CommandCenter() {
   const missingLocationProjects = useMemo(() => {
     return parsedProjects.filter(proj => 
       !proj.dynamicCoords && 
-      proj.status !== 'completed' && 
-      proj.status !== 'closed' &&
-      proj.status !== 'planning' // Planning might not have locations yet
+      proj.status === 'active'
     );
   }, [parsedProjects]);
 
@@ -102,9 +103,15 @@ export default function CommandCenter() {
 
   const [isSeeding, setIsSeeding] = useState(false);
   
-  // Drawing Mode State
-  const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const [tempZone, setTempZone] = useState<{lat: number; lng: number; radius: number; name: string; type: string; projectId?: string} | null>(null);
+  const [zoneModal, setZoneModal] = useState<{
+    isOpen: boolean;
+    mode: 'new' | 'edit' | 'missing';
+    zoneId: string;
+    title: string;
+    type: string;
+    radius: number;
+    inputLink: string;
+  }>({ isOpen: false, mode: 'new', zoneId: '', title: '', type: 'office', radius: 100, inputLink: '' });
 
   // New features state
   const [mapType, setMapType] = useState<'default' | 'satellite'>('default');
@@ -264,31 +271,60 @@ export default function CommandCenter() {
     }
   };
 
-  const handleSaveZone = async () => {
-    if (!tempZone || !activeCompanyId || !tempZone.name) {
-      toast.error('يرجى إدخال اسم المنطقة وتحديد الموقع على الخريطة');
+  const handleSaveZoneModal = async () => {
+    let coords = null;
+    const link = zoneModal.inputLink;
+    if (link) {
+      const atMatch = link.match(/(?:@|%40)(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/);
+      const qMatch = link.match(/q=(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/);
+      const directMatch = link.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+      
+      if (atMatch) coords = { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+      else if (qMatch) coords = { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+      else if (directMatch) coords = { lat: parseFloat(directMatch[1]), lng: parseFloat(directMatch[2]) };
+    }
+
+    if (!coords && zoneModal.mode !== 'edit') {
+      toast.error('الرابط غير صالح أو الإحداثيات مفقودة.');
       return;
     }
+
     try {
-      if (tempZone.projectId) {
-        await updateDoc(doc(db, 'projects', tempZone.projectId), {
-          locationCoords: { lat: tempZone.lat, lng: tempZone.lng },
-          radiusMeters: tempZone.radius
+      if (zoneModal.mode === 'missing') {
+        await updateDoc(doc(db, 'projects', zoneModal.zoneId), {
+          locationLink: link,
+          locationCoords: coords
         });
-        toast.success('تم ربط النطاق الجغرافي بالمشروع بنجاح');
-      } else {
+        toast.success('تم ربط النطاق بالمشروع بنجاح');
+      } else if (zoneModal.mode === 'new') {
+        if (!zoneModal.title) {
+          toast.error('يرجى إدخال اسم النطاق');
+          return;
+        }
         await addDoc(collection(db, 'geo_zones'), {
           companyId: activeCompanyId,
-          name: tempZone.name,
-          type: tempZone.type,
-          center: { lat: tempZone.lat, lng: tempZone.lng },
-          radiusMeters: tempZone.radius,
+          name: zoneModal.title,
+          type: zoneModal.type,
+          center: coords,
+          radiusMeters: zoneModal.radius,
           createdAt: new Date().toISOString()
         });
-        toast.success('تم إنشاء النطاق الجغرافي بنجاح');
+        toast.success('تم إنشاء النطاق بنجاح');
+      } else if (zoneModal.mode === 'edit') {
+        const isDbProject = dbProjects.some(p => p.id === zoneModal.zoneId);
+        if (isDbProject) {
+          const updateData: any = { radiusMeters: zoneModal.radius };
+          if (link) updateData.locationLink = link;
+          if (coords) updateData.locationCoords = coords;
+          await updateDoc(doc(db, 'projects', zoneModal.zoneId), updateData);
+        } else {
+          const updateData: any = { name: zoneModal.title, type: zoneModal.type, radiusMeters: zoneModal.radius };
+          if (coords) updateData.center = coords;
+          await updateDoc(doc(db, 'geo_zones', zoneModal.zoneId), updateData);
+        }
+        toast.success('تم تحديث النطاق بنجاح');
       }
-      setIsDrawingMode(false);
-      setTempZone(null);
+      setZoneModal(prev => ({...prev, isOpen: false}));
     } catch (error) {
       toast.error('فشل حفظ النطاق الجغرافي');
     }
@@ -317,9 +353,7 @@ export default function CommandCenter() {
           points={points} 
           center={selectedPoint || { lat: 24.7136, lng: 46.6753 }} 
           zoom={13} 
-          onMapClick={handleMapClick}
-          tempZoneCenter={tempZone ? { lat: tempZone.lat, lng: tempZone.lng } : undefined}
-          tempZoneRadius={tempZone?.radius}
+          onMapClick={() => {}}
           mapType={mapType}
         />
         
@@ -334,8 +368,6 @@ export default function CommandCenter() {
             <span className="absolute bottom-full mb-3 bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-lg border border-slate-700">
               {mapType === 'default' ? 'قمر صناعي' : 'خريطة عادية'}
             </span>
-          </button>
-          
           <button 
             onClick={() => {
                if (navigator.geolocation) {
@@ -421,62 +453,22 @@ export default function CommandCenter() {
                 النطاقات الجغرافية
               </h2>
               <button 
-                onClick={() => setIsDrawingMode(!isDrawingMode)}
-                className={`p-1.5 rounded-lg border transition-all ${
-                  isDrawingMode 
-                  ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' 
-                  : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30'
-                }`}
+                onClick={() => {
+                  setZoneModal({
+                    isOpen: true,
+                    mode: 'new',
+                    zoneId: '',
+                    title: '',
+                    type: 'office',
+                    radius: 100,
+                    inputLink: ''
+                  });
+                }}
+                className="p-1.5 rounded-lg border transition-all bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30"
               >
-                {isDrawingMode ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                <Plus className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Drawing Mode Panel */}
-            {isDrawingMode && (
-              <div className="mb-4 p-4 bg-slate-800/80 rounded-xl border border-primary/50 animate-in fade-in">
-                <p className="text-xs text-primary font-bold mb-3">انقر على الخريطة لتحديد مركز النطاق الجديد</p>
-                {tempZone ? (
-                  <div className="space-y-3">
-                    <input 
-                      type="text" 
-                      placeholder="اسم النطاق (مثال: مشروع المطار)" 
-                      value={tempZone.name}
-                      onChange={e => setTempZone({...tempZone, name: e.target.value})}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
-                    />
-                    <select 
-                      value={tempZone.type}
-                      onChange={e => setTempZone({...tempZone, type: e.target.value})}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
-                    >
-                      <option value="project">مشروع</option>
-                      <option value="office">مكتب إداري</option>
-                      <option value="accommodation">سكن عمال</option>
-                    </select>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400">قطر السياج (متر):</span>
-                      <input 
-                        type="number" 
-                        value={tempZone.radius}
-                        onChange={e => setTempZone({...tempZone, radius: Number(e.target.value)})}
-                        className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center"
-                      />
-                    </div>
-                    <button 
-                      onClick={handleSaveZone}
-                      className="w-full mt-2 bg-primary hover:bg-primary/80 text-white rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-4 h-4" /> حفظ النطاق
-                    </button>
-                  </div>
-                ) : (
-                  <div className="h-24 flex items-center justify-center border-2 border-dashed border-slate-600 rounded-lg text-slate-500 text-xs">
-                    بانتظار النقر على الخريطة...
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="overflow-y-auto pr-1 no-scrollbar space-y-3 flex-1">
               {zones.map(z => (
@@ -486,7 +478,16 @@ export default function CommandCenter() {
                   onClick={() => setSelectedPoint(z.center)}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, zoneId: z.id });
+                    e.stopPropagation();
+                    setZoneModal({
+                      isOpen: true,
+                      mode: 'edit',
+                      zoneId: z.id,
+                      title: z.name,
+                      type: z.type || 'project',
+                      radius: z.radiusMeters || 100,
+                      inputLink: z.center ? `${z.center.lat}, ${z.center.lng}` : ''
+                    });
                   }}
                 >
                   <div className="flex items-center gap-3">
@@ -517,30 +518,32 @@ export default function CommandCenter() {
                     <div 
                       key={`missing-${proj.id}`} 
                       onClick={() => {
-                        setIsDrawingMode(true);
-                        setTempZone({
-                          lat: 0,
-                          lng: 0,
-                          radius: 100,
-                          name: proj.title || proj.name || 'مشروع بدون اسم',
+                        setZoneModal({
+                          isOpen: true,
+                          mode: 'missing',
+                          zoneId: proj.id,
+                          title: proj.title || proj.name || 'مشروع بدون اسم',
                           type: 'project',
-                          projectId: proj.id
+                          radius: 100,
+                          inputLink: ''
                         });
-                        toast.info('انقر على الخريطة لتحديد موقع المشروع');
                       }}
-                      className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer"
-                      title="انقر لتحديد موقع المشروع على الخريطة"
+                      className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer group"
+                      title="اضغط لإضافة رابط أو إحداثيات الموقع"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
-                          <MapPin className="w-4 h-4" />
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform">
+                            <MapPin className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-white">{proj.title || proj.name || 'مشروع بدون اسم'}</p>
+                            <p className="text-[10px] text-amber-300 mt-0.5 flex items-center gap-1">
+                              اضغط لإضافة رابط أو إحداثيات الموقع
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-sm text-white">{proj.title || proj.name || 'مشروع بدون اسم'}</p>
-                          <p className="text-[10px] text-amber-300 mt-0.5 flex items-center gap-1">
-                            أضف الرابط في تفاصيل المشروع لتفعيل التتبع
-                          </p>
-                        </div>
+                        <Plus className="w-4 h-4 text-amber-500 opacity-50 group-hover:opacity-100" />
                       </div>
                     </div>
                   ))}
@@ -634,6 +637,113 @@ export default function CommandCenter() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Zone Management Modal */}
+      <AnimatePresence>
+        {zoneModal.isOpen && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm cursor-pointer"
+              onClick={() => setZoneModal(prev => ({...prev, isOpen: false}))}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden flex flex-col p-6"
+            >
+              <h2 className="text-xl font-black text-white mb-2">
+                {zoneModal.mode === 'new' ? 'إضافة نطاق جديد' : zoneModal.mode === 'edit' ? 'إدارة النطاق الجغرافي' : 'تحديد نطاق المشروع'}
+              </h2>
+              <p className="text-xs text-slate-400 mb-6">
+                ألصق الإحداثيات المباشرة (مثل: <code className="bg-slate-800 text-amber-400 px-1 rounded">24.713, 46.675</code>) أو رابط جوجل ماب الطويل.
+              </p>
+              
+              <div className="space-y-4">
+                {zoneModal.mode !== 'missing' && (
+                  <>
+                    <div>
+                      <label className="text-xs font-bold text-slate-300 block mb-2">اسم النطاق</label>
+                      <input
+                        type="text"
+                        value={zoneModal.title}
+                        onChange={(e) => setZoneModal(prev => ({...prev, title: e.target.value}))}
+                        disabled={dbProjects.some(p => p.id === zoneModal.zoneId)} // Disabled if it's a real project
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none disabled:opacity-50"
+                      />
+                    </div>
+                    <div className="flex gap-4">
+                      <div className="flex-1">
+                        <label className="text-xs font-bold text-slate-300 block mb-2">نوع النطاق</label>
+                        <select
+                          value={zoneModal.type}
+                          onChange={(e) => setZoneModal(prev => ({...prev, type: e.target.value}))}
+                          disabled={dbProjects.some(p => p.id === zoneModal.zoneId)}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white outline-none disabled:opacity-50"
+                        >
+                          <option value="project">مشروع</option>
+                          <option value="office">مكتب إداري</option>
+                          <option value="accommodation">سكن عمال</option>
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs font-bold text-slate-300 block mb-2">قطر الرادار (بالمتر)</label>
+                        <input
+                          type="number"
+                          value={zoneModal.radius}
+                          onChange={(e) => setZoneModal(prev => ({...prev, radius: Number(e.target.value)}))}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-2">رابط الموقع أو الإحداثيات {zoneModal.mode === 'missing' && `لمشروع (${zoneModal.title})`}</label>
+                  <input
+                    type="text"
+                    value={zoneModal.inputLink}
+                    onChange={(e) => setZoneModal(prev => ({...prev, inputLink: e.target.value}))}
+                    placeholder="24.7136, 46.6753"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-sm text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                    dir="ltr"
+                  />
+                </div>
+                
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={handleSaveZoneModal}
+                    disabled={!zoneModal.inputLink.trim() && zoneModal.mode !== 'edit'}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    حفظ النطاق
+                  </button>
+                  {zoneModal.mode === 'edit' && !dbProjects.some(p => p.id === zoneModal.zoneId) && (
+                    <button
+                      onClick={() => {
+                        handleDeleteZone(zoneModal.zoneId);
+                        setZoneModal(prev => ({...prev, isOpen: false}));
+                      }}
+                      className="px-4 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold h-12 rounded-xl transition-colors"
+                    >
+                      حذف
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setZoneModal(prev => ({...prev, isOpen: false}))}
+                    className="px-6 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold h-12 rounded-xl transition-colors"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

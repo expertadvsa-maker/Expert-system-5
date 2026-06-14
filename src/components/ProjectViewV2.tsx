@@ -622,12 +622,16 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
     try {
       let updatedCoords = editForm.locationCoords;
       if (editForm.locationLink) {
-        const atMatch = editForm.locationLink.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-        const qMatch = editForm.locationLink.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+        const atMatch = editForm.locationLink.match(/(?:@|%40)(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/);
+        const qMatch = editForm.locationLink.match(/q=(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/);
+        const directMatch = editForm.locationLink.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+        
         if (atMatch) {
           updatedCoords = { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
         } else if (qMatch) {
           updatedCoords = { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+        } else if (directMatch) {
+          updatedCoords = { lat: parseFloat(directMatch[1]), lng: parseFloat(directMatch[2]) };
         }
       }
 
@@ -829,7 +833,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
            </div>
 
            <div className="flex items-center gap-3">
-              {project.status === 'planning' && profile?.role === 'manager' && (
+              {project.status === 'planning' && (profile?.role === 'manager' || profile?.role === 'owner') && (
                  <button 
                     onClick={async () => {
                        try {
@@ -847,8 +851,8 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
               )}
 
             <Dialog open={isEditOpen} onOpenChange={(open) => {
-              if (open && profile?.role !== 'manager') {
-                 toast.error("صلاحيات الإدارة محصورة على المالك (المدير) فقط لمنع التلاعب.");
+              if (open && profile?.role !== 'manager' && profile?.role !== 'owner') {
+                 toast.error("صلاحيات الإدارة محصورة على المالك والمدير فقط لمنع التلاعب.");
                  return;
               }
               setIsEditOpen(open);
@@ -944,7 +948,8 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                     <Button onClick={handleUpdateProject} className="w-full h-12 rounded-2xl bg-slate-900 font-black mt-4">حفظ التغييرات</Button>
                  </div>
               </DialogContent>
-           </Dialog>
+            </Dialog>
+         </div>
         </div>
       </section>
 
