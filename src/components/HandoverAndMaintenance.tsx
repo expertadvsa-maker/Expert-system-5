@@ -54,14 +54,11 @@ export default function HandoverAndMaintenance({ project }: { project: Project }
     setIsSaving(true);
     try {
       await updateDoc(doc(db, 'projects', project.id), {
-        status: 'maintenance',
-        handoverAccepted: true,
-        handoverDate: new Date().toISOString(),
+        status: 'handover_pending',
         handoverSignatureText: handoverText,
-        clientRating: rating,
         guarantees: defaultGuarantees
       });
-      toast.success('تم إنهاء المشروع وتوثيق الاستلام وتحويله لوضع الصيانة بنجاح');
+      toast.success('تم إرسال الإقرار للعميل! المشروع الآن بانتظار توقيع العميل عبر بوابته الإلكترونية.');
       setIsSignOpen(false);
     } catch (err: any) {
       toast.error('فشل توثيق الاستلام: ' + err.message);
@@ -105,7 +102,13 @@ export default function HandoverAndMaintenance({ project }: { project: Project }
               </div>
             </div>
             
-            {!isSignOpen ? (
+            {project.status === 'handover_pending' ? (
+              <div className="bg-amber-50 p-6 rounded-3xl border border-dashed border-amber-200 text-center flex flex-col items-center gap-4">
+                <Loader2 className="w-12 h-12 text-amber-400 animate-spin" />
+                <h4 className="font-black text-amber-700">بانتظار توقيع العميل عبر البوابة الإلكترونية</h4>
+                <p className="text-sm font-bold text-amber-600/70">تم إرسال الإقرار بنجاح. سيتم الاعتماد فور توقيع العميل.</p>
+              </div>
+            ) : !isSignOpen ? (
               <div className="bg-slate-50 p-6 rounded-3xl border border-dashed border-slate-200 text-center flex flex-col items-center gap-4 hover:bg-slate-100 transition-colors">
                 <FileCheck className="w-12 h-12 text-slate-300" />
                 <h4 className="font-black text-slate-700">لم يتم تسليم المشروع للعميل بعد</h4>

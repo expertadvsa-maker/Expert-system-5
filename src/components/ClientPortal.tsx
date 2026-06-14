@@ -32,6 +32,7 @@ export default function ClientPortal() {
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [signConsent, setSignConsent] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
+  const [clientRating, setClientRating] = useState(5);
   const chatScrollRef = React.useRef<HTMLDivElement>(null);
 
   // PWA Install state
@@ -220,6 +221,9 @@ export default function ClientPortal() {
         status: 'maintenance',
         handoverAccepted: true,
         handoverDate: new Date().toISOString(),
+        handoverClientSignature: 'موقّع إلكترونياً من العميل',
+        handoverClientDate: new Date().toISOString(),
+        clientRating: clientRating,
       });
       toast.success('تم تأكيد الاستلام بنجاح، شكراً لثقتكم.');
     } catch (err) {
@@ -419,7 +423,7 @@ export default function ClientPortal() {
                 </div>
 
                 {/* Handover Block */}
-                {project.status !== 'maintenance' && project.status !== 'completed' && project.handoverSignatureText && !project.handoverAccepted && (
+                {project.status === 'handover_pending' && project.handoverSignatureText && (
                   <Card className="p-8 rounded-[2.5rem] bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-none shadow-xl shadow-emerald-500/20 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32" />
                     <div className="relative z-10">
@@ -432,9 +436,28 @@ export default function ClientPortal() {
                             <p className="text-sm font-bold text-emerald-100 mt-1">يرجى قراءة إقرار الاستلام والاعتماد لإقفال المشروع.</p>
                          </div>
                       </div>
-                      <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl text-sm font-bold leading-relaxed border border-white/20 shadow-inner mb-6">
-                        "{project.handoverSignatureText}"
+                      <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl text-sm font-bold leading-relaxed border border-white/20 shadow-inner mb-6 whitespace-pre-wrap">
+                        {project.handoverSignatureText}
                       </div>
+                      
+                      <div className="bg-white/5 p-5 rounded-3xl border border-white/10 mb-6 flex flex-col sm:flex-row items-center gap-4 justify-between">
+                         <div>
+                            <h4 className="font-black text-white text-sm">تقييمك لمستوى الخدمة</h4>
+                            <p className="text-[10px] font-bold text-emerald-100">رأيك يهمنا في تحسين جودة مشاريعنا القادمة</p>
+                         </div>
+                         <div className="flex items-center gap-2" dir="ltr">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                               <button 
+                                  key={star}
+                                  onClick={() => setClientRating(star)}
+                                  className={`p-2 rounded-xl transition-all ${clientRating >= star ? 'bg-amber-400 text-white scale-110 shadow-lg shadow-amber-500/30' : 'bg-white/10 text-white/40 hover:bg-white/20'}`}
+                               >
+                                  <Star className={`w-5 h-5 ${clientRating >= star ? 'fill-current' : ''}`} />
+                               </button>
+                            ))}
+                         </div>
+                      </div>
+
                       <div className="flex flex-col sm:flex-row gap-4 items-center bg-white/5 p-4 rounded-3xl border border-white/10">
                          <label className="flex flex-1 items-center gap-3 cursor-pointer select-none">
                             <input type="checkbox" checked={signConsent} onChange={e => setSignConsent(e.target.checked)} className="w-6 h-6 rounded-lg text-emerald-600 border-white/30 bg-white/20 focus:ring-emerald-500" />

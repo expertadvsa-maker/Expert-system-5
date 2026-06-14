@@ -84,7 +84,7 @@ export interface Project {
   title: string;
   name?: string; // Compatibility
   description?: string;
-  status: 'active' | 'completed' | 'on-hold' | 'in-progress' | 'maintenance' | 'closed';
+  status: 'planning' | 'active' | 'completed' | 'on-hold' | 'in-progress' | 'handover_pending' | 'maintenance' | 'closed';
   locationLink?: string;
   locationCoords?: { lat: number, lng: number };
   clientName?: string;
@@ -94,6 +94,9 @@ export interface Project {
   handoverAccepted?: boolean;
   handoverDate?: string;
   handoverSignatureText?: string;
+  handoverClientSignature?: string; // Ticked or signed by client
+  handoverClientDate?: string;
+  clientRating?: number;
   warrantyContractUrl?: string;
   warrantyEndDate?: string;
   startDate?: string;

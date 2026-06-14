@@ -369,13 +369,28 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
         }
       }
 
+      // محاولة استخراج الإحداثيات من رابط جوجل ماب
+      let locationCoords = undefined;
+      if (newProject.locationLink) {
+        const url = newProject.locationLink;
+        const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+        const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+        
+        if (atMatch && atMatch.length >= 3) {
+          locationCoords = { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+        } else if (qMatch && qMatch.length >= 3) {
+          locationCoords = { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+        }
+      }
+
       // 3. حفظ مستند المشروع بقاعدة البيانات
       await setDoc(projectRef, {
         ...newProject,
+        locationCoords,
         companyId: activeCompanyId || null,
         id: projectId,
         name: newProject.title, // حقل الاسم لضمان التوافقية البرمجية مع كافة واجهات النظام
-        status: 'active',
+        status: 'planning',
         createdAt: new Date().toISOString(),
         timestamp: serverTimestamp(),
         workerIds: [],
@@ -432,10 +447,17 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
     
     const unsubProjects = onSnapshot(
       activeCompanyId 
-        ? query(collection(db, 'projects'), where('companyId', '==', activeCompanyId), orderBy('createdAt', 'desc'))
-        : query(collection(db, 'projects'), orderBy('createdAt', 'desc')),
+        ? query(collection(db, 'projects'), where('companyId', '==', activeCompanyId))
+        : query(collection(db, 'projects')),
       (snapshot) => {
         const rawProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+        
+        // فرز المشاريع حسب تاريخ الإنشاء (الأحدث أولاً) لتجنب أخطاء فهرسة فايربيس
+        rawProjects.sort((a, b) => {
+           const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+           const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+           return dateB - dateA;
+        });
         
         if (isOwner) {
           setProjects(rawProjects);

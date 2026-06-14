@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from "@/components/ui/input";
 import { 
-  ArrowLeft, 
+  ArrowLeft,
+  ArrowRight, 
   MapPin, 
   HelpCircle, 
   Phone, 
@@ -771,155 +772,171 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
   return (
     <div className="w-full px-4 py-4 flex flex-col gap-6" dir="rtl">
       
-      <section className="flex flex-col gap-4">
-        <div className="flex items-center justify-between w-full">
-           <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={onBack} 
-            className="rounded-xl bg-white shadow-sm border border-slate-100 h-8 w-8"
-           >
-              <ArrowLeft className="w-4 h-4 text-slate-900" />
-           </Button>
-           <Badge className="bg-primary/10 text-primary border-none font-black text-[9px] px-3 py-1 rounded-lg uppercase tracking-widest">
-              ID: {project.id.slice(-6)}
-           </Badge>
-        </div>
-        
-        <div className="space-y-2">
-           <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">{project.status === 'active' ? 'قيد التنفيذ والمتابعة' : 'مشروع منتهي'}</span>
+      <section className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+           <div className="flex items-start gap-4">
+             <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={onBack} 
+              className="rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-100 h-12 w-12 shrink-0 transition-all active:scale-95"
+             >
+                <ArrowRight className="w-5 h-5 text-slate-900" />
+             </Button>
+             
+             <div className="flex flex-col gap-2 mt-1">
+                <div className="flex flex-wrap items-center gap-2">
+                   <div className={`h-2 w-2 rounded-full ${
+                      project.status === 'active' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 
+                      project.status === 'planning' ? 'bg-indigo-500 animate-pulse' :
+                      project.status === 'handover_pending' ? 'bg-amber-500 animate-pulse' :
+                      project.status === 'maintenance' ? 'bg-blue-500' :
+                      'bg-slate-400'
+                   }`} />
+                   <span className="text-[10px] font-black text-slate-500 tracking-wider">
+                      {project.status === 'active' ? 'قيد التنفيذ والمتابعة' : 
+                       project.status === 'planning' ? 'تخطيط وتسعير' :
+                       project.status === 'handover_pending' ? 'بانتظار توقيع العميل' :
+                       project.status === 'maintenance' ? 'صيانة وضمان' :
+                       project.status === 'completed' ? 'مشروع منتهي' :
+                       'متوقف مؤقتاً'}
+                   </span>
+                   <Badge className="bg-slate-100 text-slate-600 border-none font-black text-[9px] px-2.5 py-0.5 rounded-lg uppercase tracking-widest">
+                      ID: {project.id?.slice(-6) || '---'}
+                   </Badge>
+                </div>
+                
+                <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-snug">
+                   {project.title}
+                </h1>
+                
+                <p className="text-slate-500 font-bold text-xs leading-relaxed max-w-2xl mt-1">
+                   {project.description || 'لا يوجد وصف مفصل لهذا المشروع حالياً في النظام.'}
+                </p>
+             </div>
            </div>
-           <div className="flex items-center justify-between gap-3">
-              <h1 className="text-xl font-black text-slate-900 tracking-tight leading-tight">
-                 {project.title}
-              </h1>
-              <Dialog open={isEditOpen} onOpenChange={(open) => {
-                 if (open && profile?.role !== 'manager') {
-                    toast.error("صلاحيات الإدارة محصورة على المالك (المدير) فقط لمنع التلاعب.");
-                    return;
-                 }
-                 setIsEditOpen(open);
-              }}>
-                 <DialogTrigger asChild>
-                    <button className="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-100 bg-background h-8 px-3 font-black text-[9px] gap-2 hover:bg-muted transition-all outline-none cursor-pointer">
-                       <Settings2 className="w-2.5 h-2.5" />
-                       إدارة
-                    </button>
-                 </DialogTrigger>
-                 <DialogContent className="max-w-lg rounded-[2.5rem] p-8 border-none" dir="rtl">
-                    <DialogHeader>
-                       <DialogTitle className="text-right font-black">تعديل بيانات المشروع</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-5 mt-4">
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2 md:col-span-2">
-                             <Label className="text-xs font-black text-slate-400">عنوان المشروع *</Label>
-                             <Input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
-                          </div>
-                       </div>
 
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                             <Label className="text-xs font-black text-slate-400">نوع المشروع / اللوحة *</Label>
-                             <select
-                                value={editForm.projectType || 'hoardings'}
-                                onChange={e => setEditForm({...editForm, projectType: e.target.value})}
-                                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs pr-4 focus:ring-0 focus:border-primary outline-none"
-                             >
-                                <option value="hoardings">أسوار دعائية (تجهيز المواقع والمشاريع الخارجية)</option>
-                                <option value="signage_printing">لوحات وطباعة (واجهات محلات، يوني بول، بنر وفليكس)</option>
-                                <option value="cladding_letters">كلادينج وحروف بارزة (حروف مضيئة، زنكور، اكريليك واستيل)</option>
-                                <option value="digital_screens">شاشات ومجسمات (شاشات LED وتجهيز معارض ومؤتمرات)</option>
-                                <option value="exhibition_booths">تجهيز معارض ومؤتمرات (بناء أجنحة وبوثات معارض)</option>
-                                <option value="megastructures">مجسمات ضخمة (مجسمات جمالية وهندسية ضخمة)</option>
-                                <option value="wrapping_branding">تغليف مركبات (تغليف وتغيير هوية أساطيل السيارات)</option>
-                                <option value="maintenance">صيانة لوحات وشاشات (صيانة وقائية وتصحيحية للوحات والشاشات)</option>
-                             </select>
-                          </div>
-                          <div className="space-y-2">
-                             <Label className="text-xs font-black text-slate-400">المشرف المسؤول *</Label>
-                             <select
-                                value={editForm.supervisor || ''}
-                                onChange={e => setEditForm({...editForm, supervisor: e.target.value})}
-                                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs pr-4 focus:ring-0 focus:border-primary outline-none"
-                             >
-                                <option value="">-- اختر المشرف المسؤول --</option>
-                                {usersList.map(u => (
-                                   <option key={u.id || u.uid} value={u.name}>
-                                      {u.name} ({u.role === 'manager' ? 'مدير' : u.role === 'supervisor' ? 'مشرف' : u.role === 'sales_rep' ? 'مندوب' : 'موظف'})
-                                   </option>
-                                ))}
-                             </select>
-                          </div>
-                       </div>
+           <div className="flex items-center gap-3">
+              {project.status === 'planning' && profile?.role === 'manager' && (
+                 <button 
+                    onClick={async () => {
+                       try {
+                          await updateDoc(doc(db, 'projects', project.id), { status: 'active' });
+                          toast.success('تم تحويل المشروع إلى قيد التنفيذ وبدء العمل!');
+                       } catch(err) {
+                          toast.error('حدث خطأ أثناء تفعيل المشروع');
+                       }
+                    }}
+                    className="group/button shrink-0 inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white h-12 px-5 font-black text-xs gap-2 hover:shadow-lg hover:shadow-emerald-500/30 transition-all outline-none cursor-pointer active:scale-95"
+                 >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>اعتماد وبدء التنفيذ</span>
+                 </button>
+              )}
 
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                             <Label className="text-xs font-black text-slate-400">المقاسات الفنية والقياسات</Label>
-                             <Input value={editForm.totalArea || ''} onChange={e => setEditForm({...editForm, totalArea: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
-                          </div>
-                          <div className="space-y-2">
-                             <Label className="text-xs font-black text-slate-400">تاريخ التسليم المتوقع</Label>
-                             <Input type="date" value={editForm.endDate || ''} onChange={e => setEditForm({...editForm, endDate: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
-                          </div>
+            <Dialog open={isEditOpen} onOpenChange={(open) => {
+              if (open && profile?.role !== 'manager') {
+                 toast.error("صلاحيات الإدارة محصورة على المالك (المدير) فقط لمنع التلاعب.");
+                 return;
+              }
+              setIsEditOpen(open);
+           }}>
+              <DialogTrigger asChild>
+                 <button className="group/button shrink-0 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white h-12 px-5 font-black text-xs gap-2 hover:bg-slate-50 transition-all outline-none cursor-pointer self-start shadow-sm active:scale-95">
+                    <Settings2 className="w-4 h-4 text-slate-700" />
+                    <span className="text-slate-700">إدارة المشروع</span>
+                 </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg rounded-[2.5rem] p-8 border-none" dir="rtl">
+                 <DialogHeader>
+                    <DialogTitle className="text-right font-black">تعديل بيانات المشروع</DialogTitle>
+                 </DialogHeader>
+                 <div className="space-y-5 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div className="space-y-2 md:col-span-2">
+                          <Label className="text-xs font-black text-slate-400">عنوان المشروع *</Label>
+                          <Input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
                        </div>
-
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                             <Label className="text-xs font-black text-slate-400">الحالة</Label>
-                             <Select value={editForm.status} onValueChange={v => setEditForm({...editForm, status: v as any})}>
-                                <SelectTrigger className="rounded-xl h-10">
-                                   <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                   <SelectItem value="active">نشط</SelectItem>
-                                   <SelectItem value="completed">مكتمل</SelectItem>
-                                   <SelectItem value="on-hold">متوقف مؤقتاً</SelectItem>
-                                </SelectContent>
-                             </Select>
-                          </div>
-                          <div className="space-y-2">
-                             <Label className="text-xs font-black text-slate-400">الميزانية</Label>
-                             <Input type="number" value={editForm.budget} onChange={e => setEditForm({...editForm, budget: Number(e.target.value)})} className="rounded-xl border-slate-100 font-bold" />
-                          </div>
-                       </div>
-
-                       <div className="space-y-2">
-                          <Label className="text-xs font-black text-slate-400">رابط الموقع الجغرافي (Google Maps)</Label>
-                          <Input value={editForm.locationLink} onChange={e => setEditForm({...editForm, locationLink: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
-                       </div>
-                       <Button onClick={handleUpdateProject} className="w-full h-12 rounded-2xl bg-slate-900 font-black mt-4">حفظ التغييرات</Button>
                     </div>
-                 </DialogContent>
-               </Dialog>
-            </div>
-            <p className="text-slate-500 font-bold text-[11px] leading-relaxed max-w-xl">
-              {project.description || 'لا يوجد وصف مفصل لهذا المشروع حالياً في النظام.'}
-           </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div className="space-y-2">
+                          <Label className="text-xs font-black text-slate-400">نوع المشروع / اللوحة *</Label>
+                          <select
+                             value={editForm.projectType || 'hoardings'}
+                             onChange={e => setEditForm({...editForm, projectType: e.target.value})}
+                             className="w-full h-10 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs pr-4 focus:ring-0 focus:border-primary outline-none"
+                          >
+                             <option value="hoardings">أسوار دعائية (تجهيز المواقع والمشاريع الخارجية)</option>
+                             <option value="signage_printing">لوحات وطباعة (واجهات محلات، يوني بول، بنر وفليكس)</option>
+                             <option value="cladding_letters">كلادينج وحروف بارزة (حروف مضيئة، زنكور، اكريليك واستيل)</option>
+                             <option value="digital_screens">شاشات ومجسمات (شاشات LED وتجهيز معارض ومؤتمرات)</option>
+                             <option value="exhibition_booths">تجهيز معارض ومؤتمرات (بناء أجنحة وبوثات معارض)</option>
+                             <option value="megastructures">مجسمات ضخمة (مجسمات جمالية وهندسية ضخمة)</option>
+                             <option value="wrapping_branding">تغليف مركبات (تغليف وتغيير هوية أساطيل السيارات)</option>
+                             <option value="maintenance">صيانة لوحات وشاشات (صيانة وقائية وتصحيحية للوحات والشاشات)</option>
+                          </select>
+                       </div>
+                       <div className="space-y-2">
+                          <Label className="text-xs font-black text-slate-400">المشرف المسؤول *</Label>
+                          <select
+                             value={editForm.supervisor || ''}
+                             onChange={e => setEditForm({...editForm, supervisor: e.target.value})}
+                             className="w-full h-10 rounded-xl bg-slate-50 border border-slate-100 font-bold text-xs pr-4 focus:ring-0 focus:border-primary outline-none"
+                          >
+                             <option value="">-- اختر المشرف المسؤول --</option>
+                             {usersList.map(u => (
+                                <option key={u.id || u.uid} value={u.name}>
+                                   {u.name} ({u.role === 'manager' ? 'مدير' : u.role === 'supervisor' ? 'مشرف' : u.role === 'sales_rep' ? 'مندوب' : 'موظف'})
+                                </option>
+                             ))}
+                          </select>
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div className="space-y-2">
+                          <Label className="text-xs font-black text-slate-400">المقاسات الفنية والقياسات</Label>
+                          <Input value={editForm.totalArea || ''} onChange={e => setEditForm({...editForm, totalArea: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
+                       </div>
+                       <div className="space-y-2">
+                          <Label className="text-xs font-black text-slate-400">تاريخ التسليم المتوقع</Label>
+                          <Input type="date" value={editForm.endDate || ''} onChange={e => setEditForm({...editForm, endDate: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div className="space-y-2">
+                          <Label className="text-xs font-black text-slate-400">الحالة</Label>
+                          <Select value={editForm.status} onValueChange={v => setEditForm({...editForm, status: v as any})}>
+                             <SelectTrigger className="rounded-xl h-10">
+                                <SelectValue />
+                             </SelectTrigger>
+                             <SelectContent>
+                                <SelectItem value="active">نشط</SelectItem>
+                                <SelectItem value="completed">مكتمل</SelectItem>
+                                <SelectItem value="on-hold">متوقف مؤقتاً</SelectItem>
+                             </SelectContent>
+                          </Select>
+                       </div>
+                       <div className="space-y-2">
+                          <Label className="text-xs font-black text-slate-400">الميزانية</Label>
+                          <Input type="number" value={editForm.budget} onChange={e => setEditForm({...editForm, budget: Number(e.target.value)})} className="rounded-xl border-slate-100 font-bold" />
+                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                       <Label className="text-xs font-black text-slate-400">رابط الموقع الجغرافي (Google Maps)</Label>
+                       <Input value={editForm.locationLink} onChange={e => setEditForm({...editForm, locationLink: e.target.value})} className="rounded-xl border-slate-100 font-bold" />
+                    </div>
+                    <Button onClick={handleUpdateProject} className="w-full h-12 rounded-2xl bg-slate-900 font-black mt-4">حفظ التغييرات</Button>
+                 </div>
+              </DialogContent>
+           </Dialog>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-2">
-            <Button 
-               size="sm"
-               onClick={() => window.open(`tel:${project.clientPhone || '0500000000'}`, '_self')}
-               className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white font-black text-[10px] gap-2 shadow-sm transition-all active:scale-95"
-            >
-               <Phone className="w-3.5 h-3.5 text-emerald-400" />
-               اتصال سريع
-            </Button>
-            <Button 
-               size="sm"
-               variant="outline"
-               onClick={() => window.open(project.locationLink, '_blank')}
-               className="h-10 rounded-xl border border-slate-100 bg-white text-slate-900 font-black text-[10px] gap-2 hover:bg-slate-50 transition-all active:scale-95"
-            >
-               <MapPin className="w-3.5 h-3.5 text-primary" />
-               تحديد الموقع
-            </Button>
-      </section>
+
 
       <section className="flex flex-col gap-8">
          <div className="flex items-center gap-2 p-1.5 bg-white border border-slate-100 shadow-sm rounded-3xl overflow-x-auto no-scrollbar">
