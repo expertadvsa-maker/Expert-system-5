@@ -35,32 +35,45 @@ export default function CommandCenter() {
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [dbProjects, setDbProjects] = useState<any[]>([]);
 
+  const parsedProjects = useMemo(() => {
+    return dbProjects.map(proj => {
+      let coords = proj.locationCoords;
+      if (!coords && proj.locationLink) {
+        const atMatch = proj.locationLink.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+        const qMatch = proj.locationLink.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+        if (atMatch) coords = { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+        else if (qMatch) coords = { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+      }
+      return { ...proj, dynamicCoords: coords };
+    });
+  }, [dbProjects]);
+
   const zones = useMemo(() => {
     const combined = [...dbZones];
-    dbProjects.forEach(proj => {
-      if (proj.locationCoords && proj.status !== 'completed' && proj.status !== 'closed') {
+    parsedProjects.forEach(proj => {
+      if (proj.dynamicCoords && proj.status !== 'completed' && proj.status !== 'closed') {
         combined.push({
           id: proj.id,
           name: proj.title || proj.name || 'مشروع بدون اسم',
           type: 'project',
           companyId: proj.companyId,
-          center: proj.locationCoords,
+          center: proj.dynamicCoords,
           radiusMeters: proj.radiusMeters || 100,
           createdAt: proj.createdAt,
         });
       }
     });
     return combined;
-  }, [dbZones, dbProjects]);
+  }, [dbZones, parsedProjects]);
 
   const missingLocationProjects = useMemo(() => {
-    return dbProjects.filter(proj => 
-      !proj.locationCoords && 
+    return parsedProjects.filter(proj => 
+      !proj.dynamicCoords && 
       proj.status !== 'completed' && 
       proj.status !== 'closed' &&
       proj.status !== 'planning' // Planning might not have locations yet
     );
-  }, [dbProjects]);
+  }, [parsedProjects]);
 
   const points = useMemo(() => {
     const combinedMap = new Map<string, TrackerPoint>();
@@ -91,7 +104,7 @@ export default function CommandCenter() {
   
   // Drawing Mode State
   const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const [tempZone, setTempZone] = useState<{lat: number; lng: number; radius: number; name: string; type: string} | null>(null);
+  const [tempZone, setTempZone] = useState<{lat: number; lng: number; radius: number; name: string; type: string; projectId?: string} | null>(null);
 
   // New features state
   const [mapType, setMapType] = useState<'default' | 'satellite'>('default');
@@ -245,7 +258,8 @@ export default function CommandCenter() {
         lng,
         radius: prev?.radius || 100,
         name: prev?.name || '',
-        type: prev?.type || 'project'
+        type: prev?.type || 'project',
+        projectId: prev?.projectId
       }));
     }
   };
@@ -256,15 +270,23 @@ export default function CommandCenter() {
       return;
     }
     try {
-      await addDoc(collection(db, 'geo_zones'), {
-        companyId: activeCompanyId,
-        name: tempZone.name,
-        type: tempZone.type,
-        center: { lat: tempZone.lat, lng: tempZone.lng },
-        radiusMeters: tempZone.radius,
-        createdAt: new Date().toISOString()
-      });
-      toast.success('تم إنشاء النطاق الجغرافي بنجاح');
+      if (tempZone.projectId) {
+        await updateDoc(doc(db, 'projects', tempZone.projectId), {
+          locationCoords: { lat: tempZone.lat, lng: tempZone.lng },
+          radiusMeters: tempZone.radius
+        });
+        toast.success('تم ربط النطاق الجغرافي بالمشروع بنجاح');
+      } else {
+        await addDoc(collection(db, 'geo_zones'), {
+          companyId: activeCompanyId,
+          name: tempZone.name,
+          type: tempZone.type,
+          center: { lat: tempZone.lat, lng: tempZone.lng },
+          radiusMeters: tempZone.radius,
+          createdAt: new Date().toISOString()
+        });
+        toast.success('تم إنشاء النطاق الجغرافي بنجاح');
+      }
       setIsDrawingMode(false);
       setTempZone(null);
     } catch (error) {
@@ -494,8 +516,20 @@ export default function CommandCenter() {
                   {missingLocationProjects.map(proj => (
                     <div 
                       key={`missing-${proj.id}`} 
-                      className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
-                      title="يجب إضافة رابط موقع المشروع في صفحة المشاريع لتفعيل الرادار التلقائي"
+                      onClick={() => {
+                        setIsDrawingMode(true);
+                        setTempZone({
+                          lat: 0,
+                          lng: 0,
+                          radius: 100,
+                          name: proj.title || proj.name || 'مشروع بدون اسم',
+                          type: 'project',
+                          projectId: proj.id
+                        });
+                        toast.info('انقر على الخريطة لتحديد موقع المشروع');
+                      }}
+                      className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                      title="انقر لتحديد موقع المشروع على الخريطة"
                     >
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
