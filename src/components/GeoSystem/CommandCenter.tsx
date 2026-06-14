@@ -368,6 +368,8 @@ export default function CommandCenter() {
             <span className="absolute bottom-full mb-3 bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-lg border border-slate-700">
               {mapType === 'default' ? 'قمر صناعي' : 'خريطة عادية'}
             </span>
+          </button>
+          
           <button 
             onClick={() => {
                if (navigator.geolocation) {
