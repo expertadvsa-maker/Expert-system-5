@@ -64,7 +64,9 @@ import {
   LayoutGrid,
   ExternalLink,
   Search,
-  Radar
+  Radar,
+  Bug,
+  Terminal
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -138,47 +140,93 @@ import ClientPortal from './components/ClientPortal';
 // Error Boundary Component
 
 class ErrorBoundary extends React.Component<any, any> {
-  state = { hasError: false };
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  state = { hasError: false, error: null as Error | null, errorInfo: null as ErrorInfo | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
   }
+
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    this.setState({ errorInfo });
     console.error("Layout Error:", error, errorInfo);
   }
+
   render() {
     if (this.state.hasError) {
+      const errorStr = this.state.error?.toString() || 'Unknown Error';
+      const componentStack = this.state.errorInfo?.componentStack || 'No component stack available';
+
       return (
         <div
-          className="min-h-screen flex items-center justify-center bg-slate-50 p-6 text-center"
+          className="min-h-screen bg-slate-900 p-4 md:p-8 text-right"
           dir="rtl"
           style={{ fontFamily: "'Cairo', sans-serif" }}
         >
-          <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full border border-slate-100">
-            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <ShieldCheck className="w-8 h-8" />
+          <div className="max-w-5xl mx-auto bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-700 flex flex-col">
+            {/* Header */}
+            <div className="bg-rose-500/10 border-b border-rose-500/20 p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center shadow-inner">
+                  <Bug className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-rose-400 tracking-tight">مستكشف الأخطاء البرمجية (Debugger)</h2>
+                  <p className="text-xs font-bold text-rose-400/70 mt-1">تم التقاط عطل غير متوقع في النظام. استخدم هذه التفاصيل للتحليل والإصلاح.</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                     navigator.clipboard.writeText(`Error: ${errorStr}\n\nStack:\n${componentStack}`);
+                     toast.success("تم نسخ تفاصيل الخطأ!");
+                  }}
+                  variant="outline"
+                  className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl gap-2 h-10 px-4"
+                >
+                  <Copy className="w-4 h-4" /> <span className="hidden sm:inline">نسخ التقرير</span>
+                </Button>
+                <Button
+                  onClick={() => window.location.reload()}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl gap-2 h-10 px-4"
+                >
+                  <RefreshCw className="w-4 h-4" /> <span className="hidden sm:inline">إعادة تشغيل النظام</span>
+                </Button>
+              </div>
             </div>
-            <h2 className="text-2xl font-black text-gray-900 mb-4">
-              عذراً، حدث خطأ تقني
-            </h2>
-            <p className="text-slate-500 mb-8 font-medium leading-relaxed">
-              واجه النظام مشكلة أثناء تحميل هذه الصفحة. يرجى محاولة تحديث الصفحة
-              أو تسجيل الخروج وإعادة الدخول.
-            </p>
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={() => window.location.reload()}
-                className="bg-primary hover:bg-black text-white font-bold h-12 rounded-xl transition-all"
-              >
-                تحديث الصفحة
-              </Button>
-              <Button
-                onClick={() => signOut(auth)}
-                variant="outline"
-                className="text-slate-600 font-bold h-12 rounded-xl hover:bg-slate-50 transition-all"
-              >
-                تسجيل الخروج
-              </Button>
+
+            {/* Content */}
+            <div className="p-6 md:p-8 flex flex-col gap-6">
+              
+              <div className="bg-slate-900/50 rounded-2xl p-5 border border-slate-700/50">
+                 <h3 className="text-sm font-black text-slate-300 flex items-center gap-2 mb-3">
+                    <Terminal className="w-4 h-4 text-rose-400" />
+                    رسالة الخطأ (Error Message)
+                 </h3>
+                 <div className="bg-black/40 p-4 rounded-xl font-mono text-sm text-rose-300 whitespace-pre-wrap text-left" dir="ltr">
+                    {errorStr}
+                 </div>
+              </div>
+
+              <div className="bg-slate-900/50 rounded-2xl p-5 border border-slate-700/50">
+                 <h3 className="text-sm font-black text-slate-300 flex items-center gap-2 mb-3">
+                    <LayoutGrid className="w-4 h-4 text-indigo-400" />
+                    مسار المكونات (Component Stack)
+                 </h3>
+                 <div className="bg-black/40 p-4 rounded-xl font-mono text-xs text-indigo-300 whitespace-pre-wrap leading-relaxed text-left overflow-x-auto max-h-[400px]" dir="ltr">
+                    {componentStack}
+                 </div>
+              </div>
+
             </div>
+
+            {/* Footer */}
+            <div className="bg-slate-800/80 p-4 border-t border-slate-700 flex justify-between items-center text-xs font-bold text-slate-500">
+               <div className="flex gap-4">
+                  <button onClick={() => signOut(auth)} className="hover:text-white transition-colors">تسجيل الخروج وإنهاء الجلسة</button>
+               </div>
+               <span>نظام خبراء الرسم • وضع التطوير والمراقبة</span>
+            </div>
+
           </div>
         </div>
       );
