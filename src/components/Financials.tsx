@@ -25,11 +25,13 @@ import {
   onSnapshot, 
   orderBy, 
   addDoc, 
+  updateDoc,
   serverTimestamp,
   doc,
   deleteDoc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { getCompanyQuery } from '../lib/firestoreUtils';
 import { useAuth } from '../lib/AuthContext';
 import { logActivity } from '../lib/activity';
 import { sendNotification } from '../lib/notifications';
@@ -59,7 +61,7 @@ import {
 } from "@/components/ui/select";
 
 export default function Financials() {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const isManager = profile?.role === 'manager';
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -106,8 +108,10 @@ export default function Financials() {
   });
 
   useEffect(() => {
-    const qGen = query(collection(db, 'transactions'), orderBy('date', 'desc'));
-    const unsubGen = onSnapshot(qGen, (snapshot) => {
+    // 1. General Transactions
+    const qGen = getCompanyQuery('transactions', activeCompanyId);
+    const qGenOrdered = query(qGen, orderBy('date', 'desc'));
+    const unsubGen = onSnapshot(qGenOrdered, (snapshot) => {
       setGeneralTransactions(snapshot.docs.map(doc => ({
         id: doc.id,
         source: 'general',
@@ -115,8 +119,10 @@ export default function Financials() {
       } as unknown as Transaction)));
     }, (error) => console.error("Financials General Listen Error:", error));
 
-    const qWorker = query(collection(db, 'workerTransactions'), orderBy('date', 'desc'));
-    const unsubWorker = onSnapshot(qWorker, (snapshot) => {
+    // 2. Worker Transactions
+    const qWorker = getCompanyQuery('workerTransactions', activeCompanyId);
+    const qWorkerOrdered = query(qWorker, orderBy('date', 'desc'));
+    const unsubWorker = onSnapshot(qWorkerOrdered, (snapshot) => {
       setWorkerTransactions(snapshot.docs.map(doc => ({
         id: doc.id,
         source: 'worker',
@@ -124,11 +130,13 @@ export default function Financials() {
       })));
     }, (error) => console.error("Financials Worker Listen Error:", error));
 
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
+    // 3. Projects
+    const unsubProjects = onSnapshot(getCompanyQuery('projects', activeCompanyId), (snapshot) => {
       setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project)));
     }, (error) => console.error("Financials Projects Listen Error:", error));
 
-    const unsubBanks = onSnapshot(collection(db, 'bankAccounts'), (snapshot) => {
+    // 4. Bank Accounts
+    const unsubBanks = onSnapshot(getCompanyQuery('bankAccounts', activeCompanyId), (snapshot) => {
       setBankAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BankAccount)));
     }, (error) => console.error("Financials Banks Listen Error:", error));
 
@@ -139,7 +147,7 @@ export default function Financials() {
       unsubProjects();
       unsubBanks();
     };
-  }, []);
+  }, [activeCompanyId]);
 
   const transactions = useMemo(() => {
     const combined = [
@@ -271,7 +279,11 @@ export default function Financials() {
 
       if (!data.projectId) delete data.projectId;
 
-      await addDoc(collection(db, 'transactions'), data);
+      // 1. Create Transaction Document
+      await addDoc(collection(db, 'transactions'), {
+        ...data,
+        companyId: activeCompanyId || null
+      });
       
       await logActivity(
         formData.type === 'income' ? 'إيراد جديد' : 'مصروف جديد',
@@ -420,7 +432,7 @@ export default function Financials() {
               <Card className="md:col-span-3 rounded-3xl border-none shadow-sm bg-white p-6">
                 <h4 className="font-bold mb-4 text-slate-800">تحليل مصادر الدخل</h4>
                 <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={Object.entries(transactions.filter(t => t.unifiedType === 'income').reduce((acc: any, t) => {
                       acc[t.category || 'other'] = (acc[t.category || 'other'] || 0) + t.amount;
                       return acc;
@@ -476,7 +488,7 @@ export default function Financials() {
               <Card className="md:col-span-3 rounded-3xl border-none shadow-sm bg-white p-6">
                 <h4 className="font-bold mb-4 text-slate-800">توزيع المصروفات حسب الفئة</h4>
                 <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={Object.entries(transactions.filter(t => t.unifiedType === 'expense').reduce((acc: any, t) => {
                       const cat = t.category === 'other' ? 'أخرى' : (t.category || 'أخرى');
                       acc[cat] = (acc[cat] || 0) + t.amount;
@@ -538,7 +550,7 @@ export default function Financials() {
               <Card className="md:col-span-8 rounded-3xl border-none shadow-sm bg-white p-6">
                 <h4 className="font-bold mb-6 text-slate-800">تطور الربح الصافي شهرياً</h4>
                 <div className="h-[250px]">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} />
@@ -610,7 +622,7 @@ export default function Financials() {
               <Card className="md:col-span-2 rounded-3xl border-none shadow-sm bg-white p-6">
                 <h4 className="font-bold mb-6 text-slate-800 text-right">حركة التدفق النقدي في هذا الحساب</h4>
                 <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={chartData.map(d => {
                       const accTransactions = transactions.filter(t => t.bankAccountId === viewedAccountId);
                       const income = accTransactions.filter(t => t.unifiedType === 'income' && t.dateOriginal.getMonth() === new Date(d.sortKey).getMonth()).reduce((s,t) => s+t.amount, 0);
@@ -1191,7 +1203,7 @@ export default function Financials() {
               </div>
             </div>
             <div className="h-[250px] md:h-[300px] w-full" style={{ minHeight: 250 }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} />
@@ -1219,7 +1231,7 @@ export default function Financials() {
               </div>
             </div>
             <div className="h-[250px] md:h-[300px] w-full" style={{ minHeight: 250 }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} />

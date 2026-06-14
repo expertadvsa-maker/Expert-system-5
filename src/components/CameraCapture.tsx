@@ -10,13 +10,14 @@ import { analyzeInvoice, quickAnalyzeInvoice, InvoiceData, type QuickScanResult 
 import { db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '../lib/AuthContext';
+import { getCompanyQuery, addCompanyDoc } from '../lib/firestoreUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion, AnimatePresence } from 'motion/react';
 
 type CaptureMode = 'selection' | 'invoice' | 'project' | 'marketing' | 'auto-scan';
 
 export default function CameraCapture() {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const [mode, setMode] = useState<CaptureMode>('selection');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -41,7 +42,7 @@ export default function CameraCapture() {
       const fetchProjects = async () => {
         setLoadingProjects(true);
         try {
-          const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
+          const q = query(getCompanyQuery('projects', activeCompanyId), orderBy('createdAt', 'desc'));
           const snap = await getDocs(q);
           setProjects(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
@@ -128,7 +129,7 @@ export default function CameraCapture() {
         setFeedback({ status: 'success', message: `تم العثور على فاتورة: ${result.data.vendor} - ${result.data.amount} ر.س` });
         
         // Save to DB
-        await addDoc(collection(db, 'transactions'), {
+        await addCompanyDoc('transactions', {
           type: 'purchase',
           amount: result.data.amount,
           vendor: result.data.vendor,
@@ -137,7 +138,7 @@ export default function CameraCapture() {
           createdBy: profile?.uid,
           status: profile?.role === 'manager' ? 'approved' : 'pending',
           createdAt: serverTimestamp()
-        });
+        }, activeCompanyId);
         
         // Save to gallery
         await saveToGallery(imageData, 'المشتريات');
@@ -178,7 +179,7 @@ export default function CameraCapture() {
     setIsDragging(false);
   };
 
-  const downscaleImage = (file: File): Promise<string> => {
+  const downscaleImageWithWatermark = (file: File, coords: {lat: number, lng: number} | null, userName: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -202,6 +203,43 @@ export default function CameraCapture() {
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
+            
+            // Add Watermark for documentation modes
+            if (mode === 'project' || mode === 'marketing') {
+              const timestamp = new Date().toLocaleString('ar-SA');
+              const text1 = `التاريخ: ${timestamp}`;
+              const text2 = `بواسطة: ${userName}`;
+              const text3 = coords ? `الموقع: ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'الموقع: غير متوفر';
+
+              // Settings for watermark
+              ctx.font = 'bold 24px Arial, sans-serif';
+              const padding = 20;
+              const lineHeight = 30;
+              const boxHeight = (lineHeight * 3) + padding;
+              const boxWidth = 400; // Estimated max width
+              
+              // Bottom Right placement
+              const x = width - boxWidth - 20;
+              const y = height - boxHeight - 20;
+              
+              // Draw semi-transparent background
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+              ctx.fillRect(x, y, boxWidth, boxHeight);
+
+              // Draw text
+              ctx.fillStyle = '#ffffff';
+              ctx.textAlign = 'right';
+              ctx.shadowColor = 'rgba(0,0,0,0.8)';
+              ctx.shadowBlur = 4;
+              
+              ctx.fillText(text1, x + boxWidth - padding, y + padding + 20);
+              ctx.fillText(text2, x + boxWidth - padding, y + padding + 20 + lineHeight);
+              
+              // Highlight coordinates in yellow if available
+              if (coords) ctx.fillStyle = '#fef08a'; // yellow-200
+              ctx.fillText(text3, x + boxWidth - padding, y + padding + 20 + lineHeight * 2);
+            }
+
             resolve(canvas.toDataURL('image/jpeg', 0.8));
           } else {
             resolve(event.target?.result as string);
@@ -218,7 +256,7 @@ export default function CameraCapture() {
   const saveToGallery = async (imageData: string, customCategory?: string) => {
     if (!profile) return;
     try {
-      await addDoc(collection(db, 'gallery'), {
+      await addCompanyDoc('gallery', {
         title: mode === 'invoice' ? `فاتورة ممسوحة - ${new Date().toLocaleDateString('ar-EG')}` : 
                mode === 'marketing' ? `صورة دعائية - ${new Date().toLocaleDateString('ar-EG')}` :
                `ميديا مشروع - ${new Date().toLocaleDateString('ar-EG')}`,
@@ -228,7 +266,7 @@ export default function CameraCapture() {
         date: serverTimestamp(),
         createdBy: profile.uid,
         projectId: selectedProjectId || null
-      });
+      }, activeCompanyId);
     } catch {
       console.error('Failed to save to gallery:');
     }
@@ -246,8 +284,22 @@ export default function CameraCapture() {
   const processFile = async (file: File) => {
     if (file.type.startsWith('image/')) {
       try {
-        toast.info(mode === 'invoice' ? 'جاري معالجة الفاتورة...' : 'جاري معالجة الصورة...');
-        const downscaled = await downscaleImage(file);
+        toast.info(mode === 'invoice' ? 'جاري معالجة الفاتورة...' : 'جاري إضافة الختم الزمني والمكاني...');
+        
+        let coords: { lat: number; lng: number } | null = null;
+        if (mode === 'project' || mode === 'marketing') {
+           try {
+             const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+               navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, maximumAge: 10000 });
+             });
+             coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+           } catch (e) {
+             console.warn("Could not get geolocation for watermark", e);
+             toast.warning("لم نتمكن من جلب الموقع الجغرافي للختم.");
+           }
+        }
+
+        const downscaled = await downscaleImageWithWatermark(file, coords, profile?.name || 'مستخدم النظام');
         setCapturedImage(downscaled);
         
         if (mode === 'marketing') {
@@ -262,15 +314,16 @@ export default function CameraCapture() {
           }
           await saveToGallery(downscaled, 'المشاريع');
           // Also save to archive
-          await addDoc(collection(db, 'archive'), {
+          await addCompanyDoc('archive', {
             title: `رفع ميداني - مشروع ${projects.find(p => p.id === selectedProjectId)?.name || ''}`,
             url: downscaled,
             type: 'image',
             projectId: selectedProjectId,
             createdBy: profile?.uid,
             createdAt: serverTimestamp(),
-            tags: ['ميداني', 'مشروع']
-          });
+            location: coords || null,
+            tags: ['ميداني', 'مشروع', 'مختوم']
+          }, activeCompanyId);
           toast.success('تم حفظ ميديا المشروع في الأرشيف والمعرض');
           reset();
         } else {
@@ -322,7 +375,7 @@ export default function CameraCapture() {
   const saveInvoice = async () => {
     if (!parsedData || !profile) return;
     try {
-      await addDoc(collection(db, 'transactions'), {
+      await addCompanyDoc('transactions', {
         type: 'purchase',
         amount: parsedData.amount,
         vendor: parsedData.vendor,
@@ -331,7 +384,7 @@ export default function CameraCapture() {
         createdBy: profile.uid,
         status: 'pending', // Manual save always needs approval as per new rule
         createdAt: serverTimestamp()
-      });
+      }, activeCompanyId);
       toast.success('تمت إضافة الفاتورة للنظام بنجاح');
       reset();
     } catch {

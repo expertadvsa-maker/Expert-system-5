@@ -505,3 +505,32 @@ export const generateBIRecommendations = async (stats: any): Promise<string[]> =
   ];
 };
 
+export const generateReportInsights = async (reportData: any, reportType: string): Promise<string> => {
+  const ai = getGeminiClient();
+  if (!ai) return "التحليل الذكي غير متوفر: مفتاح API غير موجود.";
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          parts: [
+            { text: `أنت مستشار أعمال مالي وإداري خبير. قم بقراءة وتحليل بيانات التقرير التالية من نوع (${reportType}).
+استخرج أهم المؤشرات، الإيجابيات، السلبيات (إن وجدت)، وقدم توصية استراتيجية واضحة.
+يجب أن يكون الرد في فقرة واحدة متماسكة واحترافية باللغة العربية (لا تزد عن 100 كلمة).
+البيانات:
+${JSON.stringify(reportData, null, 2)}
+            ` }
+          ]
+        }
+      ],
+      config: {
+        temperature: 0.3,
+      }
+    });
+    return response.text?.trim() || "لا توجد ملاحظات واضحة.";
+  } catch (error) {
+    console.error("Error generating report insights:", error);
+    return "عذراً، حدث خطأ أثناء تحليل بيانات التقرير.";
+  }
+};

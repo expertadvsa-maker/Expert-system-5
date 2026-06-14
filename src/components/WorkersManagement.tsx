@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus, Search, Phone, HardHat, DollarSign, TrendingUp, CheckCircle2, Navigation, Loader2, Edit2, UserCheck, Trash2 } from "lucide-react";
 import { db } from "../lib/firebase";
-import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, query, where } from "firebase/firestore";
 import { useAuth } from "../lib/AuthContext";
 import { sendNotification } from "../lib/notifications";
 import { softDelete } from "../lib/softDelete";
@@ -30,7 +30,7 @@ interface Worker {
 }
 
 export default function WorkersManagement() {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,12 +88,16 @@ export default function WorkersManagement() {
   });
 
   useEffect(() => {
-    const unsubWorkers = onSnapshot(collection(db, "workers"), (snap) => {
+    const unsubWorkers = onSnapshot(
+      activeCompanyId ? query(collection(db, "workers"), where("companyId", "==", activeCompanyId)) : collection(db, "workers"), 
+      (snap) => {
       setWorkers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Worker)));
       setIsLoading(false);
     });
 
-    const unsubProjects = onSnapshot(collection(db, "projects"), (snap) => {
+    const unsubProjects = onSnapshot(
+      activeCompanyId ? query(collection(db, "projects"), where("companyId", "==", activeCompanyId)) : collection(db, "projects"), 
+      (snap) => {
       setProjects((snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[]).filter(p => p.status !== 'completed'));
     });
 
@@ -121,6 +125,7 @@ export default function WorkersManagement() {
         toast.success("تم تحديث بيانات العامل بنجاح");
       } else {
         await addDoc(collection(db, "workers"), {
+          companyId: activeCompanyId || null,
           ...workerForm,
           dailyRate: parseFloat(workerForm.dailyRate),
           status: 'available',
@@ -161,6 +166,7 @@ export default function WorkersManagement() {
       
       // 1. Create assignment record
       await addDoc(collection(db, "worker_assignments"), {
+        companyId: activeCompanyId || null,
         workerId: selectedWorker.id,
         projectId: assignmentForm.projectId,
         projectTitle: project?.title,

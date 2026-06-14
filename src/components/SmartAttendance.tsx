@@ -24,14 +24,15 @@ import {
   limit, 
   orderBy,
   updateDoc,
-  doc
+  doc,
+  setDoc
 } from 'firebase/firestore';
 import { sendNotification } from '@/lib/notifications';
 import { useAuth } from '../lib/AuthContext';
 import { toast } from 'sonner';
 
 export default function SmartAttendance() {
-  const { profile, user } = useAuth();
+  const { profile, user, activeCompanyId } = useAuth();
   const [checking, setChecking] = useState(false);
   const [todayStatus, setTodayStatus] = useState<any>(null);
   const [attendanceDocId, setAttendanceDocId] = useState<string | null>(null);
@@ -57,12 +58,9 @@ export default function SmartAttendance() {
     const today = new Date().toISOString().split('T')[0];
     
     // 1. Reactive current attendance
-    const attQ = query(
-      collection(db, 'attendance'), 
-      where('userId', '==', user.uid), 
-      where('date', '==', today),
-      limit(1)
-    );
+    const attQ = activeCompanyId 
+      ? query(collection(db, 'attendance'), where('userId', '==', user.uid), where('date', '==', today), where('companyId', '==', activeCompanyId), limit(1))
+      : query(collection(db, 'attendance'), where('userId', '==', user.uid), where('date', '==', today), limit(1));
     const unsubAtt = onSnapshot(attQ, (snap) => {
       if (!snap.empty) {
         setTodayStatus(snap.docs[0].data());
@@ -242,6 +240,7 @@ export default function SmartAttendance() {
       if (type === 'checkIn') {
         const status = checkIsLate() ? 'late' : 'present';
         await addDoc(collection(db, 'attendance'), {
+          companyId: activeCompanyId || null,
           userId: user?.uid,
           userName: profile?.name,
           date: new Date().toISOString().split('T')[0],
@@ -275,6 +274,22 @@ export default function SmartAttendance() {
         });
         toast.success('تم تسجيل الانصراف من: ' + locationLabel);
       }
+
+      // Update Live Tracking (Radar)
+      if (user?.uid) {
+        await setDoc(doc(db, 'live_tracking', user.uid), {
+          companyId: activeCompanyId || null,
+          userId: user.uid,
+          userName: profile?.name,
+          userRole: profile?.role || 'employee',
+          lat,
+          lng,
+          timestamp,
+          status: type === 'checkIn' ? 'active' : 'offline',
+          batteryLevel: Math.floor(Math.random() * (100 - 40 + 1) + 40), // Simulating battery level
+        }, { merge: true });
+      }
+
     } catch (error) {
       toast.error('حدث خطأ أثناء الحفظ');
     } finally {

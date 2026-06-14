@@ -27,7 +27,8 @@ export default function AliphiaSettingsModal({ open, onOpenChange, onSuccess }: 
 
   useEffect(() => {
     if (open) {
-      setHasLocalCreds(!!localStorage.getItem('aliphia_credentials'));
+      const activeCompanyId = localStorage.getItem('activeCompanyId') || 'default';
+      setHasLocalCreds(!!localStorage.getItem(`aliphia_credentials_${activeCompanyId}`));
       getAliphiaCredentials().then((creds) => {
         if (creds) {
           setUsername(creds.username || '');

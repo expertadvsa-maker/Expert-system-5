@@ -46,6 +46,7 @@ import {
 } from 'firebase/firestore';
 import { sendNotification } from '@/lib/notifications';
 import { db } from '../lib/firebase';
+import { getCompanyQuery, addCompanyDoc } from '../lib/firestoreUtils';
 import { useAuth } from '../lib/AuthContext';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -88,7 +89,7 @@ interface EmployeeProfileProps {
 }
 
 export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileProps) {
-  const { profile: loggedInProfile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const [employee, setEmployee] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
@@ -134,16 +135,16 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
     fetchEmployee();
 
     // Listen to activities
-    const qAct = query(
-      collection(db, 'activities'),
+    const qActivities = query(
+      getCompanyQuery('activities', activeCompanyId),
       where('userId', '==', employeeId),
       orderBy('timestamp', 'desc'),
       limit(10)
     );
 
     // Listen to attendance
-    const qAtt = query(
-      collection(db, 'attendance'),
+    const qAttendance = query(
+      getCompanyQuery('attendance', activeCompanyId),
       where('userId', '==', employeeId),
       orderBy('date', 'desc'),
       limit(30)
@@ -151,23 +152,23 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
 
     // Listen to leaves
     const qLeaves = query(
-      collection(db, 'leaveRequests'),
+      getCompanyQuery('leaveRequests', activeCompanyId),
       where('userId', '==', employeeId),
       orderBy('startDate', 'desc')
     );
 
     // Listen to adjustments
-    const qAdj = query(
-      collection(db, 'financialAdjustments'),
+    const qAdjustments = query(
+      getCompanyQuery('financialAdjustments', activeCompanyId),
       where('userId', '==', employeeId),
       orderBy('date', 'desc')
     );
 
-    const unsubAct = onSnapshot(qAct, (snapshot) => {
+    const unsubAct = onSnapshot(qActivities, (snapshot) => {
       setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    const unsubAtt = onSnapshot(qAtt, (snapshot) => {
+    const unsubAtt = onSnapshot(qAttendance, (snapshot) => {
       setAttendance(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
@@ -175,7 +176,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
       setLeaves(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    const unsubAdj = onSnapshot(qAdj, (snapshot) => {
+    const unsubAdj = onSnapshot(qAdjustments, (snapshot) => {
       setAdjustments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
@@ -185,22 +186,22 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
       unsubLeaves();
       unsubAdj();
     };
-  }, [employeeId]);
+  }, [employeeId, activeCompanyId]);
 
   const handleAddAttendance = async () => {
     if (!attendanceForm.date) return;
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'attendance'), {
+      await addCompanyDoc('attendance', {
         ...attendanceForm,
         userId: employeeId,
         timestamp: serverTimestamp(),
-        createdBy: loggedInProfile?.uid
-      });
+        createdBy: profile?.uid
+      }, activeCompanyId);
 
       await sendNotification({
         title: 'تسجيل حضور يدوي',
-        message: `قام ${loggedInProfile?.name} بتسجيل حضور لـ ${employee?.name} بتاريخ ${attendanceForm.date}`,
+        message: `قام ${profile?.name} بتسجيل حضور لـ ${employee?.name} بتاريخ ${attendanceForm.date}`,
         type: 'info',
         category: 'employee',
         targetRole: 'manager',
@@ -221,12 +222,12 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
     if (!leaveForm.startDate || !leaveForm.endDate) return;
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'leaveRequests'), {
+      await addCompanyDoc('leaveRequests', {
         ...leaveForm,
         userId: employeeId,
         status: 'pending',
         createdAt: serverTimestamp(),
-      });
+      }, activeCompanyId);
 
       await sendNotification({
         title: 'طلب إجازة جديد',
@@ -251,14 +252,14 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
     if (!adjustmentForm.amount || !adjustmentForm.reason) return;
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'financialAdjustments'), {
+      await addCompanyDoc('financialAdjustments', {
         ...adjustmentForm,
         amount: Number(adjustmentForm.amount),
         userId: employeeId,
         date: serverTimestamp(),
         status: 'pending',
-        createdBy: loggedInProfile?.uid
-      });
+        createdBy: profile?.uid
+      }, activeCompanyId);
 
       await sendNotification({
         title: 'تعديل مالي موظف',
@@ -283,15 +284,15 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
     if (!loanForm.amount || !loanForm.reason) return;
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'financialAdjustments'), {
+      await addCompanyDoc('financialAdjustments', {
         type: 'loan',
         amount: Number(loanForm.amount),
         reason: loanForm.reason,
         userId: employeeId,
         date: serverTimestamp(),
         status: 'pending',
-        createdBy: loggedInProfile?.uid
-      });
+        createdBy: profile?.uid
+      }, activeCompanyId);
 
       await sendNotification({
         title: 'طلب سلفة جديد',
@@ -317,16 +318,16 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
     if (!specialRequestContent.trim()) return;
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'activities'), {
+      await addCompanyDoc('activities', {
         title: 'طلب خاص من الموظف',
         description: specialRequestContent,
         type: 'warning',
         source: 'employee_request',
         userId: employeeId,
         timestamp: serverTimestamp(),
-        createdBy: loggedInProfile?.uid,
+        createdBy: profile?.uid,
         status: 'pending'
-      });
+      }, activeCompanyId);
       
       await sendNotification({
         title: 'طلب خاص من موظف',
@@ -365,15 +366,15 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
     if (!noteContent.trim()) return;
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'activities'), {
+      await addCompanyDoc('activities', {
         title: 'ملاحظة إدارية',
         description: noteContent,
         type: 'info',
         source: 'employee',
         userId: employeeId,
         timestamp: serverTimestamp(),
-        createdBy: loggedInProfile?.uid || 'admin'
-      });
+        createdBy: profile?.uid || 'admin'
+      }, activeCompanyId);
 
       await sendNotification({
         title: 'تحديث في ملف الموظف',
@@ -544,7 +545,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
             </CardHeader>
             <CardContent className="pt-6">
               <div className="h-48 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <AreaChart data={performanceData}>
                     <defs>
                       <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">

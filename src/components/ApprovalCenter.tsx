@@ -28,12 +28,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
+import { getCompanyQuery } from '../lib/firestoreUtils';
 import { logActivity } from '../lib/activity';
 import { sendNotification } from '../lib/notifications';
 import { toast } from 'sonner';
 
 export default function ApprovalCenter() {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const [leaves, setLeaves] = useState<any[]>([]);
   const [adjustments, setAdjustments] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -41,7 +42,7 @@ export default function ApprovalCenter() {
 
   useEffect(() => {
     // 1. Pending Leave Requests
-    const qLeaves = query(collection(db, 'leaveRequests'), where('status', '==', 'pending'));
+    const qLeaves = query(getCompanyQuery('leaveRequests', activeCompanyId), where('status', '==', 'pending'));
     const unsubLeaves = onSnapshot(qLeaves, async (snapshot) => {
       const data = await Promise.all(snapshot.docs.map(async (d) => {
         const leaveData = d.data();
@@ -53,7 +54,7 @@ export default function ApprovalCenter() {
     });
 
     // 2. Pending Financial Adjustments
-    const qAdj = query(collection(db, 'financialAdjustments'), where('status', '==', 'pending'));
+    const qAdj = query(getCompanyQuery('financialAdjustments', activeCompanyId), where('status', '==', 'pending'));
     const unsubAdj = onSnapshot(qAdj, async (snapshot) => {
       const data = await Promise.all(snapshot.docs.map(async (d) => {
         const adjData = d.data();
@@ -65,7 +66,7 @@ export default function ApprovalCenter() {
     });
 
     // 3. Pending Transactions (OCR/Invoices)
-    const qTx = query(collection(db, 'transactions'), where('status', '==', 'pending'));
+    const qTx = query(getCompanyQuery('transactions', activeCompanyId), where('status', '==', 'pending'));
     const unsubTx = onSnapshot(qTx, (snapshot) => {
       setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
@@ -76,7 +77,7 @@ export default function ApprovalCenter() {
       unsubAdj();
       unsubTx();
     };
-  }, []);
+  }, [activeCompanyId]);
 
   const handleApprove = async (collectionName: string, id: string, title: string) => {
     try {

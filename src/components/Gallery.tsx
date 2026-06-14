@@ -35,6 +35,8 @@ import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
+import { useAuth } from '../lib/AuthContext';
+import { getCompanyQuery } from '../lib/firestoreUtils';
 
 interface GalleryItem {
   id: string;
@@ -48,6 +50,7 @@ interface GalleryItem {
 }
 
 export default function Gallery() {
+  const { activeCompanyId } = useAuth();
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -67,7 +70,7 @@ export default function Gallery() {
     ];
 
     const unsubscribers = collectionsToWatch.map(coll => {
-      return onSnapshot(collection(db, coll.path), (snap) => {
+      return onSnapshot(getCompanyQuery(coll.path, activeCompanyId), (snap) => {
         const collItems: GalleryItem[] = [];
         snap.docs.forEach(d => {
           const data = d.data();
@@ -121,7 +124,7 @@ export default function Gallery() {
     });
 
     return () => unsubscribers.forEach(unsub => unsub());
-  }, []);
+  }, [activeCompanyId]);
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {

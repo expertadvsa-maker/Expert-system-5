@@ -4,13 +4,15 @@ import { FileText, Download, Trash2, Calendar, User, Search, RefreshCw, BarChart
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
+import ReportViewerModal from './ReportViewerModal';
 
 export default function ReportsGallery() {
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<ReportType | 'all'>('all');
+  const [selectedReport, setSelectedReport] = useState<SavedReport | null>(null);
 
   const loadReports = async () => {
     setLoading(true);
@@ -42,9 +44,7 @@ export default function ReportsGallery() {
   };
 
   const handleExportPDF = (report: SavedReport) => {
-    // Here we would implement the jsPDF generation based on report.data
-    // For now we simulate it
-    toast.success(`تم تحميل ${report.title} كملف PDF`);
+    setSelectedReport(report); // Open the modal and the user can hit print/PDF from there
   };
 
   const filteredReports = reports.filter(r => {
@@ -171,10 +171,10 @@ export default function ReportsGallery() {
                             <div className="p-2 bg-slate-50 border-t border-slate-100 flex gap-2">
                                 <Button onClick={() => handleExportPDF(report)} className="flex-1 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold text-xs gap-2 border border-slate-200 shadow-sm">
                                     <Download className="w-4 h-4 text-emerald-600" />
-                                    تصدير PDF
+                                    تصدير / طباعة
                                 </Button>
-                                <Button variant="secondary" className="flex-1 bg-white text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 font-bold text-xs border border-slate-200 shadow-sm">
-                                    استعراض
+                                <Button onClick={() => setSelectedReport(report)} variant="secondary" className="flex-1 bg-white text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 font-bold text-xs border border-slate-200 shadow-sm">
+                                    استعراض التقرير
                                 </Button>
                             </div>
                         </motion.div>
@@ -182,6 +182,11 @@ export default function ReportsGallery() {
                 </AnimatePresence>
             </div>
         )}
+        <ReportViewerModal 
+            isOpen={!!selectedReport} 
+            onClose={() => setSelectedReport(null)} 
+            report={selectedReport} 
+        />
     </div>
   );
 }

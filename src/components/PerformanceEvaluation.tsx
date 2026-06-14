@@ -87,8 +87,8 @@ export default function PerformanceEvaluation() {
   };
 
   const handleApplyDeduction = async (emp: any) => {
-    if (!profile || profile.role !== 'manager') {
-      toast.error('صلاحية المدير فقط مطلوبة');
+    if (!profile || (profile.role !== 'manager' && profile.role !== 'owner')) {
+      toast.error('صلاحية الإدارة أو المالك مطلوبة');
       return;
     }
 

@@ -1,7 +1,7 @@
 import { db } from './firebase';
 import { collection, addDoc, getDocs, doc, deleteDoc, query, orderBy, serverTimestamp, getDoc } from 'firebase/firestore';
 
-export type ReportType = 'projects' | 'financial' | 'employees' | 'clients' | 'purchases' | 'tasks' | 'custom';
+export type ReportType = 'projects' | 'financial' | 'employees' | 'clients' | 'purchases' | 'tasks' | 'attendance' | 'inventory' | 'assets' | 'invoices' | 'quotations' | 'workers' | 'payrolls' | 'subcontractors' | 'custom';
 
 export interface SavedReport {
   id?: string;

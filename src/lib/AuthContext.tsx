@@ -1,25 +1,42 @@
 import * as React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, signOut, getRedirectResult } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from './firestore-errors';
-import { UserProfile } from '../types';
+import { UserProfile, Company } from '../types';
 import { fetchAliphiaClients } from './aliphia';
 
 interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  activeCompanyId: string | null;
+  setActiveCompanyId: (id: string) => void;
+  companies: Company[];
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, profile: null, loading: true });
+const AuthContext = createContext<AuthContextType>({ 
+  user: null, 
+  profile: null, 
+  loading: true, 
+  activeCompanyId: null, 
+  setActiveCompanyId: () => {}, 
+  companies: [] 
+});
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(localStorage.getItem('activeCompanyId'));
+  const [companies, setCompanies] = useState<Company[]>([]);
+
+  const setActiveCompanyId = (id: string) => {
+    setActiveCompanyIdState(id);
+    localStorage.setItem('activeCompanyId', id);
+  };
 
   useEffect(() => {
     // Handle redirect result to catch errors during redirect login
@@ -149,6 +166,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (finalProfile && finalProfile.role === 'manager' && userEmail !== 'expertadvsa@gmail.com') {
               finalProfile.role = 'supervisor'; // Automatically downgrade non-owners to supervisor for safety
             }
+            if (userEmail === 'expertadvsa@gmail.com') {
+              finalProfile.role = 'owner';
+            }
             
             setProfile(finalProfile);
             setUser(user);
@@ -212,6 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUser(null);
         setProfile(null);
+        setCompanies([]);
       }
       setLoading(false);
     });
@@ -219,8 +240,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    if (!profile) return;
+    
+    // Fetch companies that this user has access to
+    const qCompanies = profile.role === 'owner' 
+      ? query(collection(db, 'companies')) 
+      : query(collection(db, 'companies'), where('id', 'in', profile.ownedCompanies || [profile.companyId]));
+      
+    const unsubscribeCompanies = onSnapshot(qCompanies, (snap) => {
+      const fetchedCompanies = snap.docs.map(d => ({ id: d.id, ...d.data() } as Company));
+      setCompanies(fetchedCompanies);
+      
+      // Auto-select company if none is selected
+      if (fetchedCompanies.length > 0 && (!activeCompanyId || !fetchedCompanies.find(c => c.id === activeCompanyId))) {
+        setActiveCompanyId(fetchedCompanies[0].id);
+      }
+    }, (err) => {
+      console.error("Error fetching companies:", err);
+    });
+
+    return unsubscribeCompanies;
+  }, [profile]);
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading }}>
+    <AuthContext.Provider value={{ user, profile, loading, activeCompanyId, setActiveCompanyId, companies }}>
       {!loading && children}
     </AuthContext.Provider>
   );

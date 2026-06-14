@@ -63,7 +63,8 @@ import {
   Paintbrush,
   LayoutGrid,
   ExternalLink,
-  Search
+  Search,
+  Radar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -95,10 +96,15 @@ import AttendanceManager from "./components/AttendanceManager";
 import SystemSettings from "./components/SystemSettings";
 import Analytics from "./components/Analytics";
 import ExecutiveBriefingSystem from "./components/ExecutiveBriefingSystem";
+import CommandCenter from "./components/GeoSystem/CommandCenter";
+import { useLiveTracking } from "./hooks/useLiveTracking";
 import WorkerView from "./components/WorkerView";
 import OnboardingGuide from "./components/OnboardingGuide";
 import SuppliersList from "./components/SuppliersList";
 import Sales from "./components/Sales";
+import Clients from "./components/Clients";
+import Invoices from "./components/Invoices";
+import Quotations from "./components/Quotations";
 import Production from "./components/Production";
 import WorkersManagement from "./components/WorkersManagement";
 import Expenses from "./components/Expenses";
@@ -106,6 +112,7 @@ import Archive from "./components/Archive";
 import AssetsManagement from "./components/AssetsManagement";
 import Gallery from "./components/Gallery";
 import ReportsGallery from "./components/ReportsGallery";
+import SmartReports from "./components/SmartReports";
 import BankingAndVault from "./components/BankingAndVault";
 
 import Subcontractors from "./components/Subcontractors";
@@ -194,7 +201,9 @@ const settingsCategories = [
 ];
 
 function AppContent() {
-  const { user, profile } = useAuth();
+  const { user, profile, activeCompanyId, setActiveCompanyId, companies } = useAuth();
+  useLiveTracking();
+  const activeCompany = companies.find(c => c.id === activeCompanyId);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
     null,
@@ -551,6 +560,7 @@ function AppContent() {
       title: "الرئيسية",
       items: [
         { id: "dashboard", label: "الرئيسية", icon: LayoutDashboard, roles: ["manager", "supervisor", "employee"] },
+        { id: "command_center", label: "الرادار الميداني", icon: Radar, roles: ["manager"] },
         { id: "briefing", label: "موجز AI", icon: Zap, roles: ["manager"] },
       ],
     },
@@ -593,9 +603,17 @@ function AppContent() {
           roles: ["manager"],
           subItems: [
             { id: "sales", label: "سجل المبيعات", roles: ["manager"] },
-            { id: "private_jobs_page", label: "المقاولات الخاصة", roles: ["manager"] },
-            { id: "sales_reps", label: "إدارة المناديب", roles: ["manager"] },
+            { id: "clients", label: "العملاء", roles: ["manager"] },
+            { id: "invoices", label: "الفواتير", roles: ["manager"] },
+            { id: "quotations", label: "عروض الأسعار", roles: ["manager"] },
+            { id: "private_jobs_page", label: "المقاولات الخاصة", roles: ["manager"] }
           ]
+        },
+        {
+          id: "sales_reps",
+          label: "إدارة المناديب",
+          icon: Users,
+          roles: ["manager"]
         },
         {
           id: "purchases_group",
@@ -661,6 +679,7 @@ function AppContent() {
             { id: "archive", label: "الأرشيف", roles: ["manager"] },
             { id: "gallery", label: "الوسائط", roles: ["manager", "supervisor", "employee"] },
             { id: "reports_gallery", label: "التقارير المحفوظة", roles: ["manager"] },
+            { id: "smart_reports", label: "التقارير الذكية", roles: ["manager"] },
           ]
         }
       ]
@@ -683,7 +702,7 @@ function AppContent() {
     });
     const item = allItems.find((i) => i.id === tabId);
     if (!item) return true;
-    return item.roles.includes(profile?.role || "employee");
+    return item.roles.includes(profile?.role || "employee") || profile?.role === "owner";
   };
 
   const toggleGroup = (groupId: string) => {
@@ -863,7 +882,7 @@ function AppContent() {
       limit(20),
     );
 
-    if (profile.role !== "manager") {
+    if (profile.role !== "manager" && profile.role !== "owner") {
       q = query(
         collection(db, "notifications"),
         where("targetRole", "in", ["all", profile.role]),
@@ -894,7 +913,7 @@ function AppContent() {
       limit(5),
     );
 
-    if (profile.role !== "manager") {
+    if (profile.role !== "manager" && profile.role !== "owner") {
       q = query(
         collection(db, "notifications"),
         where("targetRole", "in", ["all", profile.role]),
@@ -1459,31 +1478,61 @@ function AppContent() {
                 title="الذهاب للوحة الرئيسية"
               >
                 <img
-                  src={sysSettings.logoUrl}
-                  alt="خبراء الرسم"
+                  src={activeCompany?.logoUrl || sysSettings.logoUrl}
+                  alt={activeCompany?.name || "خبراء الرسم"}
                   className="w-9 h-9 object-contain rounded-xl shrink-0 transition-all p-0.5 bg-white border border-white/10 shadow-sm"
                 />
                 {!isSidebarCollapsed && (
                   <motion.div
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="flex flex-col overflow-hidden"
+                    className="flex flex-col overflow-hidden w-full justify-center relative group"
                   >
-                    <span 
-                      className={`font-black text-white tracking-tight leading-[1.1] mb-0.5 transition-all ${
-                        (sysSettings.companyName?.length || 0) > 20 ? 'text-[10px]' : 
-                        (sysSettings.companyName?.length || 0) > 15 ? 'text-[11px]' : 
-                        'text-xs md:text-sm'
-                      } line-clamp-2`}
-                    >
-                      {sysSettings.companyName}
-                    </span>
-                    <span className={`uppercase font-bold text-white/65 tracking-widest ${
-                      (sysSettings.companySub?.length || 0) > 30 ? 'text-[6px]' : 
-                      'text-[7px] md:text-[8px]'
-                    } truncate`}>
-                      {sysSettings.companySub}
-                    </span>
+                    <div className="flex items-center justify-between gap-1 w-full">
+                      <div className="flex flex-col flex-1 overflow-hidden">
+                        <span 
+                          className={`font-black text-white tracking-tight leading-[1.1] mb-0.5 transition-all ${
+                            ((activeCompany?.name || sysSettings.companyName)?.length || 0) > 20 ? 'text-[11px]' : 
+                            'text-sm'
+                          } line-clamp-1`}
+                          title={activeCompany?.name || sysSettings.companyName}
+                        >
+                          {activeCompany?.name || sysSettings.companyName}
+                        </span>
+                        {companies.length === 0 && (
+                          <span className={`uppercase font-bold text-white/65 tracking-widest ${
+                            (sysSettings.companySub?.length || 0) > 30 ? 'text-[6px]' : 
+                            'text-[8px]'
+                          } truncate`}>
+                            {sysSettings.companySub}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {companies.length > 0 && (
+                        <ChevronDown className="w-4 h-4 text-white/60 group-hover:text-white shrink-0 transition-colors" />
+                      )}
+                    </div>
+
+                    {/* Hidden interactive select */}
+                    {companies.length > 0 && (
+                      <select
+                        value={activeCompanyId || ''}
+                        onChange={(e) => {
+                          setActiveCompanyId(e.target.value);
+                          // Reload to ensure all components isolate with the new company ID
+                          setTimeout(() => {
+                            window.location.reload();
+                          }, 100);
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        style={{ appearance: 'none' }}
+                      >
+                        {companies.map(c => (
+                          <option key={c.id} value={c.id} className="text-slate-900">{c.name}</option>
+                        ))}
+                      </select>
+                    )}
                   </motion.div>
                 )}
               </div>
@@ -1492,7 +1541,7 @@ function AppContent() {
             <nav className="flex-1 overflow-visible py-4 no-scrollbar">
               {menuGroups.map((group) => {
                 const visibleItems = group.items.filter((item) =>
-                  item.roles.includes(profile?.role || "employee"),
+                  item.roles.includes(profile?.role || "employee") || profile?.role === "owner"
                 );
                 if (visibleItems.length === 0) return null;
                 const showFull = !isSidebarCollapsed;
@@ -1511,7 +1560,7 @@ function AppContent() {
                         
                         const rawSubItems = item.subItems && item.subItems.length > 0;
                         const allowedSubItems = rawSubItems
-                          ? item.subItems.filter((s: any) => s.roles.includes(profile?.role || "employee"))
+                          ? item.subItems.filter((s: any) => s.roles.includes(profile?.role || "employee") || profile?.role === "owner")
                           : [];
                           
                         if (rawSubItems && allowedSubItems.length === 0) return null;
@@ -1777,7 +1826,7 @@ function AppContent() {
         </AnimatePresence>
 
         {/* ══ DESKTOP HEADER ══ */}
-        <header className="hidden lg:flex h-14 bg-card/85 backdrop-blur-md border-b border-border/50 items-center justify-between px-5 shrink-0" dir="rtl">
+        <header className="hidden lg:flex h-14 bg-card/85 backdrop-blur-md border-b border-border/50 items-center justify-between px-5 shrink-0 relative z-[200]" dir="rtl">
 
           {/* يمين = زر القائمة + الترحيب (جانب الشريط الجانبي) */}
           <div className="flex items-center gap-3">
@@ -1890,8 +1939,8 @@ function AppContent() {
                   <Analytics 
                     onBack={() => setActiveTab("dashboard")} 
                     onSelectEmployee={(empId) => {
-                      setSelectedEmployeeId(empId);
                       setActiveTab("employees");
+                      setTimeout(() => setSelectedEmployeeId(empId), 0);
                     }}
                   />
                 )}
@@ -1914,7 +1963,11 @@ function AppContent() {
                 {activeTab === "archive" && <Archive />}
                 {activeTab === "gallery" && <Gallery />}
                 {activeTab === "reports_gallery" && <ReportsGallery />}
+                {activeTab === "smart_reports" && <SmartReports />}
                 {activeTab === "sales" && <Sales />}
+                {activeTab === "clients" && <Clients />}
+                {activeTab === "invoices" && <Invoices />}
+                {activeTab === "quotations" && <Quotations />}
                 {activeTab === "sales_reps" && (
                   <>
                     {!selectedSalesRepId ? (
@@ -1975,6 +2028,7 @@ function AppContent() {
                 {activeTab === "notifications" && <Notifications />}
                 {activeTab === "camera" && <CameraCapture />}
                 {activeTab === "briefing" && <ExecutiveBriefingSystem goToTab={setActiveTab} />}
+                {activeTab === "command_center" && <CommandCenter />}
                 {activeTab === "attendance_manager" && <AttendanceManager />}
                 {activeTab === "settings" && user?.email === "expertadvsa@gmail.com" && <SystemSettings initialTab={settingsSubTab} />}
               </motion.div>

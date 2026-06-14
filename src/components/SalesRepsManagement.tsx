@@ -15,12 +15,14 @@ import { addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { sendNotification } from '../lib/notifications';
 import { createAliphiaDocument } from '../lib/aliphia';
 import { sendWhatsappMessage } from '../lib/whatsapp';
+import { useAuth } from '../lib/AuthContext';
 
 interface SalesRepsManagementProps {
   onSelectRep?: (id: string) => void;
 }
 
 export default function SalesRepsManagement({ onSelectRep }: SalesRepsManagementProps) {
+  const { activeCompanyId } = useAuth();
   const [reps, setReps] = useState<UserProfile[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -42,7 +44,7 @@ export default function SalesRepsManagement({ onSelectRep }: SalesRepsManagement
   useEffect(() => {
     // 1. Fetch Sales Reps
     const unsubReps = onSnapshot(
-      query(collection(db, 'users'), where('role', '==', 'sales_rep')),
+      activeCompanyId ? query(collection(db, 'users'), where('role', '==', 'sales_rep'), where('companyId', '==', activeCompanyId)) : query(collection(db, 'users'), where('role', '==', 'sales_rep')),
       (snap) => setReps(snap.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile)))
     );
 
@@ -55,7 +57,7 @@ export default function SalesRepsManagement({ onSelectRep }: SalesRepsManagement
     };
 
     const unsubQuotes = onSnapshot(
-      query(collection(db, 'quotations'), where('status', '==', 'pending')),
+      activeCompanyId ? query(collection(db, 'quotations'), where('status', '==', 'pending'), where('companyId', '==', activeCompanyId)) : query(collection(db, 'quotations'), where('status', '==', 'pending')),
       (snap) => {
         pendingQuotes = snap.docs.map(d => ({ id: d.id, ...d.data(), docType: 'quotation' } as Quotation));
         updateUnifiedPending();
@@ -63,7 +65,7 @@ export default function SalesRepsManagement({ onSelectRep }: SalesRepsManagement
     );
 
     const unsubInvoices = onSnapshot(
-      query(collection(db, 'invoices'), where('status', '==', 'pending')),
+      activeCompanyId ? query(collection(db, 'invoices'), where('status', '==', 'pending'), where('companyId', '==', activeCompanyId)) : query(collection(db, 'invoices'), where('status', '==', 'pending')),
       (snap) => {
         pendingInvoices = snap.docs.map(d => ({ id: d.id, ...d.data(), docType: 'invoice' } as Quotation));
         updateUnifiedPending();
@@ -72,7 +74,7 @@ export default function SalesRepsManagement({ onSelectRep }: SalesRepsManagement
 
     // 3. Fetch pending transactions from sales reps (loans, invoices)
     const unsubTx = onSnapshot(
-      query(collection(db, 'transactions'), where('status', '==', 'pending')),
+      activeCompanyId ? query(collection(db, 'transactions'), where('status', '==', 'pending'), where('companyId', '==', activeCompanyId)) : query(collection(db, 'transactions'), where('status', '==', 'pending')),
       (snap) => {
         const allPending = snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
         setTransactions(allPending);
@@ -199,7 +201,7 @@ export default function SalesRepsManagement({ onSelectRep }: SalesRepsManagement
       const emailLower = newRep.email.toLowerCase().trim();
       
       // Strict duplicate email check across all users
-      const qDup = query(collection(db, 'users'), where('email', '==', emailLower));
+      const qDup = activeCompanyId ? query(collection(db, 'users'), where('email', '==', emailLower), where('companyId', '==', activeCompanyId)) : query(collection(db, 'users'), where('email', '==', emailLower));
       const snapDup = await getDocs(qDup);
       if (!snapDup.empty) {
         toast.error('هذا البريد الإلكتروني مسجل بالفعل لمستخدم آخر (موظف أو مندوب) في النظام');
@@ -208,6 +210,7 @@ export default function SalesRepsManagement({ onSelectRep }: SalesRepsManagement
       }
 
       await addDoc(collection(db, 'users'), {
+        companyId: activeCompanyId || null,
         name: newRep.name,
         email: emailLower,
         phone: newRep.phone,

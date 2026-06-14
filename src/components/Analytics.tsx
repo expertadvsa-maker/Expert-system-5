@@ -28,8 +28,9 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { useAuth } from '../lib/AuthContext';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Transaction, Project, UserProfile, Attendance } from '../types';
@@ -44,11 +45,13 @@ export default function Analytics({
   onBack?: () => void; 
   onSelectEmployee?: (id: string) => void; 
 }) {
+  const { activeCompanyId } = useAuth();
   const [period, setPeriod] = useState<Period>('monthly');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [employees, setEmployees] = useState<UserProfile[]>([]);
-  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [workerTransactions, setWorkerTransactions] = useState<any[]>([]);
   
   const [recommendations, setRecommendations] = useState<string[]>([
     "تحسين سياسة التحصيل بالمستخلصات لتكثيف النقدية بنسبة 5%",
@@ -58,31 +61,62 @@ export default function Analytics({
   const [recsLoading, setRecsLoading] = useState(false);
 
   useEffect(() => {
-    const unsubTx = onSnapshot(query(collection(db, 'transactions'), orderBy('date', 'desc')), (snap) => {
+    const unsubTx = onSnapshot(
+      activeCompanyId ? query(collection(db, 'transactions'), where('companyId', '==', activeCompanyId), orderBy('date', 'desc')) : query(collection(db, 'transactions'), orderBy('date', 'desc')), 
+      (snap) => {
       setTransactions(snap.docs.map(d => ({ 
         id: d.id, 
         ...d.data(), 
         dateObj: d.data().date?.toDate?.() || new Date(d.data().date) 
       } as any)));
-    }, (err) => console.error("Analytics Transactions Listen Error:", err));
+    }, (err) => {
+      if (!activeCompanyId) return;
+      console.error("Analytics Transactions Listen Error:", err);
+    });
 
-    const unsubProj = onSnapshot(collection(db, 'projects'), (snap) => {
+    const unsubProj = onSnapshot(
+      activeCompanyId ? query(collection(db, 'projects'), where('companyId', '==', activeCompanyId)) : collection(db, 'projects'), 
+      (snap) => {
       setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("Analytics Projects Listen Error:", err));
+    }, (err) => {
+      if (!activeCompanyId) return;
+      console.error("Analytics Projects Listen Error:", err);
+    });
 
-    const unsubEmp = onSnapshot(collection(db, 'users'), (snap) => {
+    const unsubEmp = onSnapshot(
+      activeCompanyId ? query(collection(db, 'users'), where('companyId', '==', activeCompanyId)) : collection(db, 'users'), 
+      (snap) => {
       setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("Analytics Employees Listen Error:", err));
+    }, (err) => {
+      if (!activeCompanyId) return;
+      console.error("Analytics Employees Listen Error:", err);
+    });
 
-    const unsubAtt = onSnapshot(collection(db, 'attendance'), (snap) => {
+    const unsubAtt = onSnapshot(
+      activeCompanyId ? query(collection(db, 'attendance'), where('companyId', '==', activeCompanyId)) : collection(db, 'attendance'), 
+      (snap) => {
       setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("Analytics Attendance Listen Error:", err));
+    }, (err) => {
+      if (!activeCompanyId) return;
+      console.error("Analytics Attendance Listen Error:", err);
+    });
+
+    const unsubWorkerTx = onSnapshot(
+      activeCompanyId ? query(collection(db, 'workerTransactions'), where('companyId', '==', activeCompanyId)) : collection(db, 'workerTransactions'), 
+      (snap) => {
+      setWorkerTransactions(snap.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        dateObj: d.data().date?.toDate?.() || new Date(d.data().date)
+      } as any)));
+    }, (err) => console.error("Analytics Worker Tx Listen Error:", err));
 
     return () => {
       unsubTx();
       unsubProj();
       unsubEmp();
       unsubAtt();
+      unsubWorkerTx();
     };
   }, []);
 
@@ -120,10 +154,13 @@ export default function Analytics({
     const atts = attendance.filter(a => (a.date?.toDate?.() || new Date(a.date)) >= startDate);
 
     // Stats
+    const wTxs = workerTransactions.filter(t => t.dateObj >= startDate);
+    const workerExpense = wTxs.filter(t => t.type === 'payment').reduce((acc, t) => acc + (t.amount || 0), 0);
+
     const income = txs.filter(t => t.type === 'income').reduce((acc, t) => acc + (t.amount || 0), 0);
     const expense = txs.filter(t => t.type === 'expense').reduce((acc, t) => acc + (t.amount || 0), 0);
     const purchase = txs.filter(t => t.type === 'purchase').reduce((acc, t) => acc + (t.amount || 0), 0);
-    const totalExp = expense + purchase;
+    const totalExp = expense + purchase + workerExpense;
     const netProfit = income - totalExp;
     const margin = income > 0 ? (netProfit / income) * 100 : 0;
     
@@ -143,10 +180,13 @@ export default function Analytics({
       return d >= prevStartDate && d < prevEndDate;
     });
 
+    const prevWTxs = workerTransactions.filter(t => t.dateObj >= prevStartDate && t.dateObj < prevEndDate);
+    const prevWorkerExpense = prevWTxs.filter(t => t.type === 'payment').reduce((acc, t) => acc + (t.amount || 0), 0);
+
     const prevIncome = prevTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + (t.amount || 0), 0);
     const prevExpense = prevTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + (t.amount || 0), 0);
     const prevPurchase = prevTxs.filter(t => t.type === 'purchase').reduce((acc, t) => acc + (t.amount || 0), 0);
-    const prevTotalExp = prevExpense + prevPurchase;
+    const prevTotalExp = prevExpense + prevPurchase + prevWorkerExpense;
     const prevNetProfit = prevIncome - prevTotalExp;
     const prevMargin = prevIncome > 0 ? (prevNetProfit / prevIncome) * 100 : 0;
 
@@ -180,6 +220,19 @@ export default function Analytics({
       chartGroups[key].profit = chartGroups[key].income - chartGroups[key].expense;
     });
 
+    wTxs.forEach(t => {
+      if (t.type !== 'payment') return;
+      let key = '';
+      if (period === 'daily') key = t.dateObj.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+      else if (period === 'weekly') key = t.dateObj.toLocaleDateString('ar-SA', { weekday: 'short' });
+      else if (period === 'monthly' || period === 'all') key = t.dateObj.toLocaleDateString('ar-SA', { month: 'short' });
+      else key = t.dateObj.getFullYear().toString();
+
+      if (!chartGroups[key]) chartGroups[key] = { name: key, income: 0, expense: 0, profit: 0, timestamp: t.dateObj.getTime() };
+      chartGroups[key].expense += t.amount || 0;
+      chartGroups[key].profit = chartGroups[key].income - chartGroups[key].expense;
+    });
+
     const sortedCharts = Object.values(chartGroups).sort((a: any, b: any) => a.timestamp - b.timestamp);
 
     // Riyadh VAT tax calculation (15%)
@@ -192,6 +245,21 @@ export default function Analytics({
     const totalProjectsCount = projects.length;
     const projRatio = totalProjectsCount > 0 ? (completedProjectsCount + 1) / (totalProjectsCount + 1) : 1;
     const calculatedAssetEfficiency = Math.min(100, Math.round(attendanceRate * 0.4 + projRatio * 60));
+
+    // Expense Breakdown
+    const expenseBreakdown: Record<string, number> = {};
+    txs.filter(t => t.type === 'expense' || t.type === 'purchase').forEach(t => {
+      const cat = t.category || 'غير مصنف';
+      expenseBreakdown[cat] = (expenseBreakdown[cat] || 0) + (t.amount || 0);
+    });
+    
+    if (workerExpense > 0) {
+      expenseBreakdown['رواتب ومدفوعات العمال'] = workerExpense;
+    }
+    
+    const sortedExpenseBreakdown = Object.entries(expenseBreakdown)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
 
     return {
       income,
@@ -209,7 +277,8 @@ export default function Analytics({
       vatOutput,
       vatInput,
       vatNet,
-      assetEfficiency: calculatedAssetEfficiency
+      assetEfficiency: calculatedAssetEfficiency,
+      expenseBreakdown: sortedExpenseBreakdown
     };
   }, [period, transactions, projects, employees, attendance]);
 
@@ -289,8 +358,8 @@ export default function Analytics({
 
       // Milestone Performance & Quality Score (40% weight)
       const mileStats = empMilestonesStats[empId] || { total: 0, completed: 0, totalComplianceScore: 0, complianceCount: 0 };
-      const completionRate = mileStats.total > 0 ? (mileStats.completed / mileStats.total) * 100 : 90; // Default baseline if no milestones assigned
-      const avgCompliance = mileStats.complianceCount > 0 ? (mileStats.totalComplianceScore / mileStats.complianceCount) : 95; // Default baseline
+      const completionRate = mileStats.total > 0 ? (mileStats.completed / mileStats.total) * 100 : 0;
+      const avgCompliance = mileStats.complianceCount > 0 ? (mileStats.totalComplianceScore / mileStats.complianceCount) : 0;
       const milestoneScore = (completionRate * 0.6) + (avgCompliance * 0.4);
 
       // Productivity Score (20% weight) - computed from average working hours
@@ -299,20 +368,21 @@ export default function Analytics({
       const productivityScore = workHoursRatio * 100;
 
       // Combined Performance Index
-      let finalIndex = (attScore * 0.4) + (milestoneScore * 0.4) + (productivityScore * 0.2);
-
-      // Fallback baseline for demo stability
-      if (finalIndex === 0 || isNaN(finalIndex)) {
-        finalIndex = 82 + (Math.abs(emp.name?.charCodeAt(0) || 0) % 16);
-      }
+      const hasData = attStats.totalDays > 0 || mileStats.total > 0;
+      let finalIndex = hasData ? (attScore * 0.4) + (milestoneScore * 0.4) + (productivityScore * 0.2) : 0;
 
       return {
         ...emp,
+        hasData,
         attendanceRate: Math.min(100, Math.max(0, finalIndex)),
-        attRate: Math.min(100, attRate > 0 ? attRate : 85 + (Math.abs(emp.name?.charCodeAt(0) || 0) % 15)),
+        attRate: Math.min(100, attRate),
         tasksRate: Math.round(completionRate)
       };
-    }).sort((a, b) => b.attendanceRate - a.attendanceRate);
+    }).sort((a, b) => {
+      if (!a.hasData && b.hasData) return 1;
+      if (a.hasData && !b.hasData) return -1;
+      return b.attendanceRate - a.attendanceRate;
+    });
   }, [employees, attendance, projects, period]);
 
   useEffect(() => {
@@ -473,7 +543,7 @@ export default function Analytics({
           </CardHeader>
           <CardContent className="p-6">
             <div className="h-[320px] w-full" style={{ minHeight: 320 }}>
-              <ResponsiveContainer width="100%" height={320}>
+              <ResponsiveContainer width="100%" height={320} minWidth={0} minHeight={0}>
                 <AreaChart data={filteredData.chartData}>
                   <defs>
                     <linearGradient id="gIncome" x1="0" y1="0" x2="0" y2="1">
@@ -568,8 +638,8 @@ export default function Analytics({
                              </p>
                           </div>
                        </div>
-                       <Badge variant="outline" className={`text-[9px] font-black shadow-none px-2 py-0.5 rounded-lg ${emp.attendanceRate >= 90 ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                         {emp.attendanceRate >= 90 ? 'ممتاز ⭐' : 'نشط'}
+                       <Badge variant="outline" className={`text-[9px] font-black shadow-none px-2 py-0.5 rounded-lg ${!emp.hasData ? 'bg-slate-50 text-slate-400 border-slate-200' : emp.attendanceRate >= 90 ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                         {!emp.hasData ? 'لا توجد بيانات 🚫' : emp.attendanceRate >= 90 ? 'ممتاز ⭐' : 'نشط'}
                        </Badge>
                     </div>
 
@@ -577,17 +647,19 @@ export default function Analytics({
                     <div className="mt-2 space-y-1.5">
                        <div className="flex justify-between items-center text-[10px] font-black">
                           <span className="text-slate-500">مؤشر الكفاءة العام</span>
-                          <span className="text-indigo-600 font-black">{Math.round(emp.attendanceRate)}%</span>
+                          <span className={emp.hasData ? "text-indigo-600 font-black" : "text-slate-400 font-bold"}>
+                            {emp.hasData ? `${Math.round(emp.attendanceRate)}%` : 'N/A'}
+                          </span>
                        </div>
                        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                           <div 
-                             className="h-full bg-indigo-600 rounded-full transition-all duration-500" 
-                             style={{ width: `${Math.round(emp.attendanceRate)}%` }} 
+                             className={`h-full rounded-full transition-all duration-500 ${emp.hasData ? 'bg-indigo-600' : 'bg-slate-300'}`} 
+                             style={{ width: `${emp.hasData ? Math.round(emp.attendanceRate) : 0}%` }} 
                           />
                        </div>
                        <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold pt-0.5">
-                          <span>الالتزام بالحضور: {Math.round(emp.attRate)}%</span>
-                          <span>معالم المشاريع: {Math.round(emp.tasksRate)}%</span>
+                          <span>الالتزام بالحضور: {emp.hasData ? `${Math.round(emp.attRate)}%` : 'N/A'}</span>
+                          <span>معالم المشاريع: {emp.hasData ? `${Math.round(emp.tasksRate)}%` : 'N/A'}</span>
                        </div>
                     </div>
                  </div>
@@ -603,7 +675,7 @@ export default function Analytics({
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                <div className="h-[180px] w-full" style={{ minHeight: 180 }}>
-                  <ResponsiveContainer width="100%" height={180}>
+                  <ResponsiveContainer width="100%" height={180} minWidth={0} minHeight={0}>
                     <PieChart>
                       <Pie
                         data={[
@@ -653,6 +725,34 @@ export default function Analytics({
                   </div>
                </div>
             </div>
+
+            {/* Expense Breakdown Section */}
+            {filteredData.expenseBreakdown && filteredData.expenseBreakdown.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h5 className="text-xs font-bold text-slate-500 mb-3 flex items-center gap-2">
+                  <TrendingDown className="w-3.5 h-3.5" />
+                  تحليل المصروفات (أين تذهب الأموال؟)
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filteredData.expenseBreakdown.slice(0, 4).map((exp: any, i: number) => {
+                    const pct = filteredData.expense > 0 ? (exp.value / filteredData.expense) * 100 : 0;
+                    return (
+                      <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="flex flex-col gap-1 w-full">
+                          <div className="flex justify-between w-full text-[10px] font-bold text-slate-700">
+                            <span>{exp.name}</span>
+                            <span>{exp.value.toLocaleString()} ر.س ({pct.toFixed(1)}%)</span>
+                          </div>
+                          <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-red-400 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
         </Card>
 
         {/* Row 3: Insights Panel */}

@@ -59,6 +59,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { BankAccount } from '../types';
 import { useAuth } from '../lib/AuthContext';
+import { getCompanyQuery } from '../lib/firestoreUtils';
 import { sendNotification } from '../lib/notifications';
 import { sendWhatsappMessage } from '../lib/whatsapp';
 import { 
@@ -74,9 +75,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import CompanyProfile from './CompanyProfile';
 import GeminiKeyCard from './GeminiKeyCard';
+import AliphiaStatusCard from './AliphiaStatusCard';
+import AliphiaSettingsModal from './AliphiaSettingsModal';
+import CompaniesManagement from './CompaniesManagement';
 
 export default function SystemSettings({ initialTab }: { initialTab?: string }) {
-  const { user, profile } = useAuth();
+  const { user, profile, activeCompanyId } = useAuth();
 
   if (user?.email !== 'expertadvsa@gmail.com') {
     return (
@@ -134,6 +138,8 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
         return { label: 'نشط 🎨' };
       case 'data':
         return { label: 'مؤمن 🔒' };
+      case 'aliphia':
+        return { label: 'جاهز 🔌' };
       default:
         return { label: 'جاهز' };
     }
@@ -152,14 +158,14 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
         return { gradient: 'from-amber-500 to-orange-600' };
       case 'ai':
         return { gradient: 'from-purple-500 to-violet-600 animate-[pulse_2s_infinite]' };
-      case 'locations':
-        return { gradient: 'from-emerald-500 to-teal-600' };
       case 'banks':
         return { gradient: 'from-green-500 to-emerald-600' };
       case 'theme':
         return { gradient: 'from-pink-500 to-rose-600' };
       case 'data':
         return { gradient: 'from-red-500 to-rose-700' };
+      case 'aliphia':
+        return { gradient: 'from-emerald-500 to-teal-500' };
       default:
         return { gradient: 'from-primary to-primary-dark' };
     }
@@ -178,8 +184,6 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
         return 'تحديد ساعات العمل، أيام الإجازات الأسبوعية، ونطاق السياج الجغرافي للمواقع.';
       case 'ai':
         return 'ربط مفتاح ذكاء Gemini، وتخصيص تفضيلات الموجز الصوتي الإداري اليومي.';
-      case 'locations':
-        return 'إضافة وإدارة فروع المنشأة، المعارض، ومواقع السكن الإداري والعمالي.';
       case 'banks':
         return 'تسجيل الحسابات البنكية للمؤسسة، وصناديق النقد (الكاش) وإدارتها.';
       case 'theme':
@@ -188,6 +192,8 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
         return 'تنظيف قاعدة البيانات من البيانات التجريبية، صيانة الكاش، ورفع مستوى الأمان.';
       case 'whatsapp':
         return 'ربط النظام بخدمات واتساب المجانية (مثل Evolution API / GreenAPI) وتخصيص قوالب رسائل النظام للعملاء والموظفين حسب الصلاحيات.';
+      case 'aliphia':
+        return 'إدارة الربط مع نظام ألف ياء المحاسبي، اختبار الاتصال، ومزامنة الفواتير والعملاء.';
       default:
         return 'تعديل وتخصيص إعدادات هذا القسم.';
     }
@@ -280,19 +286,22 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
 
   // Define All Navigation Tabs
   const tabs = [
-    { id: 'company_profile', label: 'هوية الشركة والأرشيف', icon: Building2, roles: ['manager'] },
-    { id: 'general', label: 'الإعدادات العامة', icon: SettingsIcon, roles: ['manager'] },
-    { id: 'whatsapp', label: 'مكتبة واتساب المجانية والرسائل', icon: MessageCircle, roles: ['manager'] },
-    { id: 'notifications', label: 'البريد والإشعارات', icon: Mail, roles: ['manager'] },
-    { id: 'attendance', label: 'نظام الدوام والـ GPS', icon: Clock, roles: ['manager'] },
-    { id: 'ai', label: 'الذكاء الاصطناعي', icon: Sparkles, roles: ['manager'] },
-    { id: 'locations', label: 'المقرات والسكن', icon: MapPin, roles: ['manager'] },
-    { id: 'banks', label: 'الحسابات البنكية', icon: CreditCard, roles: ['manager'] },
-    { id: 'theme', label: 'المظهر والثيم البصري', icon: Paintbrush, roles: ['manager', 'supervisor', 'employee'] },
-    { id: 'data', label: 'إدارة البيانات والأمان', icon: Database, roles: ['manager'] }
+    { id: 'companies', label: 'إدارة الشركات (المالك)', icon: Building2, roles: ['owner'] },
+    { id: 'company_profile', label: 'هوية النظام الأساسية', icon: Building2, roles: ['manager', 'owner'] },
+    { id: 'general', label: 'الإعدادات العامة', icon: SettingsIcon, roles: ['manager', 'owner'] },
+    { id: 'whatsapp', label: 'مكتبة واتساب المجانية والرسائل', icon: MessageCircle, roles: ['manager', 'owner'] },
+    { id: 'notifications', label: 'البريد والإشعارات', icon: Mail, roles: ['manager', 'owner'] },
+    { id: 'attendance', label: 'نظام الدوام والـ GPS', icon: Clock, roles: ['manager', 'owner'] },
+    { id: 'ai', label: 'الذكاء الاصطناعي', icon: Sparkles, roles: ['manager', 'owner'] },
+    { id: 'locations', label: 'المقرات والسكن', icon: MapPin, roles: ['manager', 'owner'] },
+    { id: 'banks', label: 'الحسابات البنكية', icon: CreditCard, roles: ['manager', 'owner'] },
+    { id: 'aliphia', label: 'الربط المحاسبي (ألف ياء)', icon: Globe, roles: ['manager', 'owner'] },
+    { id: 'theme', label: 'المظهر والثيم البصري', icon: Paintbrush, roles: ['manager', 'supervisor', 'employee', 'owner'] },
+    { id: 'data', label: 'إدارة البيانات والأمان', icon: Database, roles: ['manager', 'owner'] }
   ];
 
-  const visibleTabs = tabs.filter(tab => tab.roles.includes(profile?.role || 'employee'));
+  // Include owner in roles check
+  const visibleTabs = tabs.filter(tab => tab.roles.includes(profile?.role || 'employee') || profile?.role === 'owner');
 
   useEffect(() => {
     if (visibleTabs.length > 0 && !activeTab) {
@@ -303,27 +312,54 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
   useEffect(() => {
     // Load Locations
     const unsubOffices = onSnapshot(
-      query(collection(db, 'offices'), orderBy('name', 'asc')),
+      getCompanyQuery('offices', activeCompanyId),
       (snapshot) => {
-        setOffices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        docs.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
+        setOffices(docs);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error loading offices:", error);
         setLoading(false);
       }
     );
 
-    // Load Global Settings
+    // Load Global Settings & Active Company Overrides
     const loadSettings = async () => {
       const docRef = doc(db, 'system', 'settings');
       const docSnap = await getDoc(docRef);
+      let globalData = {};
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setSettings(prev => ({ ...prev, ...data }));
-        if (data.housingLocations) setHousing(data.housingLocations);
+        globalData = docSnap.data();
+        if (globalData.housingLocations) setHousing(globalData.housingLocations);
       }
+      
+      let companyData = {};
+      if (activeCompanyId) {
+        const compSnap = await getDoc(doc(db, 'companies', activeCompanyId));
+        if (compSnap.exists()) {
+          const c = compSnap.data();
+          companyData = {
+            companyName: c.name || '',
+            companySub: c.settings?.companySub || '',
+            taxNumber: c.taxNumber || '',
+            companyAddress: c.address || '',
+            companyPhone: c.phone || '',
+            companyEmail: c.email || '',
+            logoUrl: c.logoUrl || '',
+            sidebarColor: c.settings?.sidebarColor || globalData.sidebarColor || '#1a4d4e',
+            primaryColor: c.settings?.primaryColor || globalData.primaryColor || '#2c7a7d',
+          };
+        }
+      }
+
+      setSettings(prev => ({ ...prev, ...globalData, ...companyData }));
     };
     loadSettings();
 
     // Load Bank Accounts
-    const unsubBanks = onSnapshot(collection(db, 'bankAccounts'), (snapshot) => {
+    const unsubBanks = onSnapshot(getCompanyQuery('bankAccounts', activeCompanyId), (snapshot) => {
       setBankAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BankAccount)));
     });
 
@@ -331,7 +367,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
       unsubOffices();
       unsubBanks();
     };
-  }, []);
+  }, [activeCompanyId]);
 
   const handleTestWhatsapp = async () => {
     if (!settings.whatsappSettings?.managerPhone) {
@@ -360,6 +396,23 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
   const handleSaveSettings = async () => {
     setIsSubmitting(true);
     try {
+      if (activeCompanyId) {
+        await updateDoc(doc(db, 'companies', activeCompanyId), {
+           name: settings.companyName,
+           taxNumber: settings.taxNumber,
+           address: settings.companyAddress,
+           phone: settings.companyPhone,
+           email: settings.companyEmail,
+           logoUrl: settings.logoUrl,
+           settings: {
+             companySub: settings.companySub,
+             sidebarColor: settings.sidebarColor,
+             primaryColor: settings.primaryColor,
+           }
+        });
+      }
+
+      // Fallback & Global Settings
       await setDoc(doc(db, 'system', 'settings'), {
         ...settings,
         updatedAt: new Date().toISOString()
@@ -467,6 +520,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
     try {
       await addDoc(collection(db, 'bankAccounts'), {
         ...newAccount,
+        companyId: activeCompanyId || null,
         initialBalance: parseFloat(newAccount.initialBalance) || 0,
         createdAt: serverTimestamp()
       });
@@ -508,6 +562,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
       }
       await addDoc(collection(db, 'offices'), {
         ...newOffice,
+        companyId: activeCompanyId || null,
         latitude: parseFloat(newOffice.latitude),
         longitude: parseFloat(newOffice.longitude),
         createdAt: new Date().toISOString()
@@ -670,41 +725,45 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
           </div>
         </div>
       ) : (
-        <div className="max-w-4xl mx-auto">
+        <div className="w-full max-w-[1400px] mx-auto">
           {/* Breadcrumbs Header */}
-          <div className="flex flex-col gap-2 mb-6">
-            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-zinc-500">
-              <span className="cursor-pointer hover:text-primary transition-colors" onClick={() => {
+          <div className="flex flex-col gap-3 mb-8 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md p-6 rounded-3xl border border-slate-200/60 dark:border-zinc-800/60 shadow-sm">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-400 dark:text-zinc-500">
+              <span className="cursor-pointer hover:text-primary transition-colors flex items-center gap-1" onClick={() => {
                 if (visibleTabs.length > 1) setShowHub(true);
-              }}>لوحة الإعدادات</span>
+              }}>
+                <SettingsIcon className="w-3.5 h-3.5" />
+                لوحة الإعدادات
+              </span>
               <span>/</span>
-              <span className="text-slate-655 dark:text-zinc-300">{visibleTabs.find(t => t.id === activeTab)?.label}</span>
+              <span className="text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">{visibleTabs.find(t => t.id === activeTab)?.label}</span>
             </div>
             
-            <div className="flex items-center justify-between mt-1 border-b border-slate-100 dark:border-zinc-800/80 pb-4">
-              <div className="space-y-1">
-                <h1 className="text-2xl font-black text-slate-900 dark:text-zinc-100 flex items-center gap-2.5">
+            <div className="flex items-center justify-between mt-1">
+              <div className="space-y-1.5">
+                <h1 className="text-3xl font-black text-slate-900 dark:text-zinc-100 flex items-center gap-3">
                   {React.createElement(visibleTabs.find(t => t.id === activeTab)?.icon || SettingsIcon, {
-                    className: "w-6 h-6 text-primary"
+                    className: "w-8 h-8 text-primary p-1.5 bg-primary/10 rounded-xl"
                   })}
                   {visibleTabs.find(t => t.id === activeTab)?.label}
                 </h1>
+                <p className="text-slate-500 text-sm font-medium">{visibleTabs.find(t => t.id === activeTab)?.description}</p>
               </div>
 
               {visibleTabs.length > 1 && (
                 <Button
                   onClick={() => setShowHub(true)}
                   variant="outline"
-                  className="rounded-xl border border-slate-200 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-800 text-xs font-bold transition-all px-4 py-2 flex items-center gap-1.5"
+                  className="rounded-2xl border-2 border-slate-200 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:border-slate-300 text-sm font-bold transition-all px-6 py-5 flex items-center gap-2"
                 >
-                  <span className="text-base leading-none">→</span> العودة للإعدادات
+                  <span className="text-xl leading-none">→</span> العودة للقائمة الرئيسية
                 </Button>
               )}
             </div>
           </div>
 
           {/* Page Content Card */}
-          <div className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl border border-slate-200/50 dark:border-zinc-800/50 shadow-xl rounded-[2.5rem] p-5 md:p-8 min-h-[500px]">
+          <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-slate-200/60 dark:border-zinc-800/60 shadow-xl rounded-[2.5rem] p-6 md:p-10 min-h-[600px]">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
@@ -714,6 +773,19 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
                 transition={{ duration: 0.2 }}
               >
                 
+               <div className="w-full max-w-[1400px] mx-auto min-h-[500px]">
+                
+                {activeTab === 'companies' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="w-full"
+                  >
+                    <CompaniesManagement />
+                  </motion.div>
+                )}
+
                 {/* 1. COMPANY PROFILE TAB */}
                 {activeTab === 'company_profile' && (
                   <div className="space-y-6">
@@ -742,6 +814,33 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
                       </h2>
                       <p className="text-xs font-bold text-slate-400 mt-1">إدارة معلومات المنشأة والتفضيلات المالية وتخصيص الفواتير</p>
                     </div>
+
+                    {/* Hint for Multi-Tenancy */}
+                    {activeCompanyId ? (
+                      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex gap-3 items-start">
+                        <div className="p-2 bg-indigo-100 rounded-xl shrink-0">
+                          <Info className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-indigo-900 text-sm mb-1">ملاحظة هامة (نظام الشركات)</h4>
+                          <p className="text-indigo-700/80 text-xs leading-relaxed">
+                            أنت الآن تقوم بتعديل إعدادات الهوية والضرائب الخاصة بالشركة المحددة <strong>(أعلى القائمة الجانبية)</strong>. هذه التعديلات ستنطبق فقط على هذه الشركة ولن تؤثر على الشركات الأخرى.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
+                        <div className="p-2 bg-amber-100 rounded-xl shrink-0">
+                          <AlertTriangle className="w-5 h-5 text-amber-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-amber-900 text-sm mb-1">الإعدادات العامة للنظام</h4>
+                          <p className="text-amber-700/80 text-xs leading-relaxed">
+                            لم تقم باختيار شركة محددة، لذلك التعديلات هنا ستُحفظ كـ (إعدادات افتراضية وعامة) للنظام بالكامل ولن تنطبق على الشركات التي لديها إعداداتها الخاصة.
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       
@@ -1418,223 +1517,36 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
                   </div>
                 )}
 
-                {/* 6. LOCATIONS & HOUSING TAB */}
-                {activeTab === 'locations' && (
-                  <div className="space-y-8">
-                    <div className="border-b pb-4">
+
+
+                {/* 11. ALIPHIA INTEGRATION TAB */}
+                {activeTab === 'aliphia' && (
+                  <div className="space-y-6">
+                    <div className="border-b pb-4 mb-6">
                       <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2">
-                        <MapPin className="w-7 h-7 text-primary" />
-                        إدارة المقرات وسكن الموظفين
+                        <Globe className="w-7 h-7 text-primary" />
+                        الربط المحاسبي (ألف ياء)
                       </h2>
-                      <p className="text-xs font-bold text-slate-400 mt-1">تسجيل الفروع والمعارض الرسمية وتتبع إحداثيات سكن العمال</p>
+                      <p className="text-xs font-bold text-slate-400 mt-1">إدارة حالة الاتصال بالنظام المحاسبي ألف ياء وإعدادات المزامنة</p>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div className="space-y-6">
-                        
-                        {/* Add Office Form */}
-                        <Card className="rounded-[2.5rem] border-none bg-slate-50/50 shadow-sm p-6 space-y-4">
-                          <h3 className="text-lg font-black flex items-center gap-2 text-slate-800">
-                            <Plus className="w-5 h-5 text-primary" />
-                            تسجيل فرع أو مستودع جديد
-                          </h3>
-                          <form onSubmit={handleAddOffice} className="space-y-4">
-                            <div className="space-y-1">
-                              <Label className="font-bold text-xs text-slate-500">اسم الفرع/المقر</Label>
-                              <Input 
-                                required
-                                placeholder="مثال: مكتب الإدارة الرئيسي، معرض الملز..."
-                                value={newOffice.name}
-                                onChange={(e) => setNewOffice({...newOffice, name: e.target.value})}
-                                className="h-11 rounded-xl text-right bg-white border-slate-200"
-                              />
-                            </div>
-
-                            <div className="space-y-1">
-                              <Label className="font-bold text-xs text-slate-500">نوع المقر</Label>
-                              <select 
-                                className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                                value={newOffice.type}
-                                onChange={(e) => setNewOffice({...newOffice, type: e.target.value})}
-                              >
-                                <option value="office">مكتب إداري رئيسي</option>
-                                <option value="gallery">معرض مبيعات</option>
-                                <option value="warehouse">مستودع / مخزن لوجستي</option>
-                              </select>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1">
-                                <Label className="font-bold text-xs text-slate-500">خط العرض (Latitude)</Label>
-                                <Input 
-                                  required
-                                  placeholder="24.7136"
-                                  value={newOffice.latitude}
-                                  onChange={(e) => setNewOffice({...newOffice, latitude: e.target.value})}
-                                  className="h-11 rounded-xl text-right font-mono text-xs bg-white border-slate-200"
-                                  dir="ltr"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="font-bold text-xs text-slate-500">خط الطول (Longitude)</Label>
-                                <Input 
-                                  required
-                                  placeholder="46.6753"
-                                  value={newOffice.longitude}
-                                  onChange={(e) => setNewOffice({...newOffice, longitude: e.target.value})}
-                                  className="h-11 rounded-xl text-right font-mono text-xs bg-white border-slate-200"
-                                  dir="ltr"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="flex gap-2">
-                              <Button 
-                                type="button" 
-                                variant="outline" 
-                                onClick={getCurrentLocation}
-                                className="flex-1 h-11 rounded-xl gap-2 border-dashed border-primary/40 text-primary hover:bg-primary/5 font-black text-xs"
-                              >
-                                <MapPin className="w-4 h-4" />
-                                التقاط موقعي الحالي
-                              </Button>
-                              
-                              <Button 
-                                type="submit" 
-                                disabled={isSubmitting}
-                                className="flex-1 h-11 rounded-xl font-black bg-primary hover:bg-black text-white transition-all text-xs"
-                              >
-                                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ المقر'}
-                              </Button>
-                            </div>
-                          </form>
-                        </Card>
-
-                        {/* Add Housing Form */}
-                        <Card className="rounded-[2.5rem] border-none bg-slate-50/50 shadow-sm p-6 space-y-4">
-                          <h3 className="text-lg font-black flex items-center gap-2 text-slate-800">
-                            <Home className="w-5 h-5 text-primary" />
-                            إضافة سكن للموظفين والعمالة
-                          </h3>
-                          <form 
-                            onSubmit={async (e) => {
-                              e.preventDefault();
-                              const form = e.target as HTMLFormElement;
-                              const newLoc = {
-                                id: Math.random().toString(36).substring(2, 11),
-                                name: (form.elements.namedItem('housingName') as HTMLInputElement).value,
-                                address: (form.elements.namedItem('housingAddress') as HTMLInputElement).value,
-                                coordinates: (form.elements.namedItem('housingCoords') as HTMLInputElement).value,
-                                status: 'active'
-                              };
-                              
-                              const updatedHousing = [...housing, newLoc];
-                              setHousing(updatedHousing);
-                              await updateDoc(doc(db, 'system', 'settings'), {
-                                housingLocations: updatedHousing
-                              });
-                              form.reset();
-                              toast.success('تمت إضافة موقع السكن بنجاح');
-                            }}
-                            className="space-y-3 bg-white p-4 rounded-2xl border border-slate-100"
-                          >
-                            <Input name="housingName" placeholder="اسم السكن (مثال: سكن مخرج 15)" required className="h-10 rounded-xl" />
-                            <Input name="housingAddress" placeholder="العنوان بالتفصيل" required className="h-10 rounded-xl" />
-                            <Input name="housingCoords" placeholder="رابط خرائط جوجل أو إحداثيات (مثال: 24.5, 46.5)" className="h-10 rounded-xl text-left" dir="ltr" />
-                            <Button type="submit" className="w-full h-10 rounded-xl font-black text-xs gap-2">
-                              <Plus className="w-4 h-4" /> إضافة موقع السكن
-                            </Button>
-                          </form>
-                        </Card>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="md:col-span-1">
+                        <AliphiaStatusCard />
                       </div>
-
-                      {/* Display current offices & housing */}
-                      <div className="space-y-6">
-                        <div className="space-y-4">
-                          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">المقارات والمنشآت الرسمية ({offices.length})</h3>
-                          <div className="space-y-3 max-h-[300px] overflow-y-auto no-scrollbar">
-                            {offices.map(office => (
-                              <div key={office.id} className="flex items-center justify-between p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl transition-all group">
-                                <div className="flex items-center gap-3">
-                                  <div className="p-2.5 bg-primary/10 rounded-xl text-primary group-hover:bg-primary group-hover:text-white transition-all">
-                                    <MapPin className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <h4 className="font-black text-slate-800 leading-tight text-sm">{office.name}</h4>
-                                    <p className="text-[10px] font-bold text-slate-400 mt-1">
-                                      {office.type === 'office' ? 'مكتب إداري' : office.type === 'gallery' ? 'معرض مبيعات' : 'مستودع'} 
-                                      • Lat: {office.latitude}, Lng: {office.longitude}
-                                    </p>
-                                  </div>
-                                </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  onClick={() => handleDeleteOffice(office.id)}
-                                  className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl w-9 h-9"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            ))}
-                            {offices.length === 0 && (
-                              <div className="text-center py-8 bg-slate-50/40 rounded-2xl border border-dashed border-slate-200">
-                                <p className="text-xs font-bold text-slate-400">لا توجد فروع أو معارض مضافة</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="space-y-4 pt-4 border-t border-dashed">
-                          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">مواقع سكن العمال والموظفين ({housing.length})</h3>
-                          <div className="space-y-3 max-h-[300px] overflow-y-auto no-scrollbar">
-                            {housing.map(loc => (
-                              <div key={loc.id} className="flex items-center justify-between p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl transition-all group">
-                                <div className="flex items-center gap-3">
-                                  <div className="p-2.5 bg-amber-500/10 rounded-xl text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-all">
-                                    <Home className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <h4 className="font-black text-slate-800 leading-tight text-sm">{loc.name}</h4>
-                                    <p className="text-[10px] font-bold text-slate-400 mt-1">{loc.address}</p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  {loc.coordinates && (
-                                    <Button 
-                                      onClick={() => window.open(loc.coordinates.startsWith('http') ? loc.coordinates : `https://www.google.com/maps/search/?api=1&query=${loc.coordinates}`)}
-                                      variant="ghost" 
-                                      size="icon" 
-                                      className="h-9 w-9 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl"
-                                    >
-                                      <Globe className="w-4 h-4" />
-                                    </Button>
-                                  )}
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    onClick={async () => {
-                                      const updated = housing.filter(h => h.id !== loc.id);
-                                      setHousing(updated);
-                                      await updateDoc(doc(db, 'system', 'settings'), {
-                                        housingLocations: updated
-                                      });
-                                      toast.success('تم حذف موقع السكن');
-                                    }}
-                                    className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl w-9 h-9"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                            {housing.length === 0 && (
-                              <div className="text-center py-8 bg-slate-50/40 rounded-2xl border border-dashed border-slate-200">
-                                <p className="text-xs font-bold text-slate-400">لا توجد مواقع سكن مسجلة حالياً</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                      
+                      <div className="md:col-span-1">
+                         <Card className="rounded-[2rem] border-none bg-slate-50/50 shadow-sm p-6 space-y-4">
+                            <h3 className="text-lg font-black flex items-center gap-2 text-slate-800">
+                              <RefreshCw className="w-5 h-5 text-primary" />
+                              معلومات المزامنة
+                            </h3>
+                            <div className="space-y-4 text-sm font-bold text-slate-600">
+                               <p>1. تأكد من إدخال مفتاح API الخاص بنظام ألف ياء.</p>
+                               <p>2. الاتصال يتيح جلب وإنشاء الفواتير وعروض الأسعار والعملاء.</p>
+                               <p>3. يتم عرض حالة الاتصال في هذه الصفحة ويتم استخدامها في باقي أقسام النظام.</p>
+                            </div>
+                         </Card>
                       </div>
                     </div>
                   </div>
@@ -1771,6 +1683,33 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
                       </h2>
                       <p className="text-xs font-bold text-slate-400 mt-1">تحديد طابع النظام، الألوان الخاصة، وتعديل إعلانات شاشة الترحيب</p>
                     </div>
+
+                    {/* Hint for Multi-Tenancy */}
+                    {activeCompanyId ? (
+                      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex gap-3 items-start">
+                        <div className="p-2 bg-indigo-100 rounded-xl shrink-0">
+                          <Palette className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-indigo-900 text-sm mb-1">تخصيص ألوان الشركة الحالية</h4>
+                          <p className="text-indigo-700/80 text-xs leading-relaxed">
+                            الألوان التي تختارها هنا ستُطبق فقط على الشركة المحددة، مما يتيح لك تمييز كل شركة بألوان وهوية بصرية مختلفة داخل النظام.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
+                        <div className="p-2 bg-amber-100 rounded-xl shrink-0">
+                          <AlertTriangle className="w-5 h-5 text-amber-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-amber-900 text-sm mb-1">تخصيص ألوان النظام العامة</h4>
+                          <p className="text-amber-700/80 text-xs leading-relaxed">
+                            لأنك لم تحدد شركة من القائمة العلوية، هذه الألوان ستُحفظ كلون افتراضي عام للنظام ويُطبق على أي شركة لا تملك ألوانها الخاصة.
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       
@@ -2120,7 +2059,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
                     </Card>
                   </div>
                 )}
-
+               </div>
               </motion.div>
             </AnimatePresence>
           </div>

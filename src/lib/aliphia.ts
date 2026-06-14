@@ -100,13 +100,17 @@ export interface AliphiaCredentials {
 }
 
 let cachedCredentials: AliphiaCredentials | null = null;
+let currentCompanyId: string | null = null;
 
 export const getAliphiaCredentials = async (): Promise<AliphiaCredentials | null> => {
-  if (cachedCredentials) return cachedCredentials;
+  const activeCompanyId = localStorage.getItem('activeCompanyId') || 'default';
+
+  if (cachedCredentials && currentCompanyId === activeCompanyId) return cachedCredentials;
 
   // 1. القراءة من التخزين المحلي
   try {
-    const local = localStorage.getItem('aliphia_credentials');
+    const activeCompanyId = localStorage.getItem('activeCompanyId') || 'default';
+    const local = localStorage.getItem(`aliphia_credentials_${activeCompanyId}`);
     if (local) {
       const parsed = JSON.parse(local) as AliphiaCredentials;
       cachedCredentials = {
@@ -117,6 +121,7 @@ export const getAliphiaCredentials = async (): Promise<AliphiaCredentials | null
         invoiceGroupId: parsed.invoiceGroupId?.trim() || '1',
         taxRateId: parsed.taxRateId?.trim(),
       };
+      currentCompanyId = activeCompanyId;
       return cachedCredentials;
     }
   } catch(e) {
@@ -133,6 +138,7 @@ export const getAliphiaCredentials = async (): Promise<AliphiaCredentials | null
       invoiceGroupId: '1',
       taxRateId: (import.meta.env.VITE_ALIPHIA_TAX_RATE_ID || '').trim(),
     };
+    currentCompanyId = activeCompanyId;
     return cachedCredentials;
   }
   
@@ -140,13 +146,17 @@ export const getAliphiaCredentials = async (): Promise<AliphiaCredentials | null
 };
 
 export const saveAliphiaCredentials = async (creds: AliphiaCredentials) => {
-  localStorage.setItem('aliphia_credentials', JSON.stringify(creds));
+  const activeCompanyId = localStorage.getItem('activeCompanyId') || 'default';
+  localStorage.setItem(`aliphia_credentials_${activeCompanyId}`, JSON.stringify(creds));
   cachedCredentials = creds;
+  currentCompanyId = activeCompanyId;
 };
 
 export const clearAliphiaCredentials = async () => {
-  localStorage.removeItem('aliphia_credentials');
+  const activeCompanyId = localStorage.getItem('activeCompanyId') || 'default';
+  localStorage.removeItem(`aliphia_credentials_${activeCompanyId}`);
   cachedCredentials = null;
+  currentCompanyId = null;
 };
 
 const getHeaders = async (contentType = 'application/json') => {

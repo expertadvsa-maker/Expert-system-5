@@ -68,7 +68,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function BankingAndVault() {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [workerTransactions, setWorkerTransactions] = useState<any[]>([]);
@@ -91,16 +91,22 @@ export default function BankingAndVault() {
   });
 
   useEffect(() => {
-    const unsubBanks = onSnapshot(collection(db, 'bankAccounts'), (snapshot) => {
+    const unsubBanks = onSnapshot(
+      activeCompanyId ? query(collection(db, 'bankAccounts'), where('companyId', '==', activeCompanyId)) : collection(db, 'bankAccounts'), 
+      (snapshot) => {
       setBankAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BankAccount)));
       setLoading(false);
     });
 
-    const unsubTx = onSnapshot(collection(db, 'transactions'), (snapshot) => {
+    const unsubTx = onSnapshot(
+      activeCompanyId ? query(collection(db, 'transactions'), where('companyId', '==', activeCompanyId)) : collection(db, 'transactions'), 
+      (snapshot) => {
       setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
     });
 
-    const unsubWorkerTx = onSnapshot(collection(db, 'workerTransactions'), (snapshot) => {
+    const unsubWorkerTx = onSnapshot(
+      activeCompanyId ? query(collection(db, 'workerTransactions'), where('companyId', '==', activeCompanyId)) : collection(db, 'workerTransactions'), 
+      (snapshot) => {
       setWorkerTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
@@ -148,7 +154,10 @@ export default function BankingAndVault() {
         await updateDoc(doc(db, 'bankAccounts', selectedAccountId), data);
         toast.success('تم تحديث الحساب بنجاح');
       } else {
-        await addDoc(collection(db, 'bankAccounts'), data);
+        await addDoc(collection(db, 'bankAccounts'), {
+          ...data,
+          companyId: activeCompanyId || null,
+        });
         toast.success('تم إضافة الحساب بنجاح');
       }
 

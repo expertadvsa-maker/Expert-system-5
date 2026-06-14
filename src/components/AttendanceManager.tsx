@@ -28,8 +28,10 @@ import {
 } from 'firebase/firestore';
 import { exportToCSV } from '../lib/export';
 import { toast } from 'sonner';
+import { useAuth } from '../lib/AuthContext';
 
 export default function AttendanceManager() {
+  const { activeCompanyId } = useAuth();
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
@@ -37,11 +39,9 @@ export default function AttendanceManager() {
 
   useEffect(() => {
     setLoading(true);
-    const q = query(
-      collection(db, 'attendance'),
-      where('date', '==', filterDate),
-      orderBy('checkIn', 'desc')
-    );
+    const q = activeCompanyId 
+      ? query(collection(db, 'attendance'), where('date', '==', filterDate), where('companyId', '==', activeCompanyId), orderBy('checkIn', 'desc'))
+      : query(collection(db, 'attendance'), where('date', '==', filterDate), orderBy('checkIn', 'desc'));
 
     const unsub = onSnapshot(q, (snapshot) => {
       setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));

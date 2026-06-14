@@ -10,8 +10,10 @@ import { exportToCSV } from '../lib/export';
 import { exportToPDF } from '../lib/pdfExport';
 import PrintableReport from './PrintableReport';
 import { toast } from 'sonner';
+import { useAuth } from '../lib/AuthContext';
 
 export default function Payrolls() {
+  const { activeCompanyId } = useAuth();
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [payrolls, setPayrolls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,12 +31,14 @@ export default function Payrolls() {
       setLoading(true);
       try {
         // 1. Fetch all users
-        const usersSnap = await getDocs(collection(db, 'users'));
+        const usersSnap = await getDocs(activeCompanyId ? query(collection(db, 'users'), where('companyId', '==', activeCompanyId)) : collection(db, 'users'));
         const users = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         // 2. Fetch all financial adjustments for active month
         // (Only include approved or applied)
-        const adjSnap = await getDocs(query(collection(db, 'financialAdjustments'), where('status', 'in', ['approved', 'applied', 'applied_manually'])));
+        const adjSnap = await getDocs(
+          activeCompanyId ? query(collection(db, 'financialAdjustments'), where('status', 'in', ['approved', 'applied', 'applied_manually']), where('companyId', '==', activeCompanyId)) : query(collection(db, 'financialAdjustments'), where('status', 'in', ['approved', 'applied', 'applied_manually']))
+        );
         const adjustments = adjSnap.docs.map(doc => doc.data());
 
         const consolidatedPayrolls = users.map((user: any) => {

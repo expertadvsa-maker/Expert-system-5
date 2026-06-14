@@ -27,7 +27,11 @@ export type WidgetType =
   | 'list_tasks'
   | 'alerts_panel'
   | 'announcement'
-  | 'calendar_events';
+  | 'calendar_events'
+  | 'btn_create_invoice'
+  | 'btn_create_quote'
+  | 'btn_manage_clients'
+  | 'btn_manage_reps';
 
 export type WidgetSize = 'sm' | 'md' | 'lg' | 'xl' | 'xxl';
 

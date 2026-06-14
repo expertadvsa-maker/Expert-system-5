@@ -1,5 +1,20 @@
 // Common interfaces for the application
-export type UserRole = 'manager' | 'supervisor' | 'employee' | 'worker' | 'sales_rep';
+export type UserRole = 'owner' | 'manager' | 'supervisor' | 'employee' | 'worker' | 'sales_rep';
+
+export interface Company {
+  id: string;
+  name: string;
+  logoUrl?: string;
+  taxNumber?: string;
+  address?: string;
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+  website?: string;
+  ownerId: string;
+  createdAt: any;
+  settings?: any;
+}
 
 export interface UserProfile {
   id: string;
@@ -21,6 +36,8 @@ export interface UserProfile {
   baseSalary?: number;
   blockQuotations?: boolean;
   blockInvoices?: boolean;
+  companyId?: string; // Multi-tenant
+  ownedCompanies?: string[]; // Array of company IDs they own/have access to
 }
 
 export interface ProjectMilestone {
@@ -104,6 +121,7 @@ export interface Project {
   clientEmail?: string;
   timestamp?: any;
   fileAttachments?: { name: string; url: string; uploadedAt?: string }[];
+  companyId?: string;
 }
 
 export interface MaintenanceRequest {
@@ -161,6 +179,7 @@ export interface BankAccount {
   status: 'active' | 'suspended';
   bankName?: string;
   lastUpdated?: any;
+  companyId?: string;
 }
 
 export interface Transaction {
@@ -178,6 +197,7 @@ export interface Transaction {
   paymentMethod?: 'cash' | 'transfer';
   bankAccountId?: string;
   salesRepId?: string;
+  companyId?: string;
 }
 
 export interface Attendance {
@@ -189,6 +209,7 @@ export interface Attendance {
   checkOut?: string;
   location?: string;
   status: 'present' | 'absent' | 'leave';
+  companyId?: string;
 }
 
 export interface SystemSettings {
@@ -198,6 +219,7 @@ export interface SystemSettings {
   workingHoursStart: string;
   workingHoursEnd: string;
   allowManualAttendance: boolean;
+  companyId?: string;
 }
 
 export interface Quotation {
@@ -213,6 +235,8 @@ export interface Quotation {
   pdfUrl?: string;
   aliphiaId?: string;
   docType?: 'quotation' | 'invoice';
+  projectId?: string;
+  projectName?: string;
   itemsDetail?: Array<{
     name: string;
     qty: number;

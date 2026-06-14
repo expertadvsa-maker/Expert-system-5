@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
 import { db } from '../lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 import { useAuth } from '../lib/AuthContext';
 import AliphiaClientSelector, { AliphiaClient } from './AliphiaClientSelector';
 import AliphiaStatusCard from './AliphiaStatusCard';
@@ -29,6 +29,9 @@ interface Item {
 
 interface Props {
   type?: 'quotation' | 'invoice';
+  initialProjectId?: string;
+  initialProjectName?: string;
+  initialProjectDesc?: string;
 }
 
 const emptyItem = (): Item => ({
@@ -36,12 +39,18 @@ const emptyItem = (): Item => ({
   name: '', qty: 1, price: 0, desc: ''
 });
 
-export default function AIQuotationBuilder({ type = 'quotation' }: Props) {
-  const { user } = useAuth();
+export default function AIQuotationBuilder({ type = 'quotation', initialProjectId, initialProjectName, initialProjectDesc }: Props) {
+  const { user, activeCompanyId } = useAuth();
   const isQuote = type === 'quotation';
   const label   = isQuote ? 'عرض السعر' : 'الفاتورة';
 
   // ── State ──────────────────────────────────────────────
+  const [linkType,    setLinkType]    = useState<'client' | 'project'>(initialProjectId ? 'project' : 'client');
+  const [projectId,   setProjectId]   = useState(initialProjectId || '');
+  const [projectName, setProjectName] = useState(initialProjectName || '');
+  const [projectDesc, setProjectDesc] = useState(initialProjectDesc || '');
+  const [projects,    setProjects]    = useState<any[]>([]);
+
   const [client,      setClient]      = useState<AliphiaClient | null>(null);
   const [items,       setItems]       = useState<Item[]>([emptyItem()]);
   const [issueDate,   setIssueDate]   = useState(new Date().toISOString().split('T')[0]);
@@ -51,6 +60,15 @@ export default function AIQuotationBuilder({ type = 'quotation' }: Props) {
   const [isScanning,  setIsScanning]  = useState(false);
   const [isSending,   setIsSending]   = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  React.useEffect(() => {
+    if (linkType === 'project') {
+      getDocs(collection(db, 'projects')).then(snap => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setProjects(list);
+      });
+    }
+  }, [linkType]);
 
   // نتيجة الإرسال
   const [result, setResult] = useState<{
@@ -123,6 +141,47 @@ Rules: qty and price must be numbers. If price unknown set to 0.` }
     }
   };
 
+  // ── AI Auto-fill from Project ────────────────────────
+  const generateFromProject = async () => {
+    if (!projectDesc) { toast.error('لا يوجد وصف كافٍ للمشروع للتحليل'); return; }
+    const apiKey = (typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_GEMINI_API_KEY') : '') ||
+                   import.meta.env?.VITE_GEMINI_API_KEY ||
+                   (typeof window !== 'undefined' ? (window as any).VITE_GEMINI_API_KEY : '') || '';
+    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') { toast.error('مفتاح الذكاء الاصطناعي غير متوفر'); return; }
+
+    setIsScanning(true);
+    const tid = toast.loading(`جاري توليد بنود ${label} من المشروع...`);
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const res = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [
+          { text: `قم بإنشاء بنود مقترحة لـ ${label} بناءً على هذا الوصف للمشروع: "${projectDesc}".
+Return ONLY a JSON array like:
+[{"name":"item name","qty":1,"price":0,"desc":"optional details"}]
+Rules: qty and price must be numbers. If you don't know the price, set it to 0. Make the items logical for a project.` }
+        ]},
+        config: { responseMimeType: 'application/json' }
+      });
+      const parsed = JSON.parse(res.text || '[]');
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setItems(parsed.map((x: any) => ({
+          id: Math.random().toString(36).slice(2),
+          name: x.name || '', qty: Number(x.qty) || 1,
+          price: Number(x.price) || 0, desc: x.desc || ''
+        })));
+        toast.success(`✅ تم توليد ${parsed.length} بند بنجاح`);
+      } else {
+        toast.error('لم يتم العثور على بنود مناسبة');
+      }
+    } catch (e) {
+      toast.error('فشل التوليد من الذكاء الاصطناعي');
+    } finally {
+      setIsScanning(false);
+      toast.dismiss(tid);
+    }
+  };
+
   // ── Send to Aliphia ────────────────────────────────────
   const handleSendTrigger = () => {
     if (!client) { toast.error('اختر العميل أولاً'); return; }
@@ -147,9 +206,12 @@ Rules: qty and price must be numbers. If price unknown set to 0.` }
 
       // حفظ في Firebase
       await addDoc(collection(db, isQuote ? 'quotations' : 'invoices'), {
+        companyId: activeCompanyId || null,
         type,
         clientName: client.name,
         clientId: client.id,
+        projectId: linkType === 'project' ? projectId : null,
+        projectName: linkType === 'project' ? projectName : null,
         items: items.filter(i => i.name).map(i => i.name).join(', '),
         totalAmount: total,
         issueDate, dueDate, notes,
@@ -275,11 +337,54 @@ Rules: qty and price must be numbers. If price unknown set to 0.` }
       <Card className="rounded-2xl border-slate-100 shadow-sm">
         <CardContent className="p-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 space-y-2">
-              <Label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
-                <UserPlus className="w-4 h-4 text-primary" /> العميل
-              </Label>
-              <AliphiaClientSelector onSelect={setClient} selectedClientId={client?.id} />
+            <div className="md:col-span-2 space-y-3">
+              <div className="flex items-center gap-2 mb-2 p-1 bg-slate-100 rounded-lg w-fit">
+                <button
+                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${linkType === 'client' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  onClick={() => setLinkType('client')}
+                >
+                  عميل مباشر
+                </button>
+                <button
+                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${linkType === 'project' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  onClick={() => setLinkType('project')}
+                >
+                  مرتبط بمشروع
+                </button>
+              </div>
+
+              {linkType === 'project' && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-500">اختر المشروع *</Label>
+                  <select
+                    value={projectId}
+                    onChange={e => {
+                      const p = projects.find(x => x.id === e.target.value);
+                      if (p) {
+                        setProjectId(p.id);
+                        setProjectName(p.title);
+                        setProjectDesc(p.description || '');
+                        // If we had a way to auto-select client by name, we could do it here
+                      } else {
+                        setProjectId(''); setProjectName(''); setProjectDesc('');
+                      }
+                    }}
+                    className="w-full h-10 rounded-xl bg-slate-50 border-transparent text-sm font-bold px-3 focus:border-primary/20 focus:bg-white"
+                  >
+                    <option value="">-- اختر المشروع --</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.title} (العميل: {p.clientName})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                  <UserPlus className="w-4 h-4 text-primary" /> العميل {linkType === 'project' ? '(يجب مطابقته للمشروع)' : ''}
+                </Label>
+                <AliphiaClientSelector onSelect={setClient} selectedClientId={client?.id} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -408,6 +513,16 @@ Rules: qty and price must be numbers. If price unknown set to 0.` }
                 {isScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                 {isScanning ? 'جاري التحليل...' : 'استخراج البنود تلقائياً'}
               </Button>
+              {linkType === 'project' && projectId && (
+                <Button
+                  onClick={generateFromProject}
+                  disabled={isScanning || !projectDesc}
+                  className="w-full h-10 rounded-xl bg-slate-800 text-white hover:bg-slate-900 font-bold text-xs gap-2 mt-2"
+                >
+                  {isScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 text-amber-400" />}
+                  تعبئة ذكية من المشروع (AI)
+                </Button>
+              )}
             </CardContent>
           </Card>
 

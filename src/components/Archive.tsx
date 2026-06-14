@@ -28,6 +28,8 @@ import {
   doc 
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { getCompanyQuery } from '../lib/firestoreUtils';
+import { useAuth } from '../lib/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { restoreDocument } from '../lib/softDelete';
 import { toast } from 'sonner';
@@ -64,6 +66,7 @@ const formatDateString = (firebaseTimestamp: any, fallbackStr: string, cType: 'g
 };
 
 export default function Archive({ initialType }: { initialType?: ArchiveType }) {
+  const { activeCompanyId } = useAuth();
   const [activeType, setActiveType] = useState<ArchiveType>(initialType || 'all');
   const [searchTerm, setSearchTerm] = useState('');
   const [items, setItems] = useState<any[]>([]);
@@ -75,6 +78,7 @@ export default function Archive({ initialType }: { initialType?: ArchiveType }) 
   const [calendarType, setCalendarType] = useState<'gregorian' | 'hijri'>('gregorian');
 
   useEffect(() => {
+    if (!activeCompanyId) return;
     setLoading(true);
 
     const unsubSettings = onSnapshot(doc(db, 'system', 'settings'), (snapshot) => {
@@ -83,7 +87,7 @@ export default function Archive({ initialType }: { initialType?: ArchiveType }) 
       }
     });
 
-    const unsubBanks = onSnapshot(collection(db, 'bankAccounts'), (snapshot) => {
+    const unsubBanks = onSnapshot(getCompanyQuery('bankAccounts', activeCompanyId), (snapshot) => {
       const banks: Record<string, string> = {};
       snapshot.docs.forEach(doc => {
         banks[doc.id] = doc.data().name + (doc.data().type === 'cash' ? ' (خزينة)' : '');
@@ -92,7 +96,7 @@ export default function Archive({ initialType }: { initialType?: ArchiveType }) 
     });
 
     // Listen to employees
-    const qE = query(collection(db, 'users'), orderBy('name', 'asc'));
+    const qE = query(getCompanyQuery('users', activeCompanyId), orderBy('name', 'asc'));
     const unsubEmployees = onSnapshot(qE, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -114,7 +118,7 @@ export default function Archive({ initialType }: { initialType?: ArchiveType }) 
     });
 
     // Listen to workers
-    const qW = query(collection(db, 'workers'), orderBy('name', 'asc'));
+    const qW = query(getCompanyQuery('workers', activeCompanyId), orderBy('name', 'asc'));
     const unsubWorkers = onSnapshot(qW, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -136,7 +140,7 @@ export default function Archive({ initialType }: { initialType?: ArchiveType }) 
     });
 
     // Listen to transactions
-    const qT = query(collection(db, 'transactions'), orderBy('date', 'desc'));
+    const qT = query(getCompanyQuery('transactions', activeCompanyId), orderBy('date', 'desc'));
     const unsubTransactions = onSnapshot(qT, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -158,7 +162,7 @@ export default function Archive({ initialType }: { initialType?: ArchiveType }) 
     });
 
     // Listen to Projects
-    const qP = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
+    const qP = query(getCompanyQuery('projects', activeCompanyId), orderBy('createdAt', 'desc'));
     const unsubProjects = onSnapshot(qP, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -180,7 +184,7 @@ export default function Archive({ initialType }: { initialType?: ArchiveType }) 
     });
 
     // Listen to Subcontractors
-    const qS = query(collection(db, 'subcontractors'), orderBy('createdAt', 'desc'));
+    const qS = query(getCompanyQuery('subcontractors', activeCompanyId), orderBy('createdAt', 'desc'));
     const unsubSubcontractors = onSnapshot(qS, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -202,7 +206,7 @@ export default function Archive({ initialType }: { initialType?: ArchiveType }) 
     });
 
     // Listen to Recycle Bin
-    const qTrash = query(collection(db, 'recycle_bin'), orderBy('deletedAt', 'desc'));
+    const qTrash = query(getCompanyQuery('recycle_bin', activeCompanyId), orderBy('deletedAt', 'desc'));
     const unsubTrash = onSnapshot(qTrash, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -224,7 +228,7 @@ export default function Archive({ initialType }: { initialType?: ArchiveType }) 
     });
 
     // Listen to Gallery/Field Archive
-    const qArchive = query(collection(db, 'archive'), orderBy('createdAt', 'desc'));
+    const qArchive = query(getCompanyQuery('archive', activeCompanyId), orderBy('createdAt', 'desc'));
     const unsubFieldArchive = onSnapshot(qArchive, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,

@@ -93,6 +93,22 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
     type: 'calendar_events', nameAr: 'تقويم الأعمال والمؤشرات', descriptionAr: 'تقويم شهري ديناميكي يعرض مواعيد المشاريع والمهام المعلقة',
     icon: 'Calendar', category: 'actions', defaultSize: 'lg', availableSizes: ['md', 'lg', 'xl'], requiredRole: 'all', defaultColorScheme: 'indigo'
   },
+  {
+    type: 'btn_create_invoice', nameAr: 'إنشاء فاتورة', descriptionAr: 'اختصار سريع للذهاب لصفحة الفواتير وإنشائها',
+    icon: 'Receipt', category: 'actions', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'owner', defaultColorScheme: 'emerald'
+  },
+  {
+    type: 'btn_create_quote', nameAr: 'إنشاء عرض سعر', descriptionAr: 'اختصار سريع للذهاب لصفحة عروض الأسعار وتسعير بالذكاء الاصطناعي',
+    icon: 'FileText', category: 'actions', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'owner', defaultColorScheme: 'blue'
+  },
+  {
+    type: 'btn_manage_clients', nameAr: 'إدارة العملاء', descriptionAr: 'اختصار للذهاب لسجل العملاء الشامل',
+    icon: 'Users', category: 'actions', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'elevated', defaultColorScheme: 'slate'
+  },
+  {
+    type: 'btn_manage_reps', nameAr: 'إدارة المناديب', descriptionAr: 'اختصار للذهاب لإدارة مناديب المبيعات',
+    icon: 'Briefcase', category: 'actions', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'owner', defaultColorScheme: 'amber'
+  },
 ];
 
 export const COLOR_SCHEMES: Record<string, { bg: string; ring: string; icon: string; border: string; text: string; light: string }> = {

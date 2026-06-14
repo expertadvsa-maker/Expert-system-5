@@ -68,7 +68,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Employees({ onSelectEmployee, filterRole }: { onSelectEmployee?: (id: string) => void; filterRole?: string }) {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const isOwner = profile?.email?.toLowerCase().trim() === 'expertadvsa@gmail.com';
   const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState<UserProfile[]>([]);
@@ -208,7 +208,7 @@ export default function Employees({ onSelectEmployee, filterRole }: { onSelectEm
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'users'));
+    const q = activeCompanyId ? query(collection(db, 'users'), where('companyId', '==', activeCompanyId)) : query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -267,6 +267,7 @@ export default function Employees({ onSelectEmployee, filterRole }: { onSelectEm
 
       await addDoc(collection(db, 'users'), {
         ...formData,
+        companyId: activeCompanyId || null,
         email: emailLower,
         department: formData.dept,
         allowedLocationTypes: locationTypes,

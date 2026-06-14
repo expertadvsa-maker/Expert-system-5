@@ -46,7 +46,8 @@ import {
   serverTimestamp,
   doc,
   setDoc,
-  updateDoc
+  updateDoc,
+  where
 } from 'firebase/firestore';
 import { db, auth, storage } from '../lib/firebase';
 import { toast } from 'sonner';
@@ -68,7 +69,7 @@ import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType?: 'projects' | 'tasks' }) {
 
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const isOwner = profile?.email?.toLowerCase().trim() === 'expertadvsa@gmail.com';
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -371,6 +372,7 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
       // 3. حفظ مستند المشروع بقاعدة البيانات
       await setDoc(projectRef, {
         ...newProject,
+        companyId: activeCompanyId || null,
         id: projectId,
         name: newProject.title, // حقل الاسم لضمان التوافقية البرمجية مع كافة واجهات النظام
         status: 'active',
@@ -429,7 +431,9 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
     if (!profile) return;
     
     const unsubProjects = onSnapshot(
-      query(collection(db, 'projects'), orderBy('createdAt', 'desc')),
+      activeCompanyId 
+        ? query(collection(db, 'projects'), where('companyId', '==', activeCompanyId), orderBy('createdAt', 'desc'))
+        : query(collection(db, 'projects'), orderBy('createdAt', 'desc')),
       (snapshot) => {
         const rawProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
         
@@ -452,13 +456,14 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
         }
       },
       (error) => {
+        if (!activeCompanyId) return; // Prevent spurious errors when no company is selected
         console.error("Firestore Error (Projects):", error);
         toast.error("خطأ في تحميل المشاريع");
       }
     );
 
     return () => unsubProjects();
-  }, [profile, isOwner]);
+  }, [profile, isOwner, activeCompanyId]);
 
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {

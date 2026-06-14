@@ -14,6 +14,8 @@ import { db } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeProjectSpending, analyzeCompanyPortfolioCredit } from '../lib/gemini';
 import { toast } from 'sonner';
+import { useAuth } from '../lib/AuthContext';
+import { getCompanyQuery } from '../lib/firestoreUtils';
 
 /* ─── Types ─── */
 interface BriefingItem {
@@ -202,6 +204,8 @@ function splitTextIntoSpeechChunks(text: string): string[] {
 
 /* ═══════ MAIN ═══════ */
 export default function ExecutiveBriefingSystem({ goToTab }: { goToTab?: (tab: string) => void }) {
+  const { activeCompanyId, companies } = useAuth();
+  const companyName = companies.find(c => c.id === activeCompanyId)?.name || 'مؤسستك الموقرة';
   const [loading, setLoading] = useState(true);
   const [playbackState, setPlaybackState] = useState<'playing' | 'paused' | 'stopped' | 'loading'>('stopped');
   const [speechRate, setSpeechRate] = useState<number>(1.0);
@@ -289,12 +293,12 @@ export default function ExecutiveBriefingSystem({ goToTab }: { goToTab?: (tab: s
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: 'التقرير الصباحي - مؤسسة خبراء الرسم',
-          text: cached.text || 'التقرير الصباحي الصوتي لمؤسسة خبراء الرسم.'
+          title: `التقرير الصباحي - ${companyName}`,
+          text: cached.text || `التقرير الصباحي الصوتي لـ ${companyName}.`
         });
         toast.success('تمت مشاركة صوت التقرير الصباحي بنجاح! 🚀');
       } else {
-        const shareText = `*التقرير الصباحي لمالك المؤسسة 🎙️*\n\n${cached.text || ''}\n\n_تم التوليد فورياً عبر نظام خبراء الرسم الرقمي_`;
+        const shareText = `*التقرير الصباحي لمالك المؤسسة 🎙️*\n\n${cached.text || ''}\n\n_تم التوليد فورياً عبر نظام ${companyName} الرقمي_`;
         const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
         window.open(whatsappUrl, '_blank');
         handleDownloadAudio();
@@ -407,7 +411,7 @@ export default function ExecutiveBriefingSystem({ goToTab }: { goToTab?: (tab: s
 
     // Transactions
     subs.push(onSnapshot(
-      query(collection(db, 'transactions'), where('date', '>=', ago90.toISOString())),
+      query(getCompanyQuery('transactions', activeCompanyId), where('date', '>=', ago90.toISOString())),
       snap => {
         let inc = 0, exp = 0, pend = 0;
         const txsList: any[] = [];
@@ -426,7 +430,7 @@ export default function ExecutiveBriefingSystem({ goToTab }: { goToTab?: (tab: s
     ));
 
     // Projects
-    subs.push(onSnapshot(collection(db, 'projects'), snap => {
+    subs.push(onSnapshot(getCompanyQuery('projects', activeCompanyId), snap => {
       const projsList: any[] = [];
       snap.forEach(d => {
         projsList.push({ id: d.id, ...d.data() });
@@ -437,18 +441,18 @@ export default function ExecutiveBriefingSystem({ goToTab }: { goToTab?: (tab: s
     }));
 
     // Workers
-    subs.push(onSnapshot(query(collection(db, 'workers'), limit(200)), snap => {
+    subs.push(onSnapshot(query(getCompanyQuery('workers', activeCompanyId), limit(200)), snap => {
       setStats(p => ({ ...p, totalWorkers: snap.size }));
     }));
 
     // Employees
-    subs.push(onSnapshot(query(collection(db, 'users'), limit(200)), snap => {
+    subs.push(onSnapshot(query(getCompanyQuery('users', activeCompanyId), limit(200)), snap => {
       setStats(p => ({ ...p, totalEmployees: snap.size }));
     }));
 
     // Today attendance
     subs.push(onSnapshot(
-      query(collection(db, 'attendance'), where('dateString', '==', today)),
+      query(getCompanyQuery('attendance', activeCompanyId), where('dateString', '==', today)),
       snap => setStats(p => ({ ...p, todayAttendance: snap.size }))
     ));
 
@@ -458,7 +462,7 @@ export default function ExecutiveBriefingSystem({ goToTab }: { goToTab?: (tab: s
         audioRef.current.pause();
       }
     };
-  }, []);
+  }, [activeCompanyId]);
 
   // 🧹 Removed autoplay because setTimeout breaks Web Speech API user gesture rules in modern browsers.
 
@@ -467,7 +471,7 @@ export default function ExecutiveBriefingSystem({ goToTab }: { goToTab?: (tab: s
     const margin = stats.income > 0 ? Math.round((stats.net / stats.income) * 100) : 0;
     const highAlerts = briefingItems.filter(i => i.priority === 'high').length;
     
-    let text = `مرحباً بك يا طويل العمر، سعادة المدير العام لمؤسسة خبراء الرسم، السلام عليكم ورحمة الله وبركاته، إليك تقرير الأداء المالي والتشغيلي المباشر والسريع لليوم: `;
+    let text = `مرحباً بك يا طويل العمر، سعادة المدير العام لـ ${companyName}، السلام عليكم ورحمة الله وبركاته، إليك تقرير الأداء المالي والتشغيلي المباشر والسريع لليوم: `;
 
     if (voiceFocus === 'all' || voiceFocus === 'financial') {
       text += `الجانب المالي، `;

@@ -16,6 +16,7 @@ import {
   collection, query, limit, onSnapshot, orderBy, where, getDocs, doc, addDoc, updateDoc, getDoc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { getCompanyQuery } from '../lib/firestoreUtils';
 import { useAuth } from '../lib/AuthContext';
 import { sendNotification } from '../lib/notifications';
 import { AnimatePresence, motion } from 'motion/react';
@@ -185,7 +186,7 @@ function Section({ label, sub }: { label: string; sub?: string }) {
 
 /* ═══════════ MAIN ═══════════ */
 export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => void }) {
-  const { user, profile } = useAuth();
+  const { user, profile, activeCompanyId } = useAuth();
   const isOwner      = profile?.email?.toLowerCase().trim() === 'expertadvsa@gmail.com';
   const isManager    = profile?.role === 'manager' || isOwner;
   const isSupervisor = profile?.role === 'supervisor';
@@ -371,8 +372,8 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
     (async () => {
       setAiLoading(true);
       try {
-        const pSnap = await getDocs(query(collection(db, 'projects'), limit(1)));
-        const tSnap = await getDocs(query(collection(db, 'transactions'), limit(10)));
+        const pSnap = await getDocs(query(getCompanyQuery('projects', activeCompanyId), limit(1)));
+        const tSnap = await getDocs(query(getCompanyQuery('transactions', activeCompanyId), limit(10)));
         if (!pSnap.empty) {
           setAiInsight(await analyzeProjectSpending(
             pSnap.docs[0].data(), tSnap.docs.map(d => d.data())
@@ -396,7 +397,7 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
   /* ── Projects ── */
   useEffect(() => {
     if (!profile) return;
-    const u = onSnapshot(collection(db, 'projects'), s => {
+    const u = onSnapshot(getCompanyQuery('projects', activeCompanyId), s => {
       const allowedDocs = s.docs.filter(d => {
         if (isOwner) return true;
         const data = d.data();
@@ -431,12 +432,12 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
         al.push({ id: 'exp', text: 'المصروفات تجاوزت 80% من الدخل', type: 'red', icon: AlertTriangle, tab: 'financials' });
       }
       try {
-        const ps = await getDocs(query(collection(db, 'projects'), limit(10)));
+        const ps = await getDocs(query(getCompanyQuery('projects', activeCompanyId), limit(10)));
         const ap = ps.docs.filter(d => d.data().status === 'in-progress');
         if (ap.length > 0)
           br.push({ id: 'b2', text: `متابعة ${ap.length} مشاريع نشطة`, done: false, icon: Briefcase });
         const today = new Date().toISOString().split('T')[0];
-        const att = await getDocs(query(collection(db, 'attendance'), where('dateString', '==', today)));
+        const att = await getDocs(query(getCompanyQuery('attendance', activeCompanyId), where('dateString', '==', today)));
         if (att.size < stats.employeesCount * 0.5 && stats.employeesCount > 0) {
           al.push({ id: 'att', text: 'نسبة الحضور منخفضة اليوم', type: 'blue', icon: Users, tab: 'attendance_manager' });
           br.push({ id: 'b3', text: 'مراجعة سجل الحضور والانصراف', done: false, icon: Clock });
@@ -455,8 +456,8 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
     const subs: (() => void)[] = [];
 
     const qT = isOwner
-      ? query(collection(db, 'transactions'), orderBy('date', 'desc'), limit(6))
-      : query(collection(db, 'transactions'), where('createdBy', '==', user?.uid), orderBy('date', 'desc'), limit(6));
+      ? query(getCompanyQuery('transactions', activeCompanyId), orderBy('date', 'desc'), limit(6))
+      : query(getCompanyQuery('transactions', activeCompanyId), where('createdBy', '==', user?.uid), orderBy('date', 'desc'), limit(6));
 
     subs.push(onSnapshot(qT, s => {
       setTransactions(s.docs.map(d => {
@@ -471,7 +472,7 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
     }, e => console.error('Trans:', e)));
 
     if (isOwner) {
-      subs.push(onSnapshot(collection(db, 'workerTransactions'), s => {
+      subs.push(onSnapshot(getCompanyQuery('workerTransactions', activeCompanyId), s => {
         const total = s.docs.reduce((acc, d) =>
           d.data().type === 'payment' ? acc + (d.data().amount || 0) : acc, 0);
         setStats(p => ({ ...p, workerExpense: total }));
@@ -480,7 +481,7 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
       const ago90 = new Date();
       ago90.setDate(ago90.getDate() - 90);
       subs.push(onSnapshot(
-        query(collection(db, 'transactions'), where('date', '>=', ago90.toISOString())),
+        query(getCompanyQuery('transactions', activeCompanyId), where('date', '>=', ago90.toISOString())),
         s => {
           let inc = 0, exp = 0, pur = 0, pend = 0;
           s.docs.forEach(d => {
@@ -496,17 +497,17 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
 
     if (isElevated) {
 
-      subs.push(onSnapshot(query(collection(db, 'users'), limit(100)), s =>
+      subs.push(onSnapshot(query(getCompanyQuery('users', activeCompanyId), limit(100)), s =>
         setStats(p => ({ ...p, employeesCount: s.size }))));
 
-      subs.push(onSnapshot(query(collection(db, 'workers'), limit(100)), s => {
+      subs.push(onSnapshot(query(getCompanyQuery('workers', activeCompanyId), limit(100)), s => {
         setWorkers(s.docs.map(d => ({ id: d.id, ...d.data() })));
         setStats(p => ({ ...p, activeWorkers: s.size }));
       }));
 
       const todayStr = new Date().toISOString().split('T')[0];
       subs.push(onSnapshot(
-        query(collection(db, 'attendance'), where('dateString', '==', todayStr)),
+        query(getCompanyQuery('attendance', activeCompanyId), where('dateString', '==', todayStr)),
         s => {
           setTodayAttendance(s.size);
         }
@@ -522,7 +523,7 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
 
     // 1. Listen to general tasks
     const unSubTasks = onSnapshot(
-      query(collection(db, 'generalTasks'), orderBy('createdAt', 'desc')),
+      query(getCompanyQuery('generalTasks', activeCompanyId), orderBy('createdAt', 'desc')),
       (snapshot) => {
         setGeneralTasks(snapshot.docs.map(doc => {
           const data = doc.data();
@@ -538,7 +539,7 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
 
     // 2. Listen to system users/employees for assignment
     const unSubUsers = onSnapshot(
-      query(collection(db, 'users'), orderBy('name', 'asc')),
+      query(getCompanyQuery('users', activeCompanyId), orderBy('name', 'asc')),
       (snapshot) => {
         setSystemUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })));
       },
@@ -547,7 +548,7 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
 
     // 3. Listen to system projects
     const unSubProjects = onSnapshot(
-      query(collection(db, 'projects'), orderBy('createdAt', 'desc')),
+      query(getCompanyQuery('projects', activeCompanyId), orderBy('createdAt', 'desc')),
       (snapshot) => {
         setSystemProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       },
@@ -556,7 +557,7 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
 
     // 4. Listen to system suppliers
     const unSubSuppliers = onSnapshot(
-      collection(db, 'suppliers'),
+      getCompanyQuery('suppliers', activeCompanyId),
       (snapshot) => {
         setSystemSuppliers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       },
@@ -610,7 +611,10 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
       };
 
       // 2. Save in Firestore generalTasks
-      await addDoc(collection(db, 'generalTasks'), taskData);
+      await addDoc(collection(db, 'generalTasks'), {
+        companyId: activeCompanyId || null,
+        ...taskData
+      });
 
       // 3. If connected to project direct, append/inject to its milestones too!
       if (taskForm.taskType === 'project' && taskForm.linkedEntityId) {
@@ -1320,7 +1324,7 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
               <p className="text-sm font-black text-slate-900">مؤشر الإنتاجية الأسبوعي</p>
               <p className="text-[10px] text-slate-400 mb-3">التوزيع التشغيلي</p>
               <div className="h-[130px]">
-                <ResponsiveContainer width="100%" height={130}>
+                <ResponsiveContainer width="100%" height={130} minWidth={0} minHeight={0}>
                   <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
                     <defs>
                       <linearGradient id="ga" x1="0" y1="0" x2="0" y2="1">

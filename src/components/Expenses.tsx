@@ -66,7 +66,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function Expenses() {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -90,11 +90,9 @@ export default function Expenses() {
 
   useEffect(() => {
     // Listen to strictly expenses
-    const q = query(
-      collection(db, 'transactions'), 
-      where('type', '==', 'expense'),
-      orderBy('date', 'desc')
-    );
+    const q = activeCompanyId 
+      ? query(collection(db, 'transactions'), where('type', '==', 'expense'), where('companyId', '==', activeCompanyId), orderBy('date', 'desc'))
+      : query(collection(db, 'transactions'), where('type', '==', 'expense'), orderBy('date', 'desc'));
 
     const unsub = onSnapshot(q, (snapshot) => {
       setExpenses(snapshot.docs.map(doc => ({
@@ -105,11 +103,15 @@ export default function Expenses() {
       setLoading(false);
     });
 
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
+    const unsubProjects = onSnapshot(
+      activeCompanyId ? query(collection(db, 'projects'), where('companyId', '==', activeCompanyId)) : collection(db, 'projects'), 
+      (snapshot) => {
       setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    const unsubBanks = onSnapshot(collection(db, 'bankAccounts'), (snapshot) => {
+    const unsubBanks = onSnapshot(
+      activeCompanyId ? query(collection(db, 'bankAccounts'), where('companyId', '==', activeCompanyId)) : collection(db, 'bankAccounts'), 
+      (snapshot) => {
       setBankAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
@@ -132,6 +134,7 @@ export default function Expenses() {
     try {
       const isManager = profile.role === 'manager';
       await addDoc(collection(db, 'transactions'), {
+        companyId: activeCompanyId || null,
         type: 'expense',
         amount: parseFloat(formData.amount),
         description: formData.description,

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { toast } from 'sonner';
 import {
   Plus, Settings2, X, GripVertical, Zap, LayoutGrid,
@@ -11,13 +11,14 @@ import {
   Bell, ListTodo, Receipt, AreaChart, UserCheck, Layers,
   BarChart2, Loader2, Pause, CheckCircle, Briefcase,
   ShoppingCart, Package, Search, ArrowRight, Star, Wand2,
-  Archive, Camera, Calendar, Lock, Unlock, Undo, Redo, UserPlus, StickyNote, Trash2, FileText
+  Archive, Camera, Calendar, Lock, Unlock, Undo, Redo, UserPlus, StickyNote, Trash2, FileText, Pin, BellRing
 } from 'lucide-react';
 import {
   collection, query, limit, onSnapshot, orderBy, where,
   getDocs, doc, addDoc, updateDoc, getDoc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { getCompanyQuery } from '../lib/firestoreUtils';
 import { useAuth } from '../lib/AuthContext';
 import { toast as sonnerToast } from 'sonner';
 import {
@@ -1144,7 +1145,7 @@ function WeeklyChartWidget({ title, settings }: any) {
     <div className="bg-white rounded-2xl border border-slate-200 p-4 h-full flex flex-col">
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{title || 'الأداء الأسبوعي'}</p>
       <div className="flex-1 min-h-0">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           {isBar ? (
             <BarChart data={CHART_DATA}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -1531,8 +1532,8 @@ function AnnouncementWidget({ text, title }: any) {
 /* ═══════════════════════════════════════════════
    MAIN DASHBOARD BUILDER
 ═══════════════════════════════════════════════ */
-export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) => void }) {
-  const { user, profile } = useAuth();
+export default function DashboardBuilder({ goToTab }: { goToTab?: (tabId: string) => void }) {
+  const { user, profile, activeCompanyId } = useAuth();
   const isOwner      = profile?.email?.toLowerCase().trim() === 'expertadvsa@gmail.com';
   const isManager    = profile?.role === 'manager' || isOwner;
   const isSupervisor = profile?.role === 'supervisor';
@@ -1559,6 +1560,84 @@ export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) =
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
+
+  // ─── Sticky Notes Smart Indicator ───
+  const [notesStatus, setNotesStatus] = useState<'none' | 'yellow' | 'red'>('none');
+
+  useEffect(() => {
+    const checkNotes = () => {
+      const saved = localStorage.getItem('smart_sticky_notes_v2');
+      if (!saved) { setNotesStatus('none'); return; }
+      try {
+        const notes = JSON.parse(saved);
+        if (!notes || notes.length === 0) {
+          setNotesStatus('none');
+          return;
+        }
+        const lastViewedStr = localStorage.getItem('notes_last_viewed');
+        const lastViewed = lastViewedStr ? parseInt(lastViewedStr) : 0;
+        
+        let isRed = false;
+        if (Date.now() - lastViewed > 86400000) {
+          isRed = true;
+        } else {
+          for (const note of notes) {
+            if (note.alertHours && note.createdAt) {
+              if (Date.now() >= note.createdAt + note.alertHours * 3600000) {
+                isRed = true;
+                break;
+              }
+            }
+          }
+        }
+        
+        if (isRed) {
+          setNotesStatus('red');
+        } else {
+          setNotesStatus('yellow');
+        }
+      } catch(e) {
+        setNotesStatus('none');
+      }
+    };
+    checkNotes();
+    const interval = setInterval(checkNotes, 60000); // Check every minute
+    
+    const handleUpdate = () => checkNotes();
+    window.addEventListener('sticky-notes-updated', handleUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('sticky-notes-updated', handleUpdate);
+    };
+  }, [isNotesOpen]);
+
+  useEffect(() => {
+    if (isNotesOpen) {
+      localStorage.setItem('notes_last_viewed', Date.now().toString());
+      window.dispatchEvent(new Event('sticky-notes-updated'));
+    }
+  }, [isNotesOpen]);
+
+  // Pinned Note State
+  const [pinnedNotes, setPinnedNotes] = useState<any[]>([]);
+
+  useEffect(() => {
+    const updatePinned = () => {
+      const saved = localStorage.getItem('smart_sticky_notes_v2');
+      if (saved) {
+        const notes = JSON.parse(saved);
+        const pinned = notes.filter((n: any) => n.isPinned);
+        setPinnedNotes(pinned);
+      } else {
+        setPinnedNotes([]);
+      }
+    };
+    updatePinned();
+    window.addEventListener('sticky-notes-updated', updatePinned);
+    return () => {
+      window.removeEventListener('sticky-notes-updated', updatePinned);
+    };
+  }, []);
 
   const handleAddNewClient = async () => {
     if (!newClientData.name) {
@@ -1678,7 +1757,7 @@ export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) =
   const [dashboardPlayback, setDashboardPlayback] = useState<'stopped' | 'loading' | 'playing' | 'paused'>('stopped');
 
   /* ── Derived ── */
-  const totalExpenses = stats.expenses + stats.workerExpense;
+  const totalExpenses = stats.expenses + stats.workerExpense + stats.purchases;
   const netBalance    = stats.income - totalExpenses;
   const profitPct     = stats.income > 0 ? Math.round((netBalance / stats.income) * 100) : 0;
 
@@ -1720,7 +1799,7 @@ export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) =
 
   useEffect(() => {
     if (!profile) return;
-    const u = onSnapshot(collection(db, 'projects'), s => {
+    const u = onSnapshot(getCompanyQuery('projects', activeCompanyId), s => {
       const docs = s.docs.filter(d => {
         if (isOwner) return true;
         const data = d.data();
@@ -1736,8 +1815,8 @@ export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) =
     if (!profile) return;
     const subs: (() => void)[] = [];
     const qT = isOwner
-      ? query(collection(db, 'transactions'), orderBy('date', 'desc'), limit(6))
-      : query(collection(db, 'transactions'), where('createdBy', '==', user?.uid), orderBy('date', 'desc'), limit(6));
+      ? query(getCompanyQuery('transactions', activeCompanyId), orderBy('date', 'desc'), limit(6))
+      : query(getCompanyQuery('transactions', activeCompanyId), where('createdBy', '==', user?.uid), orderBy('date', 'desc'), limit(6));
     subs.push(onSnapshot(qT, s => {
       setTransactions(s.docs.map(d => {
         const data = d.data();
@@ -1747,12 +1826,12 @@ export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) =
       }));
     }));
     if (isOwner) {
-      subs.push(onSnapshot(collection(db, 'workerTransactions'), s => {
+      subs.push(onSnapshot(getCompanyQuery('workerTransactions', activeCompanyId), s => {
         const total = s.docs.reduce((acc, d) => d.data().type === 'payment' ? acc + (d.data().amount || 0) : acc, 0);
         setStats(p => ({ ...p, workerExpense: total }));
       }));
-      const ago90 = new Date(); ago90.setDate(ago90.getDate() - 90);
-      subs.push(onSnapshot(query(collection(db, 'transactions'), where('date', '>=', ago90.toISOString())), s => {
+      // Removed 90-day filter to match Financials (All-Time)
+      subs.push(onSnapshot(query(getCompanyQuery('transactions', activeCompanyId)), s => {
         let inc = 0, exp = 0, pur = 0, pend = 0;
         s.docs.forEach(d => {
           const data = d.data();
@@ -1765,30 +1844,30 @@ export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) =
       }));
     }
     if (isElevated) {
-      subs.push(onSnapshot(query(collection(db, 'users'), limit(100)), s => setStats(p => ({ ...p, employeesCount: s.size }))));
-      subs.push(onSnapshot(query(collection(db, 'workers'), limit(100)), s => {
+      subs.push(onSnapshot(query(getCompanyQuery('users', activeCompanyId), limit(100)), s => setStats(p => ({ ...p, employeesCount: s.size }))));
+      subs.push(onSnapshot(query(getCompanyQuery('workers', activeCompanyId), limit(100)), s => {
         setWorkers(s.docs.map(d => ({ id: d.id, ...d.data() })));
         setStats(p => ({ ...p, activeWorkers: s.size }));
       }));
       const todayStr = new Date().toISOString().split('T')[0];
-      subs.push(onSnapshot(query(collection(db, 'attendance'), where('dateString', '==', todayStr)), s => setTodayAttendance(s.size)));
+      subs.push(onSnapshot(query(getCompanyQuery('attendance', activeCompanyId), where('dateString', '==', todayStr)), s => setTodayAttendance(s.size)));
     }
     return () => subs.forEach(u => u());
   }, [profile, isElevated, user?.uid]);
 
   useEffect(() => {
     if (!profile) return;
-    const unSubTasks = onSnapshot(query(collection(db, 'generalTasks'), orderBy('createdAt', 'desc')), s => {
+    const unSubTasks = onSnapshot(query(getCompanyQuery('generalTasks', activeCompanyId), orderBy('createdAt', 'desc')), s => {
       setGeneralTasks(s.docs.map(d => {
         const data = d.data();
         return { id: d.id, ...data, parsedDate: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt)) : null };
       }));
     });
-    const unSubUsers = onSnapshot(query(collection(db, 'users'), orderBy('name', 'asc')), s => setSystemUsers(s.docs.map(d => ({ uid: d.id, ...d.data() }))));
-    const unSubProjects = onSnapshot(query(collection(db, 'projects'), orderBy('createdAt', 'desc')), s => setSystemProjects(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unSubSuppliers = onSnapshot(collection(db, 'suppliers'), s => setSystemSuppliers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unSubUsers = onSnapshot(query(getCompanyQuery('users', activeCompanyId), orderBy('name', 'asc')), s => setSystemUsers(s.docs.map(d => ({ uid: d.id, ...d.data() }))));
+    const unSubProjects = onSnapshot(query(getCompanyQuery('projects', activeCompanyId), orderBy('createdAt', 'desc')), s => setSystemProjects(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unSubSuppliers = onSnapshot(getCompanyQuery('suppliers', activeCompanyId), s => setSystemSuppliers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => { unSubTasks(); unSubUsers(); unSubProjects(); unSubSuppliers(); };
-  }, [profile]);
+  }, [profile, activeCompanyId]);
 
   /* ── Alerts ── */
   useEffect(() => {
@@ -1805,8 +1884,8 @@ export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) =
     (async () => {
       setAiLoading(true);
       try {
-        const pSnap = await getDocs(query(collection(db, 'projects'), limit(1)));
-        const tSnap = await getDocs(query(collection(db, 'transactions'), limit(10)));
+        const pSnap = await getDocs(query(getCompanyQuery('projects', activeCompanyId), limit(1)));
+        const tSnap = await getDocs(query(getCompanyQuery('transactions', activeCompanyId), limit(10)));
         if (!pSnap.empty) setAiInsight(await analyzeProjectSpending(pSnap.docs[0].data(), tSnap.docs.map(d => d.data())));
         else setAiInsight('لا توجد مشاريع مسجلة حتى الآن.');
       } catch (e) { console.error('AI:', e); }
@@ -2159,7 +2238,33 @@ export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) =
                     )}
                   </AnimatePresence>
                 </div>
-                <span className="bg-slate-900 text-white text-[9px] font-black px-2 py-1 rounded-lg">V3.0</span>
+                <button 
+                  onClick={() => setIsNotesOpen(true)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setIsNotesOpen(true);
+                    setTimeout(() => window.dispatchEvent(new Event('new-sticky-note')), 100);
+                  }}
+                  className={`relative flex items-center justify-center w-6 h-6 rounded-full shadow-sm transition-all hover:scale-110 ${
+                    notesStatus === 'red' ? 'bg-red-50 text-red-500' : 
+                    notesStatus === 'yellow' ? 'bg-amber-50 text-amber-500' : 
+                    'bg-slate-100 text-slate-800'
+                  }`}
+                  title="الملاحظات والملصقات (كليك يمين لملصق جديد)"
+                >
+                  {/* Outer glowing dot */}
+                  <span className={`absolute inset-0 rounded-full ${
+                    notesStatus === 'red' ? 'bg-red-400 animate-ping opacity-75' : 
+                    notesStatus === 'yellow' ? 'bg-amber-400 animate-ping opacity-75' : 
+                    'hidden'
+                  }`}></span>
+                  {/* Inner solid dot */}
+                  <span className={`relative w-2.5 h-2.5 rounded-full ${
+                    notesStatus === 'red' ? 'bg-red-500' : 
+                    notesStatus === 'yellow' ? 'bg-amber-400' : 
+                    'bg-slate-800'
+                  }`}></span>
+                </button>
               </>
             )}
           </div>
@@ -2342,6 +2447,63 @@ export default function DashboardBuilder({ goToTab }: { goToTab: (tab: string) =
       />
 
       <StickyNotesBoard isOpen={isNotesOpen} onClose={() => setIsNotesOpen(false)} />
+
+      {/* Pinned Notes Floating Widgets */}
+      <AnimatePresence>
+        {!isNotesOpen && pinnedNotes.map(note => (
+          <motion.div
+            key={`pinned-${note.id}`}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1, x: note.pinnedX || 0, y: note.pinnedY || 0 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            drag
+            dragMomentum={false}
+            onDragEnd={(event, info) => {
+              const saved = localStorage.getItem('smart_sticky_notes_v2');
+              if (saved) {
+                const allNotes = JSON.parse(saved);
+                const currentNote = allNotes.find((n: any) => n.id === note.id);
+                const currentX = currentNote?.pinnedX || 0;
+                const currentY = currentNote?.pinnedY || 0;
+                const newNotes = allNotes.map((n: any) => 
+                  n.id === note.id ? { ...n, pinnedX: currentX + info.offset.x, pinnedY: currentY + info.offset.y } : n
+                );
+                localStorage.setItem('smart_sticky_notes_v2', JSON.stringify(newNotes));
+                window.dispatchEvent(new Event('sticky-notes-updated'));
+              }
+            }}
+            className={`fixed top-24 left-6 z-[60] w-64 rounded-2xl p-4 shadow-xl border cursor-grab active:cursor-grabbing
+              ${note.color === 'amber' ? 'bg-amber-100 border-amber-300 text-amber-900' : ''}
+              ${note.color === 'rose' ? 'bg-rose-100 border-rose-300 text-rose-900' : ''}
+              ${note.color === 'emerald' ? 'bg-emerald-100 border-emerald-300 text-emerald-900' : ''}
+              ${note.color === 'blue' ? 'bg-blue-100 border-blue-300 text-blue-900' : ''}
+              ${note.color === 'violet' ? 'bg-violet-100 border-violet-300 text-violet-900' : ''}
+            `}
+            dir="rtl"
+          >
+            <div className="flex justify-between items-start mb-2 opacity-50 hover:opacity-100 transition-opacity">
+              <Pin className="w-4 h-4 fill-current rotate-45" />
+              <button 
+                onClick={() => {
+                  const saved = localStorage.getItem('smart_sticky_notes_v2');
+                  if (saved) {
+                    const allNotes = JSON.parse(saved);
+                    const newNotes = allNotes.map((n: any) => n.id === note.id ? { ...n, isPinned: false } : n);
+                    localStorage.setItem('smart_sticky_notes_v2', JSON.stringify(newNotes));
+                    window.dispatchEvent(new Event('sticky-notes-updated'));
+                  }
+                }}
+                className="hover:bg-white/20 p-1 rounded-md"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="text-sm font-bold whitespace-pre-wrap leading-relaxed pointer-events-none">
+              {note.content || "ملاحظة فارغة..."}
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </div>
   );
 }
@@ -2368,14 +2530,21 @@ function StickyNotesBoard({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   const saveNotes = (newNotes: any[]) => {
     setNotes(newNotes);
     localStorage.setItem('smart_sticky_notes_v2', JSON.stringify(newNotes));
+    window.dispatchEvent(new Event('sticky-notes-updated'));
   };
 
   const addNote = () => {
-    saveNotes([{ id: Date.now().toString(), content: '', color: 'amber' }, ...notes]);
+    saveNotes([{ id: Date.now().toString(), content: '', color: 'amber', createdAt: Date.now(), alertHours: 0 }, ...notes]);
   };
 
-  const updateNote = (id: string, content: string) => {
-    saveNotes(notes.map(n => n.id === id ? { ...n, content } : n));
+  useEffect(() => {
+    const handleNew = () => addNote();
+    window.addEventListener('new-sticky-note', handleNew);
+    return () => window.removeEventListener('new-sticky-note', handleNew);
+  }, [notes]);
+
+  const updateNote = (id: string, updates: any) => {
+    saveNotes(notes.map(n => n.id === id ? { ...n, ...updates } : n));
   };
 
   const deleteNote = (id: string) => {
@@ -2420,7 +2589,7 @@ function StickyNotesBoard({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
               {notes.length === 0 && (
                 <div className="h-40 flex flex-col items-center justify-center text-slate-400">
                   <StickyNote className="w-12 h-12 mb-3 opacity-20" />
@@ -2428,30 +2597,72 @@ function StickyNotesBoard({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                   <p className="text-xs mt-1">انقر على "ملصق جديد" للبدء</p>
                 </div>
               )}
+              
+              <Reorder.Group axis="y" values={notes} onReorder={saveNotes} className="space-y-6">
               {notes.map(note => {
                 const scheme = colors.find(c => c.id === note.color) || colors[0];
+                const isPinned = !!note.isPinned;
+                
+                let isAlerted = false;
+                if (note.alertHours && note.createdAt) {
+                  if (Date.now() >= note.createdAt + note.alertHours * 3600000) {
+                    isAlerted = true;
+                  }
+                }
+
                 return (
-                  <div key={note.id} className={`rounded-2xl p-4 flex flex-col shadow-sm border ${scheme.bg} ${scheme.border} relative transition-all group mt-6`}>
-                    {/* Top Pin */}
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-rose-500 rounded-full shadow-lg border-2 border-rose-600 flex items-center justify-center z-10">
-                       <div className="w-2 h-2 bg-white/50 rounded-full" />
+                  <Reorder.Item 
+                    key={note.id} 
+                    value={note}
+                    className={`rounded-2xl p-4 flex flex-col shadow-sm border ${scheme.bg} ${scheme.border} relative transition-all group cursor-grab active:cursor-grabbing`}
+                  >
+                    {/* Drag Handle Top Pin */}
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-4 bg-transparent flex items-center justify-center z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <GripVertical className="w-4 h-4 text-slate-400 rotate-90" />
                     </div>
+                    {isPinned && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-rose-500 rounded-full shadow-lg border-2 border-rose-600 flex items-center justify-center z-10">
+                         <div className="w-2 h-2 bg-white/50 rounded-full" />
+                      </div>
+                    )}
                     
                     <div className="flex items-center justify-between mb-3 mt-1">
                       <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         {colors.map(c => (
-                          <button key={c.id} onClick={() => saveNotes(notes.map(n => n.id === note.id ? { ...n, color: c.id } : n))} className={`w-5 h-5 rounded-full border-2 ${c.bg} ${note.color === c.id ? 'border-slate-800' : 'border-transparent hover:scale-110'}`} />
+                          <button key={c.id} onPointerDown={(e) => e.stopPropagation()} onClick={() => updateNote(note.id, { color: c.id })} className={`w-5 h-5 rounded-full border-2 ${c.bg} ${note.color === c.id ? 'border-slate-800' : 'border-transparent hover:scale-110'}`} />
                         ))}
                       </div>
-                      <button onClick={() => deleteNote(note.id)} className={`opacity-0 group-hover:opacity-100 transition text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 p-1.5 rounded-lg`}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onPointerDown={(e) => e.stopPropagation()}>
+                        <div className="flex items-center bg-white/50 rounded-lg px-2 py-1 gap-1 border border-white/20">
+                          <BellRing className={`w-3 h-3 ${isAlerted ? 'text-red-500 animate-pulse' : 'text-slate-500'}`} />
+                          <input 
+                            type="number" 
+                            className="w-8 bg-transparent text-xs text-center outline-none font-bold text-slate-700" 
+                            placeholder="ساعة"
+                            value={note.alertHours || ''}
+                            onChange={(e) => updateNote(note.id, { alertHours: parseFloat(e.target.value) || 0, createdAt: note.createdAt || Date.now() })}
+                          />
+                        </div>
+                        <button 
+                          onClick={() => {
+                            updateNote(note.id, { isPinned: !isPinned });
+                          }} 
+                          className={`p-1.5 rounded-lg transition ${isPinned ? 'text-amber-600 bg-amber-50' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                          title="تثبيت على الشاشة"
+                        >
+                          <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-current' : ''}`} />
+                        </button>
+                        <button onClick={() => deleteNote(note.id)} className={`text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 p-1.5 rounded-lg`}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     <textarea
                       value={note.content}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onChange={(e) => {
-                        updateNote(note.id, e.target.value);
+                        updateNote(note.id, { content: e.target.value });
                         e.target.style.height = 'auto';
                         e.target.style.height = `${e.target.scrollHeight}px`;
                       }}
@@ -2462,9 +2673,10 @@ function StickyNotesBoard({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                       placeholder="اكتب ملاحظاتك هنا... ✍️"
                       className={`w-full bg-transparent resize-none border-none outline-none text-sm font-bold leading-relaxed ${scheme.text} placeholder-${scheme.id}-700/40 overflow-hidden min-h-[80px]`}
                     />
-                  </div>
+                  </Reorder.Item>
                 );
               })}
+              </Reorder.Group>
             </div>
           </motion.div>
         </>

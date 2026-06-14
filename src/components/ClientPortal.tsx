@@ -111,12 +111,14 @@ export default function ClientPortal() {
     if (isAuthenticated && project?.clientName) {
       const qQuotes = query(collection(db, 'quotations'), where('clientName', '==', project.clientName));
       const unsubQ = onSnapshot(qQuotes, (snap) => {
-        setQuotations(snap.docs.map(d => ({ id: d.id, ...d.data() } as Quotation)));
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Quotation));
+        setQuotations(docs.filter(d => !d.projectId || d.projectId === project.id));
       });
 
       const qInvoices = query(collection(db, 'invoices'), where('clientName', '==', project.clientName));
       const unsubI = onSnapshot(qInvoices, (snap) => {
-        setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() } as Quotation)));
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Quotation));
+        setInvoices(docs.filter(d => !d.projectId || d.projectId === project.id));
       });
 
       return () => { unsubQ(); unsubI(); };

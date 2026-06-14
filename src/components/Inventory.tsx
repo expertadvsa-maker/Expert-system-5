@@ -31,6 +31,7 @@ import {
   increment
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { getCompanyQuery } from '../lib/firestoreUtils';
 import { useAuth } from '../lib/AuthContext';
 import { logActivity } from '../lib/activity';
 import { sendNotification } from '../lib/notifications';
@@ -47,7 +48,7 @@ import {
 import { Label } from "@/components/ui/label";
 
 export default function Inventory() {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const isManager = profile?.role === 'manager';
   const isSupervisor = profile?.role === 'supervisor';
   const isElevated = isManager || isSupervisor;
@@ -74,7 +75,7 @@ export default function Inventory() {
 
   useEffect(() => {
     const unsubItems = onSnapshot(
-      query(collection(db, 'inventory'), orderBy('name', 'asc')),
+      query(getCompanyQuery('inventory', activeCompanyId), orderBy('name', 'asc')),
       (snapshot) => {
         setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setLoading(false);
@@ -82,7 +83,7 @@ export default function Inventory() {
     );
 
     const unsubLogs = onSnapshot(
-      query(collection(db, 'inventoryLogs'), orderBy('timestamp', 'desc')),
+      query(getCompanyQuery('inventoryLogs', activeCompanyId), orderBy('timestamp', 'desc')),
       (snapshot) => {
         setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }
@@ -101,6 +102,7 @@ export default function Inventory() {
       const qty = parseFloat(newItem.quantity);
       await addDoc(collection(db, 'inventory'), {
         ...newItem,
+        companyId: activeCompanyId || null,
         quantity: qty,
         reorderLevel: parseFloat(newItem.reorderLevel),
         lastUpdated: new Date().toISOString()
@@ -139,6 +141,7 @@ export default function Inventory() {
       });
 
       await addDoc(collection(db, 'inventoryLogs'), {
+        companyId: activeCompanyId || null,
         itemId,
         change,
         reason,

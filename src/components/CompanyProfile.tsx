@@ -159,7 +159,7 @@ const DEFAULT_SUBSCRIPTIONS = [
 ];
 
 export default function CompanyProfile() {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -279,7 +279,7 @@ export default function CompanyProfile() {
   useEffect(() => {
     // Sync company profile settings from FireStore with real-time snapshot
     const unsubProfile = onSnapshot(
-      doc(db, "system", "company_profile"),
+      doc(db, activeCompanyId ? `companies/${activeCompanyId}/settings` : 'system', activeCompanyId ? 'profile' : 'company_profile'),
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
@@ -303,7 +303,7 @@ export default function CompanyProfile() {
 
   const initializeDefaultDatabase = async () => {
     try {
-      await setDoc(doc(db, "system", "company_profile"), {
+      await setDoc(doc(db, activeCompanyId ? `companies/${activeCompanyId}/settings` : 'system', activeCompanyId ? 'profile' : 'company_profile'), {
         contacts,
         googleSettings,
         documents: DEFAULT_DOCUMENTS,
@@ -412,7 +412,7 @@ export default function CompanyProfile() {
 
     setIsSubmitting(true);
     try {
-      await setDoc(doc(db, "system", "company_profile"), {
+      await setDoc(doc(db, activeCompanyId ? `companies/${activeCompanyId}/settings` : 'system', activeCompanyId ? 'profile' : 'company_profile'), {
         contacts,
         googleSettings,
         documents,
@@ -472,7 +472,7 @@ export default function CompanyProfile() {
 
     setIsSubmitting(true);
     try {
-      await setDoc(doc(db, "system", "company_profile"), {
+      await setDoc(doc(db, activeCompanyId ? `companies/${activeCompanyId}/settings` : 'system', activeCompanyId ? 'profile' : 'company_profile'), {
         contacts,
         googleSettings,
         documents,
@@ -623,7 +623,7 @@ export default function CompanyProfile() {
 
     setIsSubmitting(true);
     try {
-      await setDoc(doc(db, "system", "company_profile"), {
+      await setDoc(doc(db, activeCompanyId ? `companies/${activeCompanyId}/settings` : 'system', activeCompanyId ? 'profile' : 'company_profile'), {
         contacts,
         googleSettings,
         documents: updatedDocs,
@@ -645,7 +645,7 @@ export default function CompanyProfile() {
     if (!confirm("هل أنت متأكد من حذف وأرشفة هذه الوثيقة من السجلات الإلكترونية لـ هوية الشركة؟")) return;
     const updatedDocs = documents.filter((d) => d.id !== id);
     try {
-      await setDoc(doc(db, "system", "company_profile"), {
+      await setDoc(doc(db, activeCompanyId ? `companies/${activeCompanyId}/settings` : 'system', activeCompanyId ? 'profile' : 'company_profile'), {
         contacts,
         googleSettings,
         documents: updatedDocs,
@@ -701,7 +701,7 @@ export default function CompanyProfile() {
 
     setIsSubmitting(true);
     try {
-      await setDoc(doc(db, "system", "company_profile"), {
+      await setDoc(doc(db, activeCompanyId ? `companies/${activeCompanyId}/settings` : 'system', activeCompanyId ? 'profile' : 'company_profile'), {
         contacts,
         googleSettings,
         documents: updatedDocs,
@@ -796,7 +796,7 @@ export default function CompanyProfile() {
 
     setIsSubmitting(true);
     try {
-      await setDoc(doc(db, "system", "company_profile"), {
+      await setDoc(doc(db, activeCompanyId ? `companies/${activeCompanyId}/settings` : 'system', activeCompanyId ? 'profile' : 'company_profile'), {
         contacts,
         googleSettings,
         documents,
@@ -818,7 +818,7 @@ export default function CompanyProfile() {
     if (!confirm("هل أنت متأكد من إلغاء تتبع هذا الاشتراك السحابي من السجلات؟")) return;
     const updatedSubs = subscriptions.filter((s) => s.id !== id);
     try {
-      await setDoc(doc(db, "system", "company_profile"), {
+      await setDoc(doc(db, activeCompanyId ? `companies/${activeCompanyId}/settings` : 'system', activeCompanyId ? 'profile' : 'company_profile'), {
         contacts,
         googleSettings,
         documents,

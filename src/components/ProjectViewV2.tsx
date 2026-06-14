@@ -46,7 +46,9 @@ import {
   Hash,
   Maximize,
   Check,
-  Lock
+  Lock,
+  Receipt,
+  X
 } from 'lucide-react';
 import { 
   doc, 
@@ -61,17 +63,20 @@ import {
   setDoc,
   serverTimestamp,
   addDoc,
-  deleteField
+  deleteField,
+  getDoc,
+  deleteDoc
 } from 'firebase/firestore';
 import { db, auth, storage } from '../lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { sendWhatsappMessage } from '../lib/whatsapp';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 import { toast } from 'sonner';
-import { Project, UserProfile as Worker, ProjectUpdate, Transaction, ProjectMilestone } from '../types';
+import { Project, UserProfile as Worker, ProjectUpdate, Transaction, ProjectMilestone, Quotation } from '../types';
 import { calculateProjectProgress } from '../lib/projectUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../lib/AuthContext';
+import AIQuotationBuilder from './AIQuotationBuilder';
 import {
   Dialog,
   DialogContent,
@@ -139,7 +144,7 @@ const HelpTooltip = ({ content }: { content: string }) => {
 import HandoverAndMaintenance from './HandoverAndMaintenance';
 
 export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props) {
-  const { profile } = useAuth();
+  const { profile, activeCompanyId } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [usersList, setUsersList] = useState<Worker[]>([]);
@@ -147,6 +152,27 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [clientChats, setClientChats] = useState<any[]>([]);
   const [receipts, setReceipts] = useState<any[]>([]);
+
+  // ── Quotations & Invoices ──
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [invoices, setInvoices] = useState<Quotation[]>([]);
+  const [showDocBuilder, setShowDocBuilder] = useState<'quotation' | 'invoice' | null>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const qQuotes = query(collection(db, 'quotations'), where('projectId', '==', projectId));
+    const unsubQ = onSnapshot(qQuotes, snap => {
+      setQuotations(snap.docs.map(d => ({ id: d.id, ...d.data() } as Quotation)));
+    });
+
+    const qInvoices = query(collection(db, 'invoices'), where('projectId', '==', projectId));
+    const unsubI = onSnapshot(qInvoices, snap => {
+      setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() } as Quotation)));
+    });
+
+    return () => { unsubQ(); unsubI(); };
+  }, [projectId]);
   const chatScrollRef = React.useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -261,6 +287,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
       const amountVal = parseFloat(paymentForm.amount);
       const txRef = doc(collection(db, 'transactions'));
       await setDoc(txRef, {
+        companyId: activeCompanyId || null,
         id: txRef.id,
         type: 'income',
         category: 'دفعة عميل',
@@ -303,6 +330,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
 
       const txRef = doc(collection(db, 'transactions'));
       await setDoc(txRef, {
+        companyId: activeCompanyId || null,
         id: txRef.id,
         type: 'income',
         category: 'دفعة عميل',
@@ -335,6 +363,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
       const amountVal = parseFloat(expenseForm.amount);
       const txRef = doc(collection(db, 'transactions'));
       await setDoc(txRef, {
+        companyId: activeCompanyId || null,
         id: txRef.id,
         type: 'expense',
         category: expenseForm.category,
@@ -369,6 +398,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
       });
       if (!isAssigned) {
          await addDoc(collection(db, 'notifications'), {
+        companyId: activeCompanyId || null,
             title: 'تم إضافتك لمشروع جديد',
             message: `تم تكليفك ضمن الفريق الفني لمشروع: ${project?.title || 'مشروع جديد'}`,
             type: 'info',
@@ -391,6 +421,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
     try {
       const updateRef = doc(collection(db, 'projectUpdates'));
       await setDoc(updateRef, {
+        companyId: activeCompanyId || null,
         id: updateRef.id,
         projectId: projectId,
         content: chatInput.trim(),
@@ -1767,6 +1798,55 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                          </div>
                        )}
                      </div>
+
+                     {/* ── Quotations & Invoices ── */}
+                     <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm mt-8">
+                       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
+                         <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100">
+                               <FileText className="w-6 h-6 text-slate-700" />
+                            </div>
+                            <div>
+                               <h3 className="text-lg font-black text-slate-800">عروض الأسعار والفواتير</h3>
+                               <p className="text-xs font-bold text-slate-400 mt-1">المستندات المالية المرتبطة بالمشروع</p>
+                            </div>
+                         </div>
+                         <div className="flex gap-2">
+                            <Button onClick={() => setShowDocBuilder('quotation')} variant="outline" className="rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold h-10 px-4">
+                               + عرض سعر
+                            </Button>
+                            <Button onClick={() => setShowDocBuilder('invoice')} variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold h-10 px-4">
+                               + فاتورة
+                            </Button>
+                         </div>
+                       </div>
+
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         {[...quotations, ...invoices].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(doc => (
+                           <div key={doc.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 flex flex-col gap-3">
+                             <div className="flex items-start justify-between">
+                               <div className="flex items-center gap-2">
+                                 {doc.docType === 'invoice' ? <Receipt className="w-4 h-4 text-emerald-600" /> : <FileText className="w-4 h-4 text-indigo-600" />}
+                                 <span className="font-bold text-sm text-slate-800">{doc.docType === 'invoice' ? 'فاتورة' : 'عرض سعر'}</span>
+                               </div>
+                               <span className="text-xs font-bold text-slate-400">{new Date(doc.createdAt).toLocaleDateString('ar-SA')}</span>
+                             </div>
+                             <div className="flex items-center justify-between mt-2">
+                               <span className="text-lg font-black text-slate-800">{doc.totalAmount?.toLocaleString('ar-SA')} ر.س</span>
+                               <Button variant="ghost" size="sm" onClick={() => window.open(doc.pdfUrl || '#', '_blank')} className="h-8 text-xs font-bold gap-1 bg-white border border-slate-200 shadow-sm rounded-lg hover:bg-slate-100">
+                                 <ExternalLink className="w-3 h-3" /> عرض PDF
+                               </Button>
+                             </div>
+                           </div>
+                         ))}
+                         {quotations.length === 0 && invoices.length === 0 && (
+                           <div className="col-span-full py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                             <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                             <p className="text-sm font-bold text-slate-500">لا توجد مستندات مرتبطة بهذا المشروع</p>
+                           </div>
+                         )}
+                       </div>
+                     </div>
                   </motion.div>
                )}
 
@@ -2295,6 +2375,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                              });
                              const updateRef = doc(collection(db, 'projectUpdates'));
                              await setDoc(updateRef, {
+        companyId: activeCompanyId || null,
                                 id: updateRef.id,
                                 projectId: projectId,
                                 content: `قام ${profile?.name || 'مدير المشروع'} بإرسال رسالة مباشرة للعميل.`,
@@ -2326,6 +2407,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                           });
                           const updateRef = doc(collection(db, 'projectUpdates'));
                           await setDoc(updateRef, {
+        companyId: activeCompanyId || null,
                              id: updateRef.id,
                              projectId: projectId,
                              content: `قام ${profile?.name || 'مدير المشروع'} بإرسال رسالة مباشرة للعميل.`,
@@ -2440,6 +2522,35 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
             </div>
          </div>
       )}
+
+      {/* ── Document Builder Dialog ── */}
+      <Dialog open={!!showDocBuilder} onOpenChange={(open) => !open && setShowDocBuilder(null)}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-slate-50 h-[90vh] flex flex-col rounded-3xl border-0 shadow-2xl">
+          <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-100 z-10 sticky top-0">
+            <div>
+               <h2 className="text-xl font-black text-slate-800">
+                 {showDocBuilder === 'quotation' ? 'إصدار عرض سعر ذكي' : 'إصدار فاتورة ذكية'}
+               </h2>
+               <p className="text-xs font-bold text-slate-500 mt-1">تعبئة ذكية باستخدام الذكاء الاصطناعي</p>
+            </div>
+            <div className="flex gap-2">
+               <Button onClick={() => setShowDocBuilder(null)} variant="ghost" className="h-9 w-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 p-0">
+                  <X className="w-5 h-5" />
+               </Button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-slate-50/50">
+            {showDocBuilder && (
+              <AIQuotationBuilder 
+                type={showDocBuilder} 
+                initialProjectId={project.id} 
+                initialProjectName={project.title} 
+                initialProjectDesc={project.description} 
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <footer className="py-12 text-center opacity-10">
          <p className="text-[10px] font-black uppercase tracking-[0.6em]">Aman Management System • Next Gen Advertising & Signage</p>

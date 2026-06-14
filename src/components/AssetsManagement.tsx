@@ -35,6 +35,8 @@ import {
 import { db } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { useAuth } from '../lib/AuthContext';
+import { getCompanyQuery, addCompanyDoc } from '../lib/firestoreUtils';
 import {
   Dialog,
   DialogContent,
@@ -83,6 +85,7 @@ interface Asset {
 }
 
 export default function AssetsManagement() {
+  const { activeCompanyId } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,12 +108,14 @@ export default function AssetsManagement() {
   const [newField, setNewField] = useState({ label: '', value: '' });
 
   useEffect(() => {
-    const unsubAssets = onSnapshot(query(collection(db, 'assets'), orderBy('name')), (snap) => {
-      setAssets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Asset)));
+    const unsubAssets = onSnapshot(getCompanyQuery('assets', activeCompanyId), (snap) => {
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Asset));
+      docs.sort((a, b) => a.name.localeCompare(b.name));
+      setAssets(docs);
       setLoading(false);
     });
 
-    const unsubEmps = onSnapshot(collection(db, 'employees'), (snap) => {
+    const unsubEmps = onSnapshot(getCompanyQuery('users', activeCompanyId), (snap) => {
       setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
@@ -118,7 +123,7 @@ export default function AssetsManagement() {
       unsubAssets();
       unsubEmps();
     };
-  }, []);
+  }, [activeCompanyId]);
 
   const handleAddAsset = async () => {
     if (!newAsset.name || !newAsset.serialNumber) {
@@ -127,17 +132,16 @@ export default function AssetsManagement() {
     }
 
     try {
-      await addDoc(collection(db, 'assets'), {
+      await addCompanyDoc('assets', {
         ...newAsset,
         status: 'available',
         history: [{
           type: 'status-change',
-          date: new Date(),
+          date: new Date().toISOString(),
           note: 'تمت إضافة الأصل إلى النظام',
           userName: 'المدير'
         }],
-        createdAt: serverTimestamp()
-      });
+      }, activeCompanyId);
       setIsAddDialogOpen(false);
       setNewAsset({
         name: '',
