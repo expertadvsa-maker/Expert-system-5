@@ -16,6 +16,8 @@ import {
   orderBy,
   limit,
   updateDoc,
+  getDocs,
+  writeBatch
 } from "firebase/firestore";
 import {
   Bell,
@@ -250,6 +252,36 @@ const settingsCategories = [
 
 function AppContent() {
   const { user, profile, activeCompanyId, setActiveCompanyId, companies } = useAuth();
+  
+  // Migration script: link orphan users to the main company
+  useEffect(() => {
+    if (user?.email === 'expertadvsa@gmail.com' && activeCompanyId) {
+      const migrateOrphans = async () => {
+        try {
+          const usersSnap = await getDocs(collection(db, 'users'));
+          const batch = writeBatch(db);
+          let count = 0;
+          usersSnap.forEach(docSnap => {
+            const data = docSnap.data();
+            if (!data.companyId) {
+              batch.update(docSnap.ref, { companyId: activeCompanyId });
+              count++;
+            }
+          });
+          if (count > 0) {
+            await batch.commit();
+            import('sonner').then(({ toast }) => {
+              toast.success(`تمت الهجرة: تم ربط ${count} حساب قديم بشركتك الحالية بنجاح!`);
+            });
+          }
+        } catch (err) {
+          console.error("Migration error:", err);
+        }
+      };
+      migrateOrphans();
+    }
+  }, [user?.email, activeCompanyId]);
+
   useLiveTracking();
   const activeCompany = companies.find(c => c.id === activeCompanyId);
   const [activeTab, setActiveTab] = useState("dashboard");
