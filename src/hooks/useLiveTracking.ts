@@ -55,15 +55,25 @@ export function useLiveTracking() {
   }, [activeCompanyId]);
 
   useEffect(() => {
-    // 🚀 Start tracking logic as soon as user is logged in
-    // This guarantees the browser asks for permission even if profile/company is still loading
-    if (!user?.uid || !navigator.geolocation) {
+    // 🚀 Start tracking logic
+    // Wait for profile to load so we don't accidentally ask owners for location
+    if (!user?.uid || !navigator.geolocation || !profile) {
+      return;
+    }
+
+    // Role-Based Firewall: Do not track owners, managers, or clients
+    if (['owner', 'manager', 'client'].includes(profile.role)) {
       return;
     }
 
     const updateLocation = async (lat: number, lng: number, speedMps: number | null) => {
       if (!activeCompanyId || !profile) {
         // We have location permission, but the app is still loading profile/company. Wait quietly.
+        if (!activeCompanyId && profile && ['supervisor', 'employee'].includes(profile.role)) {
+          import('react-hot-toast').then(({ toast }) => {
+            toast.error("تنبيه: حسابك غير مرتبط بأي شركة حالياً، ولن تظهر في الرادار الإداري!", { id: 'no_company_toast' });
+          });
+        }
         return;
       }
 
@@ -165,19 +175,31 @@ export function useLiveTracking() {
     };
 
     let currentWatchId: number;
+    let hasShownSuccessToast = false;
 
     const startTracking = (highAccuracy: boolean) => {
       currentWatchId = navigator.geolocation.watchPosition(
-        successCallback,
+        (position) => {
+          if (!hasShownSuccessToast) {
+            import('react-hot-toast').then(({ toast }) => {
+               toast.success('📍 تم التقاط الإحداثيات! أنت الآن متصل بالرادار.', { duration: 4000 });
+            });
+            hasShownSuccessToast = true;
+          }
+          successCallback(position);
+        },
         (error) => {
           console.warn(`Geolocation error (HighAccuracy: ${highAccuracy}):`, error);
           if (error.code === error.PERMISSION_DENIED) {
-            console.error("يرجى السماح بصلاحية الموقع من إعدادات المتصفح");
-            // You can use toast here if imported, but dispatching an event is safer for hooks
+            import('react-hot-toast').then(({ toast }) => {
+              toast.error("يرجى السماح بصلاحية الموقع من إعدادات المتصفح");
+            });
             window.dispatchEvent(new CustomEvent('geolocation_denied'));
           } else if (error.code === error.TIMEOUT && highAccuracy) {
-            // If high accuracy (GPS) fails indoors, fallback to lower accuracy (Network/WiFi)
             console.warn("GPS timeout, falling back to network location...");
+            import('react-hot-toast').then(({ toast }) => {
+              toast.loading("إشارة الـ GPS ضعيفة، جاري البحث عن طريق أبراج الاتصال...", { duration: 3000 });
+            });
             navigator.geolocation.clearWatch(currentWatchId);
             startTracking(false);
           }
