@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { GeoZone, TrackerPoint } from './types';
@@ -111,6 +111,29 @@ export default function LiveMap({ zones, points, center = { lat: 24.7136, lng: 4
         )}
 
         {/* Render Zones */}
+        {/* Draw User Paths */}
+        {points.map(point => {
+          if (point.path && point.path.length > 1) {
+            const positions = point.path.map(p => [p.lat, p.lng] as [number, number]);
+            
+            // Determine path color based on latest speed (or default to cyan)
+            let pathColor = '#06b6d4'; // Cyan
+            if (point.speed) {
+               if (point.speed > 120) pathColor = '#ef4444'; // Red
+               else if (point.speed > 80) pathColor = '#f97316'; // Orange
+            }
+
+            return (
+              <Polyline 
+                key={`path-${point.id}`}
+                positions={positions} 
+                pathOptions={{ color: pathColor, weight: 4, opacity: 0.8, dashArray: '5, 10', lineCap: 'round' }} 
+              />
+            );
+          }
+          return null;
+        })}
+
         {zones.map(zone => (
           <Circle
             key={zone.id}
@@ -151,6 +174,14 @@ export default function LiveMap({ zones, points, center = { lat: 24.7136, lng: 4
             >
               <Popup>
                 <div className="text-right font-sans" dir="rtl">
+                  {point.speed !== undefined && (
+                    <div className="flex justify-between items-center bg-slate-100 p-2 rounded text-sm mb-2">
+                      <span className="text-slate-600 font-bold">السرعة:</span>
+                      <span className={`font-bold ${point.speed > 120 ? 'text-red-600' : 'text-emerald-600'}`} dir="ltr">
+                        {point.speed} km/h
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 mb-2">
                     {point.photoURL ? (
                       <img src={point.photoURL} alt={point.userName} className="w-10 h-10 rounded-full object-cover border border-slate-200" />

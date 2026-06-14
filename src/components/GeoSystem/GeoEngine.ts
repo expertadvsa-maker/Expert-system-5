@@ -51,6 +51,45 @@ export class GeoEngine {
       };
     }
 
+    // 3. Inactivity Anomaly
+    if (currentZone && currentZone.type !== 'accommodation' && point.status === 'offline') {
+      const timeDiff = Date.now() - new Date(point.timestamp).getTime();
+      const hoursOffline = timeDiff / (1000 * 60 * 60);
+      
+      if (hoursOffline >= 2) {
+        return {
+          id: `anom_${Date.now()}_${point.userId}`,
+          companyId: point.companyId,
+          userId: point.userId,
+          userName: point.userName,
+          type: 'inactivity',
+          message: `الموظف ${point.userName} خامل أو فقد الاتصال منذ أكثر من ${Math.floor(hoursOffline)} ساعة داخل نطاق ${currentZone.name}`,
+          timestamp: new Date().toISOString(),
+          severity: 'high',
+          resolved: false,
+          lat: point.lat,
+          lng: point.lng
+        };
+      }
+    }
+
+    // 4. Speeding Anomaly
+    if (point.speed && point.speed > 120) {
+      return {
+        id: `anom_${Date.now()}_speed_${point.userId}`,
+        companyId: point.companyId,
+        userId: point.userId,
+        userName: point.userName,
+        type: 'speeding',
+        message: `الموظف ${point.userName} يقود بسرعة زائدة جداً (${point.speed} كم/س)`,
+        timestamp: new Date().toISOString(),
+        severity: 'high',
+        resolved: false,
+        lat: point.lat,
+        lng: point.lng
+      };
+    }
+
     // 2. Curfew Violation for Accommodation
     if (currentZone && currentZone.type === 'accommodation' && currentZone.rules?.curfewStart && currentZone.rules?.curfewEnd) {
       const now = new Date();

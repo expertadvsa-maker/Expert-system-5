@@ -25,9 +25,10 @@ export interface TrackerPoint {
   photoURL?: string;
   lat: number;
   lng: number;
+  speed?: number;
+  path?: { lat: number; lng: number; timestamp: number; speed?: number }[];
   timestamp: string;
   batteryLevel?: number;
-  speed?: number; // m/s
   status: 'active' | 'idle' | 'offline';
   currentZoneId?: string; // if they are inside a known zone
 }

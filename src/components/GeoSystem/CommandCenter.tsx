@@ -630,6 +630,11 @@ export default function CommandCenter() {
                             البطارية {point.batteryLevel}%
                           </div>
                         )}
+                        {point.speed !== undefined && (
+                          <div className={`text-[10px] font-bold mt-1 ${point.speed > 120 ? 'text-red-400' : 'text-emerald-500'}`} dir="ltr">
+                            {point.speed} km/h
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
