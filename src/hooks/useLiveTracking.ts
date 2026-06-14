@@ -158,23 +158,53 @@ export function useLiveTracking() {
       }
     };
 
-    const errorCallback = (error: GeolocationPositionError) => {
-      console.warn("Geolocation watch error:", error);
+    let currentWatchId: number;
+
+    const startTracking = (highAccuracy: boolean) => {
+      currentWatchId = navigator.geolocation.watchPosition(
+        successCallback,
+        (error) => {
+          console.warn(`Geolocation error (HighAccuracy: ${highAccuracy}):`, error);
+          if (error.code === error.PERMISSION_DENIED) {
+            console.error("يرجى السماح بصلاحية الموقع من إعدادات المتصفح");
+            // You can use toast here if imported, but dispatching an event is safer for hooks
+            window.dispatchEvent(new CustomEvent('geolocation_denied'));
+          } else if (error.code === error.TIMEOUT && highAccuracy) {
+            // If high accuracy (GPS) fails indoors, fallback to lower accuracy (Network/WiFi)
+            console.warn("GPS timeout, falling back to network location...");
+            navigator.geolocation.clearWatch(currentWatchId);
+            startTracking(false);
+          }
+        },
+        {
+          enableHighAccuracy: highAccuracy,
+          maximumAge: 10000,
+          timeout: highAccuracy ? 10000 : 30000
+        }
+      );
     };
 
-    const watchId = navigator.geolocation.watchPosition(
-      successCallback,
-      errorCallback,
-      {
-        enableHighAccuracy: true,
-        maximumAge: 10000,
-        timeout: 10000
-      }
-    );
+    // Kickstart tracking with High Accuracy first
+    startTracking(true);
+
+    // 🚀 Mobile Browser Hack: iOS Safari and some mobile browsers block background 
+    // location requests on page load without a user gesture. 
+    // We attach a dummy request to the very first tap/click anywhere on the screen 
+    // to guarantee the native permission popup appears!
+    const handleFirstInteraction = () => {
+      navigator.geolocation.getCurrentPosition(() => {}, () => {}, { maximumAge: 60000 });
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+    
+    document.addEventListener('click', handleFirstInteraction);
+    document.addEventListener('touchstart', handleFirstInteraction);
 
     // Cleanup: Set status to offline when unmounting/closing app (if possible)
     return () => {
-      navigator.geolocation.clearWatch(watchId);
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+      if (currentWatchId) navigator.geolocation.clearWatch(currentWatchId);
       // Attempt to set offline status gracefully
       setDoc(doc(db, 'live_tracking', user.uid), {
         status: 'offline',
