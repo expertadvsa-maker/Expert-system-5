@@ -1994,13 +1994,13 @@ function AppContent() {
                 )}
                 {activeTab === "profile" && (
                   <EmployeeProfile
-                    employeeId={user.uid}
+                    employeeId={profile?.id || user.uid}
                     onBack={() => setActiveTab("dashboard")}
                   />
                 )}
                 {activeTab === "sales_rep_profile" && (
                   <SalesRepProfile
-                    salesRepId={user.uid}
+                    salesRepId={profile?.id || user.uid}
                     onBack={() => setActiveTab("rep_dashboard")}
                   />
                 )}

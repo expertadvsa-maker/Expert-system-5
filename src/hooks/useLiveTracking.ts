@@ -61,8 +61,8 @@ export function useLiveTracking() {
       return;
     }
 
-    // Role-Based Firewall: Do not track owners, managers, or clients
-    if (['owner', 'manager', 'client'].includes(profile.role)) {
+    // Role-Based Firewall: Track everyone EXCEPT clients
+    if (['client'].includes(profile.role)) {
       return;
     }
 
