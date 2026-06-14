@@ -620,8 +620,20 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
 
   const handleUpdateProject = async () => {
     try {
+      let updatedCoords = editForm.locationCoords;
+      if (editForm.locationLink) {
+        const atMatch = editForm.locationLink.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+        const qMatch = editForm.locationLink.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+        if (atMatch) {
+          updatedCoords = { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+        } else if (qMatch) {
+          updatedCoords = { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+        }
+      }
+
       await updateDoc(doc(db, 'projects', projectId), {
         ...editForm,
+        locationCoords: updatedCoords,
         updatedAt: new Date().toISOString()
       });
       toast.success("تم تحديث بيانات المشروع");

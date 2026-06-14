@@ -53,6 +53,15 @@ export default function CommandCenter() {
     return combined;
   }, [dbZones, dbProjects]);
 
+  const missingLocationProjects = useMemo(() => {
+    return dbProjects.filter(proj => 
+      !proj.locationCoords && 
+      proj.status !== 'completed' && 
+      proj.status !== 'closed' &&
+      proj.status !== 'planning' // Planning might not have locations yet
+    );
+  }, [dbProjects]);
+
   const points = useMemo(() => {
     const combinedMap = new Map<string, TrackerPoint>();
     dbPoints.forEach(p => combinedMap.set(p.userId || p.id, p));
@@ -474,6 +483,36 @@ export default function CommandCenter() {
                 </div>
               ))}
             </div>
+
+            {missingLocationProjects.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-3">
+                <h3 className="text-xs font-bold text-amber-400 flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  مشاريع نشطة بلا نطاق راداري
+                </h3>
+                <div className="space-y-2">
+                  {missingLocationProjects.map(proj => (
+                    <div 
+                      key={`missing-${proj.id}`} 
+                      className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
+                      title="يجب إضافة رابط موقع المشروع في صفحة المشاريع لتفعيل الرادار التلقائي"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
+                          <MapPin className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm text-white">{proj.title || proj.name || 'مشروع بدون اسم'}</p>
+                          <p className="text-[10px] text-amber-300 mt-0.5 flex items-center gap-1">
+                            أضف الرابط في تفاصيل المشروع لتفعيل التتبع
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Clean Mock Data Button */}
             {points.some(p => ['أحمد سعد', 'محمود علي', 'فارس المشرف', 'سعيد يوسف'].includes(p.userName)) && (
