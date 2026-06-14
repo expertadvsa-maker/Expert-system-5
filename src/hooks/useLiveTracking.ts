@@ -70,7 +70,7 @@ export function useLiveTracking() {
       if (!activeCompanyId || !profile) {
         // We have location permission, but the app is still loading profile/company. Wait quietly.
         if (!activeCompanyId && profile && ['supervisor', 'employee'].includes(profile.role)) {
-          import('react-hot-toast').then(({ toast }) => {
+          import('sonner').then(({ toast }) => {
             toast.error("تنبيه: حسابك غير مرتبط بأي شركة حالياً، ولن تظهر في الرادار الإداري!", { id: 'no_company_toast' });
           });
         }
@@ -181,7 +181,7 @@ export function useLiveTracking() {
       currentWatchId = navigator.geolocation.watchPosition(
         (position) => {
           if (!hasShownSuccessToast) {
-            import('react-hot-toast').then(({ toast }) => {
+            import('sonner').then(({ toast }) => {
                toast.success('📍 تم التقاط الإحداثيات! أنت الآن متصل بالرادار.', { duration: 4000 });
             });
             hasShownSuccessToast = true;
@@ -191,13 +191,13 @@ export function useLiveTracking() {
         (error) => {
           console.warn(`Geolocation error (HighAccuracy: ${highAccuracy}):`, error);
           if (error.code === error.PERMISSION_DENIED) {
-            import('react-hot-toast').then(({ toast }) => {
+            import('sonner').then(({ toast }) => {
               toast.error("يرجى السماح بصلاحية الموقع من إعدادات المتصفح");
             });
             window.dispatchEvent(new CustomEvent('geolocation_denied'));
           } else if (error.code === error.TIMEOUT && highAccuracy) {
             console.warn("GPS timeout, falling back to network location...");
-            import('react-hot-toast').then(({ toast }) => {
+            import('sonner').then(({ toast }) => {
               toast.loading("إشارة الـ GPS ضعيفة، جاري البحث عن طريق أبراج الاتصال...", { duration: 3000 });
             });
             navigator.geolocation.clearWatch(currentWatchId);
