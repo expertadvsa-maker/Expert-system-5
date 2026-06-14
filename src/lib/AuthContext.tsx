@@ -244,9 +244,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!profile) return;
     
     // Fetch companies that this user has access to
-    const qCompanies = profile.role === 'owner' 
-      ? query(collection(db, 'companies')) 
-      : query(collection(db, 'companies'), where('id', 'in', profile.ownedCompanies || [profile.companyId]));
+    let qCompanies;
+    if (profile.role === 'owner') {
+      qCompanies = query(collection(db, 'companies'));
+    } else {
+      const allowedIds = profile.ownedCompanies || (profile.companyId ? [profile.companyId] : []);
+      if (allowedIds.length === 0) {
+        setCompanies([]);
+        return;
+      }
+      qCompanies = query(collection(db, 'companies'), where('id', 'in', allowedIds));
+    }
       
     const unsubscribeCompanies = onSnapshot(qCompanies, (snap) => {
       const fetchedCompanies = snap.docs.map(d => ({ id: d.id, ...d.data() } as Company));
