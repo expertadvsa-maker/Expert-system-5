@@ -153,11 +153,13 @@ export function useLiveTracking() {
       }
     };
 
+    let isFirstUpdateInSession = true;
+
     const successCallback = (position: GeolocationPosition) => {
       const { latitude, longitude, speed } = position.coords;
       const now = Date.now();
 
-      if (lastLocation.current) {
+      if (lastLocation.current && !isFirstUpdateInSession) {
         // Calculate distance
         const dist = GeoEngine.calculateDistance(
           lastLocation.current.lat, 
@@ -173,7 +175,8 @@ export function useLiveTracking() {
           updateLocation(latitude, longitude, speed);
         }
       } else {
-        // First location update
+        // First location update in this session/mount
+        isFirstUpdateInSession = false;
         lastLocation.current = { lat: latitude, lng: longitude, timestamp: now };
         updateLocation(latitude, longitude, speed);
       }
