@@ -84,34 +84,24 @@ export default function CommandCenter() {
   }, [parsedProjects]);
 
   const points = useMemo(() => {
-    const finalPoints: TrackerPoint[] = [];
-    const validUsersMap = new Map<string, any>();
+    const combinedMap = new Map<string, TrackerPoint>();
     
-    // Only include real employees/supervisors currently active in the company
-    dbUsers.forEach(u => {
-      if (u.role !== 'client') {
-        validUsersMap.set(u.id, u);
-      }
-    });
-
+    // First, add all active tracking points for this company.
+    // If a point is here, it means the user tracked themselves.
     dbPoints.forEach(p => {
-       const id = p.userId || p.id;
-       // Keep point if user is valid OR if point belongs to the current viewing admin
-       if (validUsersMap.has(id) || id === currentUser?.uid) {
-           const dbU = validUsersMap.get(id);
-           finalPoints.push({
-             ...p,
-             userName: dbU?.name || p.userName,
-             userRole: dbU?.role || p.userRole,
-             photoURL: dbU?.photoURL || p.photoURL,
-           });
-           validUsersMap.delete(id); // Remove so we don't process as offline
+       if (p.userRole !== 'client') {
+          // Use userId or id as the key
+          combinedMap.set(p.userId || p.id, p);
        }
     });
 
-    // Process remaining as offline
-    validUsersMap.forEach(u => {
-      finalPoints.push({
+    // Second, loop through users in the company. 
+    // If they aren't tracking, add them as offline. If they are tracking, update their name/photo.
+    dbUsers.forEach(u => {
+      if (u.role === 'client') return; // Skip clients
+
+      if (!combinedMap.has(u.id)) {
+        combinedMap.set(u.id, {
           id: `offline_${u.id}`,
           userId: u.id,
           userName: u.name,
@@ -122,11 +112,17 @@ export default function CommandCenter() {
           lng: undefined as unknown as number,
           timestamp: new Date().toISOString(),
           status: 'offline',
-      });
+        });
+      } else {
+        // Ensure their name and photo are up-to-date from dbUsers
+        const existing = combinedMap.get(u.id)!;
+        existing.userName = u.name || existing.userName;
+        existing.photoURL = u.photoURL || existing.photoURL;
+      }
     });
-    
-    return finalPoints;
-  }, [dbPoints, dbUsers, currentUser]);
+
+    return Array.from(combinedMap.values());
+  }, [dbPoints, dbUsers]);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | undefined>();
   const notifiedAnomalies = useRef<Set<string>>(new Set());
 
@@ -145,7 +141,7 @@ export default function CommandCenter() {
   // New features state
   const [mapType, setMapType] = useState<'default' | 'satellite'>('default');
   const [contextMenu, setContextMenu] = useState<{x: number, y: number, zoneId: string} | null>(null);
-  const [showUsersModal, setShowUsersModal] = useState<'active' | 'all' | null>(null);
+  const [showUsersModal, setShowUsersModal] = useState<'active' | 'offline' | null>(null);
 
   // Live Alerts Panel State
   const [liveAlerts, setLiveAlerts] = useState<Array<{
@@ -545,14 +541,14 @@ export default function CommandCenter() {
                   <div className="text-2xl font-black text-white">{activeCount}</div>
                 </div>
                 <div 
-                  onClick={() => setShowUsersModal('all')}
-                  className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 cursor-pointer hover:bg-slate-700/80 hover:border-blue-500/50 transition-all active:scale-95"
+                  onClick={() => setShowUsersModal('offline')}
+                  className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 cursor-pointer hover:bg-slate-700/80 hover:border-slate-500/50 transition-all active:scale-95"
                 >
                   <div className="text-slate-400 flex items-center gap-1.5 mb-1 text-xs font-bold">
                     <Users className="w-3.5 h-3.5" />
-                    إجمالي القوة
+                    غير نشط (أوفلاين)
                   </div>
-                  <div className="text-2xl font-black text-white">{points.length}</div>
+                  <div className="text-2xl font-black text-white">{offlineCount}</div>
                 </div>
               </div>
             ) : (
@@ -790,56 +786,75 @@ export default function CommandCenter() {
             >
               <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/30">
                 <h2 className="text-lg font-black text-white flex items-center gap-2">
-                  {showUsersModal === 'active' ? <Activity className="w-5 h-5 text-emerald-400" /> : <Users className="w-5 h-5 text-blue-400" />}
-                  {showUsersModal === 'active' ? 'المستخدمون النشطون حالياً' : 'جميع المستخدمين'}
+                  {showUsersModal === 'active' ? <Activity className="w-5 h-5 text-emerald-400" /> : <Users className="w-5 h-5 text-slate-400" />}
+                  {showUsersModal === 'active' ? 'المستخدمون النشطون حالياً' : 'غير النشطين (أوفلاين)'}
                 </h2>
                 <button onClick={() => setShowUsersModal(null)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               <div className="p-4 overflow-y-auto space-y-3 custom-scrollbar">
-                {points.filter(p => showUsersModal === 'active' ? p.status === 'active' : true).length === 0 ? (
+                {points.filter(p => showUsersModal === 'active' ? (p.status === 'active' || p.status === 'idle') : p.status === 'offline').length === 0 ? (
                   <div className="text-center py-10 text-slate-500 font-bold">لا يوجد مستخدمين لعرضهم</div>
                 ) : (
                   points
-                    .filter(p => showUsersModal === 'active' ? p.status === 'active' : true)
-                    .map(point => (
-                    <div 
-                      key={point.id} 
-                      className="flex items-center gap-4 p-3 rounded-2xl bg-slate-800/50 hover:bg-slate-800 transition-colors border border-slate-700/50 cursor-pointer"
-                      onClick={() => {
-                        setSelectedPoint({ lat: point.lat, lng: point.lng });
-                        setShowUsersModal(null);
-                      }}
-                    >
-                      {point.photoURL ? (
-                        <img src={point.photoURL} alt={point.userName} className="w-12 h-12 rounded-full object-cover border-2 border-slate-700" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center font-black text-slate-300 text-lg">
-                          {point.userName?.charAt(0) || '?'}
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="font-black text-slate-200">{point.userName}</div>
-                        <div className="text-xs font-bold text-slate-400 mt-0.5">{point.userRole === 'manager' ? 'مدير' : 'موظف'}</div>
-                      </div>
-                      <div className="text-left">
-                        <div className={`text-[10px] font-black px-2 py-1 rounded-md inline-block mb-1 ${point.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : point.status === 'idle' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-400'}`}>
-                          {point.status === 'active' ? 'نشط' : point.status === 'idle' ? 'خامل' : 'غير متصل'}
-                        </div>
-                        {point.batteryLevel !== undefined && (
-                          <div className={`text-[10px] font-bold ${point.batteryLevel < 20 ? 'text-red-400' : 'text-slate-500'}`}>
-                            البطارية {point.batteryLevel}%
+                    .filter(p => showUsersModal === 'active' ? (p.status === 'active' || p.status === 'idle') : p.status === 'offline')
+                    .map(point => {
+                      let timeAgoStr = 'غير متاح';
+                      if (point.timestamp) {
+                        const diffMs = Date.now() - new Date(point.timestamp).getTime();
+                        const diffMins = Math.round(diffMs / 60000);
+                        if (diffMins < 1) timeAgoStr = 'الآن';
+                        else if (diffMins < 60) timeAgoStr = `منذ ${diffMins} دقيقة`;
+                        else {
+                          const diffHours = Math.floor(diffMins / 60);
+                          if (diffHours < 24) timeAgoStr = `منذ ${diffHours} ساعة`;
+                          else timeAgoStr = `منذ ${Math.floor(diffHours / 24)} يوم`;
+                        }
+                      }
+
+                      return (
+                        <div 
+                          key={point.id} 
+                          className="flex items-center gap-4 p-3 rounded-2xl bg-slate-800/50 hover:bg-slate-800 transition-colors border border-slate-700/50 cursor-pointer"
+                          onClick={() => {
+                            if (point.lat && point.lng) {
+                              setSelectedPoint({ lat: point.lat, lng: point.lng });
+                              setShowUsersModal(null);
+                            }
+                          }}
+                        >
+                          {point.photoURL ? (
+                            <img src={point.photoURL} alt={point.userName} className="w-12 h-12 rounded-full object-cover border-2 border-slate-700" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center font-black text-slate-300 text-lg">
+                              {point.userName?.charAt(0) || '?'}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <div className="font-black text-slate-200">{point.userName}</div>
+                            <div className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-1">
+                               آخر نشاط: {timeAgoStr}
+                            </div>
                           </div>
-                        )}
-                        {point.speed !== undefined && (
-                          <div className={`text-[10px] font-bold mt-1 ${point.speed > 120 ? 'text-red-400' : 'text-emerald-500'}`} dir="ltr">
-                            {point.speed} km/h
+                          <div className="text-left">
+                            <div className={`text-[10px] font-black px-2 py-1 rounded-md inline-block mb-1 ${point.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : point.status === 'idle' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-400'}`}>
+                              {point.status === 'active' ? 'نشط' : point.status === 'idle' ? 'خامل' : 'أوفلاين'}
+                            </div>
+                            {point.batteryLevel !== undefined && (
+                              <div className={`text-[10px] font-bold ${point.batteryLevel < 20 ? 'text-red-400' : 'text-slate-500'}`}>
+                                البطارية {point.batteryLevel}%
+                              </div>
+                            )}
+                            {point.speed !== undefined && point.status !== 'offline' && (
+                              <div className={`text-[10px] font-bold mt-1 ${point.speed > 120 ? 'text-red-400' : 'text-emerald-500'}`} dir="ltr">
+                                {point.speed} km/h
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
+                        </div>
+                      );
+                    })
                 )}
               </div>
             </motion.div>
