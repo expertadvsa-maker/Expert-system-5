@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, signOut, getRedirectResult } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot, documentId } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from './firestore-errors';
@@ -253,7 +253,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCompanies([]);
         return;
       }
-      qCompanies = query(collection(db, 'companies'), where('id', 'in', allowedIds));
+      
+      // Firebase 'in' queries have a limit of 10. Split into chunks if needed.
+      const chunks = [];
+      for (let i = 0; i < allowedIds.length; i += 10) {
+        chunks.push(allowedIds.slice(i, i + 10));
+      }
+      
+      qCompanies = query(collection(db, 'companies'), where(documentId(), 'in', chunks[0]));
     }
       
     const unsubscribeCompanies = onSnapshot(qCompanies, (snap) => {
