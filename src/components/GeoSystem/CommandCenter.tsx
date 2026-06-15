@@ -29,7 +29,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 
 export default function CommandCenter() {
-  const { activeCompanyId } = useAuth();
+  const { activeCompanyId, user: currentUser } = useAuth();
   const [dbZones, setDbZones] = useState<GeoZone[]>([]);
   const [dbPoints, setDbPoints] = useState<TrackerPoint[]>([]);
   const [dbUsers, setDbUsers] = useState<any[]>([]);
@@ -94,17 +94,24 @@ export default function CommandCenter() {
       }
     });
 
+    dbPoints.forEach(p => {
+       const id = p.userId || p.id;
+       // Keep point if user is valid OR if point belongs to the current viewing admin
+       if (validUsersMap.has(id) || id === currentUser?.uid) {
+           const dbU = validUsersMap.get(id);
+           finalPoints.push({
+             ...p,
+             userName: dbU?.name || p.userName,
+             userRole: dbU?.role || p.userRole,
+             photoURL: dbU?.photoURL || p.photoURL,
+           });
+           validUsersMap.delete(id); // Remove so we don't process as offline
+       }
+    });
+
+    // Process remaining as offline
     validUsersMap.forEach(u => {
-      const liveData = dbPoints.find(p => p.userId === u.id || p.id === u.id);
-      if (liveData) {
-        finalPoints.push({
-          ...liveData,
-          userName: u.name,
-          userRole: u.role,
-          photoURL: u.photoURL,
-        });
-      } else {
-        finalPoints.push({
+      finalPoints.push({
           id: `offline_${u.id}`,
           userId: u.id,
           userName: u.name,
@@ -115,12 +122,11 @@ export default function CommandCenter() {
           lng: undefined as unknown as number,
           timestamp: new Date().toISOString(),
           status: 'offline',
-        });
-      }
+      });
     });
     
     return finalPoints;
-  }, [dbPoints, dbUsers]);
+  }, [dbPoints, dbUsers, currentUser]);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | undefined>();
   const notifiedAnomalies = useRef<Set<string>>(new Set());
 
