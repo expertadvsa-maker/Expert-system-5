@@ -84,12 +84,27 @@ export default function CommandCenter() {
   }, [parsedProjects]);
 
   const points = useMemo(() => {
-    const combinedMap = new Map<string, TrackerPoint>();
-    dbPoints.forEach(p => combinedMap.set(p.userId || p.id, p));
+    const finalPoints: TrackerPoint[] = [];
+    const validUsersMap = new Map<string, any>();
     
+    // Only include real employees/supervisors currently active in the company
     dbUsers.forEach(u => {
-      if (!combinedMap.has(u.id)) {
-        combinedMap.set(u.id, {
+      if (u.role !== 'client') {
+        validUsersMap.set(u.id, u);
+      }
+    });
+
+    validUsersMap.forEach(u => {
+      const liveData = dbPoints.find(p => p.userId === u.id || p.id === u.id);
+      if (liveData) {
+        finalPoints.push({
+          ...liveData,
+          userName: u.name,
+          userRole: u.role,
+          photoURL: u.photoURL,
+        });
+      } else {
+        finalPoints.push({
           id: `offline_${u.id}`,
           userId: u.id,
           userName: u.name,
@@ -103,7 +118,8 @@ export default function CommandCenter() {
         });
       }
     });
-    return Array.from(combinedMap.values());
+    
+    return finalPoints;
   }, [dbPoints, dbUsers]);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | undefined>();
   const notifiedAnomalies = useRef<Set<string>>(new Set());
@@ -124,6 +140,18 @@ export default function CommandCenter() {
   const [mapType, setMapType] = useState<'default' | 'satellite'>('default');
   const [contextMenu, setContextMenu] = useState<{x: number, y: number, zoneId: string} | null>(null);
   const [showUsersModal, setShowUsersModal] = useState<'active' | 'all' | null>(null);
+
+  // Live Alerts Panel State
+  const [liveAlerts, setLiveAlerts] = useState<Array<{
+    id: string;
+    message: string;
+    type: 'warning' | 'error';
+    time: string;
+  }>>([]);
+
+  const removeAlert = (id: string) => {
+    setLiveAlerts(prev => prev.filter(a => a.id !== id));
+  };
 
   // Close context menu on document click
   useEffect(() => {
@@ -210,18 +238,19 @@ export default function CommandCenter() {
         if (!notifiedAnomalies.current.has(anomalyKey)) {
           notifiedAnomalies.current.add(anomalyKey);
           
-          // Show Toast Bubble
-          if (anomaly.severity === 'high') {
-             toast.error(`إنذار ميداني: ${anomaly.message}`, { duration: 6000, icon: '🚨' });
-          } else {
-             toast.warning(`إنذار ميداني: ${anomaly.message}`, { duration: 5000, icon: '⚠️' });
-          }
+          // Add to Custom Live Alerts Panel
+          setLiveAlerts(prev => [{
+            id: anomalyKey,
+            message: `الموظف ${point.userName}: ${anomaly.message}`,
+            type: anomaly.severity === 'high' ? 'error' : 'warning',
+            time: new Date().toLocaleTimeString('ar-SA')
+          }, ...prev]);
           
           // Send to Global Notifications
           addDoc(collection(db, 'notifications'), {
             companyId: activeCompanyId,
             title: anomaly.type === 'out_of_bounds' ? 'خروج عن النطاق المسموح' : 'إنذار ميداني',
-            message: anomaly.message,
+            message: `الموظف ${point.userName}: ${anomaly.message}`,
             category: 'system',
             type: 'alert',
             read: false,
@@ -241,7 +270,13 @@ export default function CommandCenter() {
       if (!notifiedAnomalies.current.has(congKey)) {
         notifiedAnomalies.current.add(congKey);
         
-        toast.warning(`تنبيه تجمع: ${cong.message}`, { duration: 6000, icon: '👥' });
+        // Add to Custom Live Alerts Panel
+        setLiveAlerts(prev => [{
+          id: congKey,
+          message: cong.message,
+          type: 'warning',
+          time: new Date().toLocaleTimeString('ar-SA')
+        }, ...prev]);
         
         addDoc(collection(db, 'notifications'), {
           companyId: activeCompanyId,
@@ -681,6 +716,55 @@ export default function CommandCenter() {
 
         {/* Center Spacer */}
         <div className="flex-1" />
+
+        {/* Left Panel - Live Alerts */}
+        <div className="w-80 h-full flex flex-col gap-4 pointer-events-none">
+          <AnimatePresence>
+            {liveAlerts.length > 0 && (
+              <motion.div 
+                initial={{ x: -50, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -50, opacity: 0 }}
+                className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-2xl pointer-events-auto flex flex-col max-h-full"
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    الإنذارات المباشرة
+                  </h2>
+                  <button 
+                    onClick={() => setLiveAlerts([])}
+                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                  >
+                    مسح الكل
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
+                  <AnimatePresence>
+                    {liveAlerts.map(alert => (
+                      <motion.div
+                        key={alert.id}
+                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, height: 0, marginBottom: 0, padding: 0, border: 0 }}
+                        className={`p-3 rounded-xl border relative group ${alert.type === 'error' ? 'bg-rose-500/10 border-rose-500/30 text-rose-200' : 'bg-amber-500/10 border-amber-500/30 text-amber-200'}`}
+                      >
+                        <button 
+                          onClick={() => removeAlert(alert.id)}
+                          className="absolute left-2 top-2 w-6 h-6 rounded-full bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/40"
+                        >
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                        <p className="text-xs font-bold leading-relaxed ml-6">{alert.message}</p>
+                        <p className="text-[10px] mt-2 opacity-60 text-left" dir="ltr">{alert.time}</p>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Users List Modal */}
