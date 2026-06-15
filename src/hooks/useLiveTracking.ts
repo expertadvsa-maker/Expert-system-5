@@ -66,6 +66,11 @@ export function useLiveTracking() {
       return;
     }
 
+    // RACE CONDITION FIX: If the user is supposed to have a company, but activeCompanyId is not set yet, WAIT!
+    if (profile.companyId && !activeCompanyId) {
+      return;
+    }
+
     const updateLocation = async (lat: number, lng: number, speedMps: number | null) => {
       if (!activeCompanyId || !profile) {
         // We have location permission, but the app is still loading profile/company. Wait quietly.
