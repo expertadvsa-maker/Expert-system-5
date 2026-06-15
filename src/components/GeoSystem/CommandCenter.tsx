@@ -452,6 +452,7 @@ export default function CommandCenter() {
           zoom={13} 
           onMapClick={() => {}}
           mapType={mapType}
+          historyTrack={historyMode ? historyPoints.slice(0, historyIndex + 1) : undefined}
         />
         
         {/* Floating Map Controls */}
@@ -719,53 +720,54 @@ export default function CommandCenter() {
         {/* Center Spacer */}
         <div className="flex-1" />
 
-        {/* Left Panel - Live Alerts */}
-        <div className="w-80 h-full flex flex-col gap-4 pointer-events-none">
+        {/* Left Panel - Live Alerts (Floating Bubbles) */}
+        <div className="w-80 h-full flex flex-col gap-3 pointer-events-none pr-4 pt-4">
           <AnimatePresence>
             {liveAlerts.length > 0 && (
               <motion.div 
-                initial={{ x: -50, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: -50, opacity: 0 }}
-                className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-2xl pointer-events-auto flex flex-col max-h-full"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="flex justify-end mb-2 pointer-events-auto"
               >
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-rose-400" />
-                    الإنذارات المباشرة
-                  </h2>
-                  <button 
-                    onClick={() => setLiveAlerts([])}
-                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                  >
-                    مسح الكل
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
-                  <AnimatePresence>
-                    {liveAlerts.map(alert => (
-                      <motion.div
-                        key={alert.id}
-                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, height: 0, marginBottom: 0, padding: 0, border: 0 }}
-                        className={`p-3 rounded-xl border relative group ${alert.type === 'error' ? 'bg-rose-500/10 border-rose-500/30 text-rose-200' : 'bg-amber-500/10 border-amber-500/30 text-amber-200'}`}
-                      >
-                        <button 
-                          onClick={() => removeAlert(alert.id)}
-                          className="absolute left-2 top-2 w-6 h-6 rounded-full bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/40"
-                        >
-                          <X className="w-3 h-3 text-white" />
-                        </button>
-                        <p className="text-xs font-bold leading-relaxed ml-6">{alert.message}</p>
-                        <p className="text-[10px] mt-2 opacity-60 text-left" dir="ltr">{alert.time}</p>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
+                <button 
+                  onClick={() => setLiveAlerts([])}
+                  className="bg-slate-900/80 backdrop-blur-md border border-slate-700 hover:bg-rose-500/20 hover:border-rose-500/50 hover:text-rose-400 text-slate-300 text-xs px-4 py-1.5 rounded-full transition-all flex items-center gap-2 shadow-lg"
+                >
+                  <X className="w-3 h-3" />
+                  مسح جميع الإنذارات
+                </button>
               </motion.div>
             )}
           </AnimatePresence>
+
+          <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar hide-scrollbar-thumb">
+            <AnimatePresence>
+              {liveAlerts.map(alert => (
+                <motion.div
+                  key={alert.id}
+                  initial={{ opacity: 0, x: -50, scale: 0.9 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9, height: 0, marginBottom: 0, padding: 0, border: 0 }}
+                  className={`p-4 rounded-2xl border pointer-events-auto shadow-2xl relative group backdrop-blur-xl ${alert.type === 'error' ? 'bg-rose-950/80 border-rose-500/50 text-rose-100' : 'bg-amber-950/80 border-amber-500/50 text-amber-100'}`}
+                >
+                  <button 
+                    onClick={() => removeAlert(alert.id)}
+                    className="absolute left-2 top-2 w-6 h-6 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-black/60 hover:scale-110"
+                  >
+                    <X className="w-3 h-3 text-white" />
+                  </button>
+                  <div className="flex gap-3">
+                    <AlertTriangle className={`w-5 h-5 shrink-0 ${alert.type === 'error' ? 'text-rose-400' : 'text-amber-400'}`} />
+                    <div className="flex-1">
+                      <p className="text-xs font-bold leading-relaxed">{alert.message}</p>
+                      <p className="text-[10px] mt-2 opacity-60 text-left font-mono" dir="ltr">{alert.time}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 

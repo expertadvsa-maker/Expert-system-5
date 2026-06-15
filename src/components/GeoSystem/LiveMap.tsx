@@ -86,6 +86,7 @@ interface LiveMapProps {
   onMapClick?: (lat: number, lng: number) => void;
   tempZoneRadius?: number;
   mapType?: 'default' | 'satellite';
+  historyTrack?: TrackerPoint[];
 }
 
 // Component to recenter map dynamically
@@ -112,8 +113,26 @@ function MapEvents({ onClick, onZoom }: { onClick?: (lat: number, lng: number) =
   return null;
 }
 
-export default function LiveMap({ zones, points, center = { lat: 24.7136, lng: 46.6753 }, zoom = 12, onMapClick, tempZoneCenter, tempZoneRadius = 50, mapType = 'default' }: LiveMapProps) {
+export default function LiveMap({ 
+  zones, 
+  points, 
+  center = { lat: 24.7136, lng: 46.6753 }, 
+  zoom = 12, 
+  onMapClick, 
+  tempZoneCenter,
+  tempZoneRadius = 50, 
+  mapType = 'default',
+  historyTrack = []
+}: LiveMapProps) {
   const [currentZoom, setCurrentZoom] = React.useState(zoom);
+
+  // Parse points to valid coordinates
+  const validPoints = points.filter(p => p.lat !== undefined && p.lng !== undefined && !isNaN(p.lat) && !isNaN(p.lng));
+  
+  // Parse history track for polyline
+  const polylinePositions = historyTrack
+    .filter(p => p.lat !== undefined && p.lng !== undefined && !isNaN(p.lat) && !isNaN(p.lng))
+    .map(p => [p.lat, p.lng] as [number, number]);
 
   // Google Maps Arabic URLs
   const defaultUrl = "https://mt1.google.com/vt/lyrs=m&hl=ar&x={x}&y={y}&z={z}";
@@ -201,6 +220,14 @@ export default function LiveMap({ zones, points, center = { lat: 24.7136, lng: 4
           </Circle>
         ))}
 
+        {/* Render History Track */}
+        {polylinePositions.length > 1 && (
+          <Polyline 
+            positions={polylinePositions} 
+            pathOptions={{ color: '#8b5cf6', weight: 4, dashArray: '8 8', opacity: 0.8 }} 
+          />
+        )}
+
         {/* Render Live Tracker Points */}
         {points.filter(p => p.lat !== undefined && p.lng !== undefined).map(point => {
           let color = '#22c55e'; // Green for active
@@ -216,45 +243,44 @@ export default function LiveMap({ zones, points, center = { lat: 24.7136, lng: 4
               position={[point.lat, point.lng]}
               icon={icon}
             >
-              <Popup>
-                <div className="text-right font-sans" dir="rtl">
+              <Popup className="glass-popup">
+                <div className="text-right font-sans min-w-[200px]" dir="rtl">
                   {point.speed !== undefined && (
-                    <div className="flex justify-between items-center bg-slate-100 p-2 rounded text-sm mb-2">
-                      <span className="text-slate-600 font-bold">السرعة:</span>
-                      <span className={`font-bold ${point.speed > 120 ? 'text-red-600' : 'text-emerald-600'}`} dir="ltr">
+                    <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded-lg text-sm mb-3 border border-slate-700/50">
+                      <span className="text-slate-300 font-bold">السرعة:</span>
+                      <span className={`font-bold ${point.speed > 120 ? 'text-rose-400' : 'text-emerald-400'}`} dir="ltr">
                         {point.speed} km/h
                       </span>
                     </div>
                   )}
-                  <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center gap-3 mb-3">
                     {point.photoURL ? (
-                      <img src={point.photoURL} alt={point.userName} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                      <img src={point.photoURL} alt={point.userName} className="w-12 h-12 rounded-full object-cover border-2 border-slate-600 shadow-lg" />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-500">
+                      <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center font-black text-slate-400 border-2 border-slate-700 shadow-lg">
                         {point.userName?.charAt(0) || '?'}
                       </div>
                     )}
                     <div>
-                      <p className="font-black text-sm text-slate-800">{point.userName}</p>
-                      <p className="text-xs font-bold text-slate-500">{point.userRole === 'manager' ? 'مدير' : 'موظف'}</p>
+                      <p className="font-black text-base text-slate-100">{point.userName}</p>
+                      <p className="text-xs font-bold text-slate-400 mt-0.5">{point.userRole === 'manager' ? 'مدير' : 'موظف'}</p>
                     </div>
                   </div>
-                  <div className="space-y-1 text-xs font-bold text-slate-600 border-t border-slate-100 pt-2">
-                    <p>الحالة: <span className={point.status === 'active' ? 'text-green-600' : point.status === 'idle' ? 'text-amber-500' : 'text-slate-400'}>{point.status === 'active' ? 'نشط' : point.status === 'idle' ? 'خامل' : 'غير متصل'}</span></p>
+                  <div className="space-y-1.5 text-xs font-bold text-slate-300 border-t border-slate-700/50 pt-3">
+                    <p>الحالة: <span className={point.status === 'active' ? 'text-emerald-400' : point.status === 'idle' ? 'text-amber-400' : 'text-slate-500'}>{point.status === 'active' ? 'نشط' : point.status === 'idle' ? 'خامل' : 'غير متصل'}</span></p>
                     {point.batteryLevel !== undefined && (
-                      <p>البطارية: <span className={point.batteryLevel < 20 ? 'text-red-500' : 'text-slate-600'}>{point.batteryLevel}%</span></p>
+                      <p>البطارية: <span className={point.batteryLevel < 20 ? 'text-rose-400' : 'text-slate-400'}>{point.batteryLevel}%</span></p>
                     )}
-                    <p className="text-[10px] text-slate-400 font-normal mt-1">آخر تحديث: {new Date(point.timestamp).toLocaleTimeString('ar-SA')}</p>
+                    <p className="text-[10px] text-slate-500 font-normal mt-2">آخر تحديث: {new Date(point.timestamp).toLocaleTimeString('ar-SA')}</p>
                     
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         navigator.clipboard.writeText(`https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}`);
-                        // The user will get the text copied to their clipboard
                       }}
-                      className="mt-2 w-full flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 rounded-lg text-[10px] font-bold transition-colors border border-slate-200"
+                      className="mt-3 w-full flex items-center justify-center gap-2 bg-slate-800/80 hover:bg-slate-700 hover:text-white text-slate-300 py-2 rounded-xl text-xs font-bold transition-colors border border-slate-600"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                       نسخ موقع الموظف
                     </button>
                   </div>
