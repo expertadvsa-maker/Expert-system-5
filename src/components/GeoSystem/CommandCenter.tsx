@@ -264,7 +264,7 @@ export default function CommandCenter() {
     });
 
     const validPoints = points.filter(p => p.lat && p.lng);
-    const congregations = GeoEngine.detectCongregations(validPoints, 3, 50);
+    const congregations = GeoEngine.detectCongregations(validPoints, zones, 3, 50);
     congregations.forEach(cong => {
       const todayStr = new Date().toISOString().split('T')[0];
       const congKey = `congregation-${cong.pointIds?.join('-')}-${todayStr}`;

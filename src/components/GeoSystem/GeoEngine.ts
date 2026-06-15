@@ -120,7 +120,7 @@ export class GeoEngine {
   }
 
   // Detect congregation (too many people in one unexpected area)
-  static detectCongregations(points: TrackerPoint[], minPeople: number = 5, radiusThreshold: number = 50): GeoAnomaly[] {
+  static detectCongregations(points: TrackerPoint[], zones: GeoZone[] = [], minPeople: number = 5, radiusThreshold: number = 50): GeoAnomaly[] {
     const anomalies: GeoAnomaly[] = [];
     const processedIds = new Set<string>();
 
@@ -137,21 +137,32 @@ export class GeoEngine {
       }
 
       if (cluster.length >= minPeople) {
-        // Ensure they aren't just in an official zone
-        // If we had zones array here we could check, but let's assume raw detection for now
         cluster.forEach(p => processedIds.add(p.id));
         
-        anomalies.push({
-          id: `cong_${Date.now()}_${i}`,
-          companyId: cluster[0].companyId,
-          type: 'congregation',
-          message: `تجمع غير معتاد لعدد ${cluster.length} موظفين في منطقة بقطر ${radiusThreshold} متر.`,
-          timestamp: new Date().toISOString(),
-          severity: 'high',
-          resolved: false,
-          lat: cluster[0].lat,
-          lng: cluster[0].lng
-        });
+        // Ensure they aren't just in an official zone (e.g., office or project site)
+        let isInZone = false;
+        for (const zone of zones) {
+           const distToZone = this.calculateDistance(points[i].lat, points[i].lng, zone.center.lat, zone.center.lng);
+           // We add radiusThreshold as a buffer, since the cluster could be slightly offset
+           if (distToZone <= zone.radiusMeters + (radiusThreshold / 2)) {
+              isInZone = true;
+              break;
+           }
+        }
+
+        if (!isInZone) {
+          anomalies.push({
+            id: `cong_${Date.now()}_${i}`,
+            companyId: cluster[0].companyId,
+            type: 'congregation',
+            message: `تجمع غير معتاد لعدد ${cluster.length} موظفين في منطقة غير مصرحة.`,
+            timestamp: new Date().toISOString(),
+            severity: 'high',
+            resolved: false,
+            lat: cluster[0].lat,
+            lng: cluster[0].lng
+          });
+        }
       }
     }
 
