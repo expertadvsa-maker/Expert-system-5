@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { db } from '../lib/firebase';
-import { doc, setDoc, getDoc, collection, onSnapshot, query, where, addDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, updateDoc, collection, onSnapshot, query, where, addDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { useAuth } from '../lib/AuthContext';
 import { GeoEngine } from '../components/GeoSystem/GeoEngine';
 import { GeoZone } from '../components/GeoSystem/types';
@@ -106,6 +106,25 @@ export function useLiveTracking() {
                  createdAt: serverTimestamp(),
                  link: '/radar'
                }).catch(e => console.error("Event failed", e));
+               
+               // Auto Check-out (Smart Attendance)
+               try {
+                 const attQ = query(
+                   collection(db, 'attendance'), 
+                   where('userId', '==', user.uid), 
+                   where('date', '==', todayStr), 
+                   where('companyId', '==', activeCompanyId)
+                 );
+                 const snap = await getDocs(attQ);
+                 if (!snap.empty) {
+                   const docRef = doc(db, 'attendance', snap.docs[0].id);
+                   await updateDoc(docRef, {
+                     checkOut: nowStr,
+                     isManual: false
+                   });
+                   import('sonner').then(({ toast }) => toast.info(`تم تسجيل انصرافك تلقائياً من ${prevZone.name}`));
+                 }
+               } catch(err) { console.error("Auto Checkout Error", err); }
             }
           }
           if (currentZone) {
@@ -120,6 +139,38 @@ export function useLiveTracking() {
                createdAt: serverTimestamp(),
                link: '/radar'
             }).catch(e => console.error("Event failed", e));
+            
+            // Auto Check-in (Smart Attendance)
+            try {
+              const attQ = query(
+                collection(db, 'attendance'), 
+                where('userId', '==', user.uid), 
+                where('date', '==', todayStr), 
+                where('companyId', '==', activeCompanyId)
+              );
+              const snap = await getDocs(attQ);
+              if (snap.empty) {
+                // Determine if late (using basic 08:15 logic, ideally should fetch settings)
+                const nowTime = new Date();
+                const start = new Date();
+                start.setHours(8, 15, 0, 0);
+                const isLate = nowTime > start;
+                
+                await addDoc(collection(db, 'attendance'), {
+                  companyId: activeCompanyId,
+                  userId: user.uid,
+                  userName: profile.name,
+                  date: todayStr,
+                  checkIn: nowStr,
+                  status: isLate ? 'late' : 'present',
+                  isManual: false,
+                  department: profile.department || 'الرئيسي',
+                  locationName: currentZone.name,
+                  distance: 0 // Inside zone
+                });
+                import('sonner').then(({ toast }) => toast.success(`تم تسجيل حضورك تلقائياً في ${currentZone.name}`));
+              }
+            } catch(err) { console.error("Auto Checkin Error", err); }
           }
           lastZoneId.current = currentZoneId;
         }
@@ -133,6 +184,16 @@ export function useLiveTracking() {
 
         const pointData = { lat, lng, timestamp: Date.now(), speed: speedKmh };
         
+        // Anti-Fraud / Inactivity Check
+        let finalStatus = 'active';
+        if (lastLocation.current) {
+          const dist = GeoEngine.calculateDistance(lastLocation.current.lat, lastLocation.current.lng, lat, lng);
+          const timeIdle = Date.now() - lastLocation.current.timestamp;
+          if (dist < 5 && timeIdle > 45 * 60 * 1000) {
+             finalStatus = 'idle'; // idle after 45 minutes of no movement
+          }
+        }
+        
         await setDoc(doc(db, 'live_tracking', user.uid), {
           companyId: activeCompanyId,
           userId: user.uid,
@@ -144,8 +205,18 @@ export function useLiveTracking() {
           speed: speedKmh,
           currentZoneId: currentZoneId,
           timestamp: nowStr,
-          status: 'active',
+          status: finalStatus,
           path: pathResetRequired ? [pointData] : arrayUnion(pointData)
+        }, { merge: true });
+        
+        // 3. Save to History Playback Archive (Tracking History)
+        const historyDocRef = doc(db, 'tracking_history', `${user.uid}_${todayStr}`);
+        await setDoc(historyDocRef, {
+          companyId: activeCompanyId,
+          userId: user.uid,
+          date: todayStr,
+          points: arrayUnion(pointData),
+          lastUpdated: nowStr
         }, { merge: true });
 
       } catch (error) {

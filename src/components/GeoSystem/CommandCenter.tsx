@@ -4,7 +4,7 @@ import { GeoZone, TrackerPoint, GeoAnomaly } from './types';
 import { GeoEngine } from './GeoEngine';
 import LiveMap from './LiveMap';
 import { db } from '../../lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, writeBatch, doc, deleteDoc, getDocs, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, writeBatch, doc, deleteDoc, getDocs, getDoc, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { 
   Radar, 
@@ -34,6 +34,13 @@ export default function CommandCenter() {
   const [dbPoints, setDbPoints] = useState<TrackerPoint[]>([]);
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [dbProjects, setDbProjects] = useState<any[]>([]);
+  
+  // History Playback State
+  const [historyMode, setHistoryMode] = useState(false);
+  const [historyDate, setHistoryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [historyUserId, setHistoryUserId] = useState<string | null>(null);
+  const [historyPoints, setHistoryPoints] = useState<TrackerPoint[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   const parsedProjects = useMemo(() => {
     return dbProjects.map(proj => {
@@ -124,6 +131,35 @@ export default function CommandCenter() {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
+
+  // Fetch History Points
+  useEffect(() => {
+    if (!historyMode || !historyUserId || !activeCompanyId) {
+      setHistoryPoints([]);
+      setHistoryIndex(0);
+      return;
+    }
+
+    const fetchHistory = async () => {
+      try {
+        const historyDocRef = doc(db, 'tracking_history', `${historyUserId}_${historyDate}`);
+        const historyDoc = await getDoc(historyDocRef);
+        if (historyDoc.exists() && historyDoc.data().companyId === activeCompanyId) {
+          const data = historyDoc.data();
+          setHistoryPoints(data.points || []);
+          setHistoryIndex(0); // reset to beginning of day
+        } else {
+          setHistoryPoints([]);
+          toast.info('لا توجد بيانات مسجلة لهذا الموظف في هذا اليوم');
+        }
+      } catch (e) {
+        console.error("Error fetching history:", e);
+        toast.error('حدث خطأ أثناء جلب سجل المسار');
+      }
+    };
+    
+    fetchHistory();
+  }, [historyMode, historyUserId, historyDate, activeCompanyId]);
 
   // Listen to Firebase 'geo_zones' and 'live_tracking'
   useEffect(() => {
@@ -343,6 +379,30 @@ export default function CommandCenter() {
     }
   };
 
+  const displayPoints = useMemo(() => {
+    if (historyMode && historyPoints.length > 0) {
+      const user = dbUsers.find(u => u.id === historyUserId);
+      const point = historyPoints[historyIndex];
+      if (!point || !user) return [];
+      
+      return [{
+        id: `history_${user.id}_${point.timestamp}`,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        companyId: user.companyId,
+        photoURL: user.photoURL,
+        lat: point.lat,
+        lng: point.lng,
+        timestamp: new Date(point.timestamp).toISOString(),
+        speed: point.speed,
+        status: 'active',
+        path: historyPoints.slice(0, historyIndex + 1)
+      } as TrackerPoint];
+    }
+    return points;
+  }, [historyMode, historyPoints, historyIndex, historyUserId, dbUsers, points]);
+
   return (
     <div className="w-full h-[calc(100vh-80px)] overflow-hidden relative font-sans bg-slate-950 text-slate-50 flex" dir="rtl">
       
@@ -350,7 +410,7 @@ export default function CommandCenter() {
       <div className="absolute inset-0 z-0">
         <LiveMap 
           zones={zones} 
-          points={points} 
+          points={displayPoints} 
           center={selectedPoint || { lat: 24.7136, lng: 46.6753 }} 
           zoom={13} 
           onMapClick={() => {}}
@@ -416,35 +476,87 @@ export default function CommandCenter() {
           className="w-80 h-full flex flex-col gap-4 pointer-events-auto"
         >
           {/* Header */}
-          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-2xl">
-            <h1 className="text-xl font-black flex items-center gap-2 text-white">
-              <Radar className="w-6 h-6 text-emerald-400" />
-              الرادار الميداني
-            </h1>
-            <p className="text-xs text-slate-400 mt-1 font-semibold">مركز القيادة والسيطرة الجغرافية</p>
-            
-            <div className="grid grid-cols-2 gap-3 mt-6">
-              <div 
-                onClick={() => setShowUsersModal('active')}
-                className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 cursor-pointer hover:bg-slate-700/80 hover:border-emerald-500/50 transition-all active:scale-95"
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-2xl flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h1 className="text-xl font-black flex items-center gap-2 text-white">
+                <Radar className="w-6 h-6 text-emerald-400" />
+                الرادار الميداني
+              </h1>
+              
+              <button 
+                onClick={() => setHistoryMode(!historyMode)}
+                className={`text-xs px-3 py-1 rounded-full font-bold transition-all border ${historyMode ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}
               >
-                <div className="text-emerald-400 flex items-center gap-1.5 mb-1 text-xs font-bold">
-                  <Activity className="w-3.5 h-3.5" />
-                  نشط حالياً
-                </div>
-                <div className="text-2xl font-black text-white">{activeCount}</div>
-              </div>
-              <div 
-                onClick={() => setShowUsersModal('all')}
-                className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 cursor-pointer hover:bg-slate-700/80 hover:border-blue-500/50 transition-all active:scale-95"
-              >
-                <div className="text-slate-400 flex items-center gap-1.5 mb-1 text-xs font-bold">
-                  <Users className="w-3.5 h-3.5" />
-                  إجمالي القوة
-                </div>
-                <div className="text-2xl font-black text-white">{points.length}</div>
-              </div>
+                {historyMode ? 'إيقاف الأرشيف' : 'تشغيل الأرشيف'}
+              </button>
             </div>
+            
+            {!historyMode ? (
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div 
+                  onClick={() => setShowUsersModal('active')}
+                  className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 cursor-pointer hover:bg-slate-700/80 hover:border-emerald-500/50 transition-all active:scale-95"
+                >
+                  <div className="text-emerald-400 flex items-center gap-1.5 mb-1 text-xs font-bold">
+                    <Activity className="w-3.5 h-3.5" />
+                    نشط حالياً
+                  </div>
+                  <div className="text-2xl font-black text-white">{activeCount}</div>
+                </div>
+                <div 
+                  onClick={() => setShowUsersModal('all')}
+                  className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 cursor-pointer hover:bg-slate-700/80 hover:border-blue-500/50 transition-all active:scale-95"
+                >
+                  <div className="text-slate-400 flex items-center gap-1.5 mb-1 text-xs font-bold">
+                    <Users className="w-3.5 h-3.5" />
+                    إجمالي القوة
+                  </div>
+                  <div className="text-2xl font-black text-white">{points.length}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 mt-2 border-t border-slate-800 pt-3">
+                <label className="text-xs text-slate-400 font-bold">تاريخ المسار</label>
+                <input 
+                  type="date" 
+                  value={historyDate}
+                  onChange={(e) => setHistoryDate(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                />
+                
+                <label className="text-xs text-slate-400 font-bold">الموظف</label>
+                <select 
+                  value={historyUserId || ''}
+                  onChange={(e) => setHistoryUserId(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                >
+                  <option value="">اختر الموظف...</option>
+                  {dbUsers.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+
+                {historyPoints.length > 0 && (
+                  <div className="mt-2">
+                    <div className="flex justify-between text-xs text-indigo-300 mb-1">
+                      <span>بداية اليوم</span>
+                      <span>نهاية اليوم</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max={historyPoints.length - 1} 
+                      value={historyIndex}
+                      onChange={(e) => setHistoryIndex(parseInt(e.target.value))}
+                      className="w-full accent-indigo-500"
+                    />
+                    <div className="text-center text-xs text-slate-300 mt-2 font-mono">
+                      الوقت: {new Date(historyPoints[historyIndex]?.timestamp || Date.now()).toLocaleTimeString('ar-SA')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Zones List */}
