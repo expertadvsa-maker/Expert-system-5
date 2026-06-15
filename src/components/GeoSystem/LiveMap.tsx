@@ -12,23 +12,67 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-const createAvatarIcon = (color: string, photoURL?: string, zoom: number = 12) => {
-  // Dynamic size based on zoom level. 
-  // Map zoom typically goes from 5 (far out) to 18 (close up)
+const createAvatarIcon = (color: string, photoURL?: string, zoom: number = 12, status: string = 'offline') => {
+  // Dynamic size based on zoom level
   const size = Math.max(16, Math.min(80, Math.pow(zoom, 1.4)));
   const anchor = size / 2;
   const borderWidth = Math.max(2, size / 20);
+  const isActive = status === 'active';
   
   let innerHtml = '';
   if (photoURL) {
-    innerHtml = `<img src="${photoURL}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: ${borderWidth}px solid ${color}; box-shadow: 0 0 10px ${color};" />`;
+    innerHtml = `<img src="${photoURL}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: ${borderWidth}px solid ${color}; position: relative; z-index: 2;" />`;
   } else {
-    innerHtml = `<div style="background-color: ${color}; width: 100%; height: 100%; border-radius: 50%; border: ${borderWidth}px solid white; box-shadow: 0 0 10px ${color};"></div>`;
+    innerHtml = `<div style="background-color: ${color}; width: 100%; height: 100%; border-radius: 50%; border: ${borderWidth}px solid white; position: relative; z-index: 2;"></div>`;
   }
+
+  // Add the pulsing rings if active
+  const pulseHtml = isActive ? `
+    <div class="radar-pulse ring-1" style="border-color: ${color}"></div>
+    <div class="radar-pulse ring-2" style="border-color: ${color}"></div>
+    <div class="status-dot"></div>
+  ` : '';
 
   return L.divIcon({
     className: 'custom-map-marker',
-    html: `<div style="width: ${size}px; height: ${size}px; border-radius: 50%; background-color: white; transition: all 0.3s ease-out; transform-origin: center;">${innerHtml}</div>`,
+    html: `
+      <div style="width: ${size}px; height: ${size}px; position: relative; display: flex; align-items: center; justify-content: center; transform-origin: center;">
+        ${innerHtml}
+        ${pulseHtml}
+      </div>
+      <style>
+        .radar-pulse {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          border: 2px solid;
+          opacity: 0;
+          z-index: 1;
+        }
+        .radar-pulse.ring-1 {
+          animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        .radar-pulse.ring-2 {
+          animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite 1.25s;
+        }
+        .status-dot {
+          position: absolute;
+          bottom: 0;
+          right: 0;
+          width: ${size/3}px;
+          height: ${size/3}px;
+          background-color: #10b981;
+          border-radius: 50%;
+          border: 2px solid white;
+          z-index: 3;
+        }
+        @keyframes pulse-ring {
+          0% { transform: scale(1); opacity: 0.8; }
+          100% { transform: scale(2.5); opacity: 0; }
+        }
+      </style>
+    `,
     iconSize: [size, size],
     iconAnchor: [anchor, anchor]
   });
@@ -164,7 +208,7 @@ export default function LiveMap({ zones, points, center = { lat: 24.7136, lng: 4
           else if (point.status === 'idle') color = '#f59e0b'; // Amber
           else if (point.userRole === 'manager' || point.userRole === 'owner') color = '#3b82f6'; // Blue
 
-          const icon = createAvatarIcon(color, point.photoURL, currentZoom);
+          const icon = createAvatarIcon(color, point.photoURL, currentZoom, point.status);
 
           return (
             <Marker
