@@ -1459,54 +1459,58 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
         </div>
       </div>
 
-      {/* 📊 Bento Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-        <Card className="rounded-3xl border border-slate-200/60 shadow-sm p-6 bg-white opacity-100 relative overflow-hidden group ring-0">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12 group-hover:scale-125 transition-transform duration-700" />
-          <div className="relative z-10">
-            <div className="h-10 w-10 bg-primary/10 text-primary rounded-lg flex items-center justify-center mb-4">
-              <TrendingUp className="w-5 h-5" />
+      {/* 📊 Smart Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+        <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="h-10 w-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0">
+            <Briefcase className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-slate-500 mb-0.5">إجمالي المشاريع</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-black text-slate-900">{projects.length}</span>
+              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">{stats.active} نشط</span>
             </div>
-            <p className="text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest">إجمالي الميزانيات</p>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-black text-slate-900">{stats.totalBudget.toLocaleString()}</span>
+          </div>
+        </Card>
+
+        <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="h-10 w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-slate-500 mb-0.5">إجمالي الميزانيات</p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-black text-slate-900">{stats.totalBudget.toLocaleString()}</span>
               <span className="text-[9px] font-bold text-slate-500">SAR</span>
             </div>
           </div>
         </Card>
 
-        <Card className="rounded-3xl border border-slate-200/60 shadow-sm p-6 bg-white opacity-100 relative overflow-hidden group ring-0">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full -mr-12 -mt-12 group-hover:scale-125 transition-transform duration-700" />
-          <div className="relative z-10">
-            <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center mb-4">
-              <Briefcase className="w-5 h-5" />
+        <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div className="w-full pr-2">
+            <div className="flex justify-between items-center mb-1">
+              <p className="text-[10px] font-black text-slate-500">مشاريع مكتملة</p>
+              <span className="text-sm font-black text-slate-900">{stats.completed}</span>
             </div>
-            <p className="text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest">المشاريع النشطة</p>
-            <span className="text-2xl font-black text-slate-900">{stats.active}</span>
+            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+               <div className="h-full bg-blue-500 rounded-full" style={{ width: `${projects.length > 0 ? (stats.completed / projects.length) * 100 : 0}%` }} />
+            </div>
           </div>
         </Card>
 
-        <Card className="rounded-3xl border border-slate-200/60 shadow-sm p-6 bg-white opacity-100 relative overflow-hidden group ring-0">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full -mr-12 -mt-12 group-hover:scale-125 transition-transform duration-700" />
-          <div className="relative z-10">
-            <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <p className="text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest">مشاريع مكتملة</p>
-            <span className="text-2xl font-black text-slate-900">{stats.completed}</span>
+        <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-slate-900 flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="h-10 w-10 bg-white/10 text-white rounded-xl flex items-center justify-center shrink-0 border border-white/10">
+            <Target className="w-5 h-5" />
           </div>
-        </Card>
-
-        <Card className="rounded-3xl bg-slate-900 border-none shadow-xl p-6 text-white relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/20 blur-2xl" />
-          <div className="relative z-10">
-            <div className="h-10 w-10 bg-white/10 text-white rounded-lg flex items-center justify-center mb-4 border border-white/20">
-              <Target className="w-5 h-5" />
-            </div>
-            <p className="text-[10px] font-black text-slate-400 mb-1 uppercase tracking-widest">معدل الإنجاز</p>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-black">{projects.length > 0 ? Math.round((stats.completed / projects.length) * 100) : 0}</span>
-              <span className="text-[9px] font-bold text-slate-500">%</span>
+          <div>
+            <p className="text-[10px] font-black text-slate-400 mb-0.5">معدل الإنجاز العام</p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-black text-white">{projects.length > 0 ? Math.round((stats.completed / projects.length) * 100) : 0}</span>
+              <span className="text-[9px] font-bold text-emerald-400">%</span>
             </div>
           </div>
         </Card>
@@ -1623,13 +1627,14 @@ const ProjectGridCard = React.memo(({ project, onSelect }: { project: Project, o
       layout
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -8, scale: 1.02 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
+      whileHover={{ y: -4, scale: 1.01 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
       onClick={onSelect}
       className="group cursor-pointer"
     >
-      <Card className="rounded-3xl border border-slate-200/60 bg-white overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/30 transition-all duration-300 h-full flex flex-col ring-0">
-        <div className="relative aspect-[16/10] overflow-hidden bg-slate-100 shrink-0">
+      <Card className="rounded-2xl border border-slate-200/60 bg-white shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-300 flex flex-col ring-0 h-auto overflow-hidden">
+        {/* Compact Image Header */}
+        <div className="relative h-28 overflow-hidden bg-slate-100 shrink-0">
           {hasPhotos ? (
             <img 
               src={project.photoUrls[0]} 
@@ -1639,69 +1644,59 @@ const ProjectGridCard = React.memo(({ project, onSelect }: { project: Project, o
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-slate-50 text-slate-300">
-              <div className="h-16 w-16 rounded-[2rem] bg-slate-100 dark:bg-zinc-800 border border-slate-200 flex items-center justify-center">
-                <Briefcase className="w-8 h-8 opacity-40 text-slate-400" />
-              </div>
+            <div className="w-full h-full flex items-center justify-center bg-slate-50/80">
+              <Briefcase className="w-6 h-6 opacity-30 text-slate-400" />
             </div>
           )}
-
-          <div className="absolute top-4 right-4 z-20">
-            <Badge className={`border-none px-4 py-1.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm ${
-              project.status === 'active' 
-                ? 'bg-slate-900 text-white' 
-                : 'bg-emerald-500 text-white'
+          
+          {/* Top Badges */}
+          <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-20">
+            <Badge className={`border-none px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm ${
+              project.status === 'active' ? 'bg-white text-slate-900' : 'bg-emerald-500 text-white'
             }`}>
               {project.status === 'active' ? '• نشط' : '• مكتمل'}
             </Badge>
           </div>
-
-          {/* Progress Overlay */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-900/80 to-transparent">
-             <div className="flex items-center justify-between text-white mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">نسبة الإنجاز</span>
-                <span className="text-xs font-black">{progress}%</span>
-             </div>
-             <div className="h-2 w-full bg-slate-900/50 rounded-full overflow-hidden">
-                <motion.div 
-                   initial={{ width: 0 }}
-                   animate={{ width: `${progress}%` }}
-                   transition={{ duration: 1, delay: 0.5 }}
-                   className="h-full bg-emerald-500" 
-                />
-             </div>
-          </div>
         </div>
 
-        <CardContent className="p-6 flex-1 flex flex-col relative bg-white">
-          <div className="flex items-center gap-2 mb-3 text-slate-400">
-            <div className="h-6 w-6 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100">
-               <Calendar className="w-3 h-3" />
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-widest">
-              {project.createdAt ? new Date(project.createdAt).toLocaleDateString('ar-SA') : 'منذ وقت قريب'}
-            </span>
+        {/* Content Body */}
+        <CardContent className="p-4 flex-1 flex flex-col bg-white">
+          <div className="flex items-center justify-between mb-2">
+             <span className="text-[9px] font-black uppercase text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md">
+               {project.createdAt ? new Date(project.createdAt).toLocaleDateString('ar-SA') : 'جديد'}
+             </span>
+             {project.clientName && (
+               <div className="flex items-center gap-1 text-[9px] font-black text-primary bg-primary/5 px-2 py-0.5 rounded-md truncate max-w-[120px]">
+                 <span className="truncate">{project.clientName}</span>
+               </div>
+             )}
           </div>
 
-          <h3 className="text-lg font-black text-slate-900 mb-2 leading-tight group-hover:text-primary transition-colors line-clamp-1">
+          <h3 className="text-sm font-black text-slate-900 mb-1 leading-tight group-hover:text-primary transition-colors line-clamp-1">
             {project.title}
           </h3>
           
-          <p className="text-xs font-bold text-slate-500 line-clamp-2 mb-6 leading-relaxed flex-1">
-            {project.description || 'لا يوجد وصف متاح لهذا المشروع حالياً في السجلات..'}
+          <p className="text-[10px] font-bold text-slate-500 line-clamp-1 mb-3">
+            {project.description || 'لا يوجد وصف متاح..'}
           </p>
 
-          <div className="pt-5 border-t border-slate-50 flex items-center justify-between">
-            <div className="space-y-1">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">قيمة المشروع</p>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-xl font-black text-slate-900 tracking-tight">{(project.projectValue ?? project.budget ?? 0).toLocaleString()}</span>
-                <span className="text-[9px] font-bold text-slate-400 uppercase">SAR</span>
-              </div>
+          <div className="mt-auto border-t border-slate-50 pt-3 flex items-center justify-between">
+            <div className="flex flex-col gap-0.5 w-1/2">
+               <p className="text-[8px] font-black text-slate-400 uppercase">الميزانية</p>
+               <div className="flex items-baseline gap-1">
+                 <span className="text-xs font-black text-slate-900">{(project.projectValue ?? project.budget ?? 0).toLocaleString()}</span>
+                 <span className="text-[8px] font-bold text-slate-400">SAR</span>
+               </div>
             </div>
             
-            <div className="h-10 w-10 bg-slate-50 text-slate-900 rounded-2xl flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all transform group-hover:rotate-12 shadow-sm border border-slate-100 group-hover:border-primary">
-               <ArrowUpRight className="w-5 h-5" />
+            <div className="w-1/2 text-left flex flex-col items-end gap-1">
+               <div className="flex items-center gap-1">
+                  <span className="text-[8px] font-black uppercase text-slate-400">الإنجاز</span>
+                  <span className="text-[10px] font-black text-emerald-600">{progress}%</span>
+               </div>
+               <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${progress}%` }} />
+               </div>
             </div>
           </div>
         </CardContent>
