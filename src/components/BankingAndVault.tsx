@@ -123,7 +123,7 @@ export default function BankingAndVault() {
       const wTransactions = workerTransactions.filter(t => t.bankAccountId === acc.id);
       
       const income = accTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-      const expense = accTransactions.filter(t => t.type === 'expense' || t.type === 'purchase').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      const expense = accTransactions.filter(t => t.type === 'expense' || t.type === 'purchase' || t.type === 'supplier_payment').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
       const workerExpense = wTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
       return {

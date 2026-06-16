@@ -209,10 +209,7 @@ export default function Expenses() {
         approvedBy: profile.uid
       });
 
-      const currentBalance = bankSnap.data().initialBalance || 0;
-      await updateDoc(bankRef, {
-        initialBalance: currentBalance - (expense.amount || 0)
-      });
+      // Removed duplicate bank deduction: System aggregates balances dynamically from transactions
 
       toast.success('تم اعتماد المصروف وخصمه من الحساب');
     } catch (error: any) {

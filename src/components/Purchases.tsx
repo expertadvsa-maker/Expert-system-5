@@ -464,16 +464,7 @@ export default function Purchases() {
 
       const docRef = await addDoc(collection(db, 'transactions'), transactionData);
 
-      if (isAutoApproved && formData.bankAccountId && formData.paymentMethod !== 'credit') {
-        const bankRef = doc(db, 'bankAccounts', formData.bankAccountId);
-        const bankSnap = await getDoc(bankRef);
-        if (bankSnap.exists()) {
-          const currentBalance = bankSnap.data().balance || bankSnap.data().initialBalance || 0;
-          await updateDoc(bankRef, {
-            balance: currentBalance - amountNum
-          });
-        }
-      }
+      // Removed duplicate bank deduction: System aggregates balances dynamically from transactions
 
       const projectTitle = projects.find(p => p.id === formData.projectId)?.title;
       await logActivity(
@@ -541,10 +532,7 @@ export default function Purchases() {
         approvedBy: profile.uid
       });
       
-      const currentBalance = bankSnap.data().initialBalance || 0;
-      await updateDoc(bankRef, {
-        initialBalance: currentBalance - (purchase.amount || 0)
-      });
+      // Removed duplicate bank deduction: System aggregates balances dynamically from transactions
 
       await logActivity(
         'اعتماد طلب شراء / مصروف',

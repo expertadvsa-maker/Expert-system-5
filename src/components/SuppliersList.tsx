@@ -117,11 +117,7 @@ export default function SuppliersList() {
         status: 'approved'
       });
 
-      // Deduct from bank
-      const bankRef = doc(db, "bankAccounts", paymentBankId);
-      await updateDoc(bankRef, {
-        balance: increment(-amountNum)
-      });
+      // Removed duplicate bank deduction: System aggregates balances dynamically from transactions
 
       toast.success('تم تسجيل الدفعة وخصمها من الحساب بنجاح');
       setIsPaymentOpen(false);
