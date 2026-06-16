@@ -30,7 +30,11 @@ import {
   UploadCloud,
   Trash2,
   UsersRound,
-  Lock
+  Lock,
+  Layers,
+  Receipt,
+  Globe,
+  HardHat
 } from 'lucide-react';
 import { parseProjectFromText, analyzeProjectDocument } from '../lib/gemini';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -77,6 +81,7 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('all');
+  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
 
   // Task specific states
@@ -96,6 +101,12 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
   const [selectedFiles, setSelectedFiles] = useState<{ id: string; file: File; progress: number; status: 'pending' | 'uploading' | 'success' | 'error'; url?: string; }[]>([]);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [analyzingFileId, setAnalyzingFileId] = useState<string | null>(null);
+
+  const [detailsDialog, setDetailsDialog] = useState<{
+    isOpen: boolean;
+    type: 'delayed' | 'portal' | 'workers' | 'active' | 'planning' | 'completed';
+    title: string;
+  } | null>(null);
 
   const [newProject, setNewProject] = useState({
     title: '',
@@ -445,6 +456,9 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
   useEffect(() => {
     if (!profile) return;
     
+    const handleOpenAddProject = () => setIsAddOpen(true);
+    window.addEventListener('open-add-project', handleOpenAddProject);
+    
     const unsubProjects = onSnapshot(
       activeCompanyId 
         ? query(collection(db, 'projects'), where('companyId', '==', activeCompanyId))
@@ -484,23 +498,158 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
       }
     );
 
-    return () => unsubProjects();
+    return () => {
+      window.removeEventListener('open-add-project', handleOpenAddProject);
+      unsubProjects();
+    };
   }, [profile, isOwner, activeCompanyId]);
 
-  const filteredProjects = useMemo(() => {
+  const filteredProjectsByTime = useMemo(() => {
+    if (timeFilter === 'all') return projects;
+
+    const now = new Date();
+    const periodEnd = new Date(now);
+    periodEnd.setHours(23, 59, 59, 999);
+    
+    const periodStart = new Date(now);
+    periodStart.setHours(0, 0, 0, 0);
+
+    if (timeFilter === 'today') {
+      // Today is just today (already set)
+    } else if (timeFilter === 'week') {
+      // Assuming week starts on Sunday
+      periodStart.setDate(now.getDate() - now.getDay());
+    } else if (timeFilter === 'month') {
+      periodStart.setDate(1);
+    } else if (timeFilter === 'year') {
+      periodStart.setMonth(0, 1);
+    }
+
     return projects.filter(p => {
+      // Resolve start date
+      let pStart = new Date(0);
+      if (p.startDate) {
+        pStart = new Date(p.startDate);
+      } else if (p.createdAt) {
+        pStart = typeof p.createdAt.toDate === 'function' ? p.createdAt.toDate() : new Date(p.createdAt);
+      }
+
+      // Resolve end date
+      let pEnd = new Date(8640000000000000); // Far future
+      if (p.status === 'completed' || p.status === 'closed' || p.status === 'cancelled') {
+        if (p.endDate) {
+          pEnd = new Date(p.endDate);
+        } else if (p.handoverDate) {
+           pEnd = new Date(p.handoverDate);
+        } else {
+           pEnd = pStart; // Fallback
+        }
+      }
+
+      return pStart <= periodEnd && pEnd >= periodStart;
+    });
+  }, [projects, timeFilter]);
+
+  const filteredProjects = useMemo(() => {
+    return filteredProjectsByTime.filter(p => {
+      if (p.status === 'cancelled' && statusFilter !== 'cancelled') return false;
       const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                            (p.description?.toLowerCase().includes(searchQuery.toLowerCase() ?? ''));
-      const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+      const matchesStatus = statusFilter === 'all' ? (p.status !== 'cancelled') : p.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [projects, searchQuery, statusFilter]);
+  }, [filteredProjectsByTime, searchQuery, statusFilter]);
 
   const stats = useMemo(() => {
-    const active = projects.filter(p => p.status === 'active').length;
-    const completed = projects.filter(p => p.status === 'completed').length;
-    const totalBudget = projects.reduce((acc, curr) => acc + (curr.projectValue ?? curr.budget ?? 0), 0);
-    return { active, completed, totalBudget };
+    const now = new Date();
+    const periodEnd = new Date(now);
+    periodEnd.setHours(23, 59, 59, 999);
+    
+    const periodStart = new Date(now);
+    periodStart.setHours(0, 0, 0, 0);
+
+    if (timeFilter === 'week') {
+      periodStart.setDate(now.getDate() - now.getDay());
+    } else if (timeFilter === 'month') {
+      periodStart.setDate(1);
+    } else if (timeFilter === 'year') {
+      periodStart.setMonth(0, 1);
+    }
+
+    const activeProjects = filteredProjectsByTime.filter(p => p.status !== 'cancelled');
+    
+    // For counts, we rely on the already filtered activeProjects which represent projects "active/overlapping" in the period
+    const active = activeProjects.filter(p => p.status === 'active' || p.status === 'in-progress').length;
+    const completed = activeProjects.filter(p => p.status === 'completed').length;
+    const planning = activeProjects.filter(p => p.status === 'planning').length;
+    const maintenance = activeProjects.filter(p => p.status === 'maintenance' || p.status === 'handover_pending').length;
+    
+    // Delayed projects
+    const today = new Date().toISOString().split('T')[0];
+    const delayed = activeProjects.filter(p => p.status !== 'completed' && p.status !== 'maintenance' && p.endDate && p.endDate < today).length;
+
+    // Portal users
+    const portalUsers = activeProjects.filter(p => !!p.clientPin).length;
+
+    // Active workers
+    const activeWorkers = new Set();
+    activeProjects.filter(p => p.status === 'active' || p.status === 'in-progress').forEach(p => {
+       if (p.workerIds) p.workerIds.forEach(w => activeWorkers.add(w));
+    });
+
+    // EVENT-BASED FINANCIALS: Only count budget for projects CREATED in the period
+    const totalBudget = activeProjects.reduce((acc, curr) => {
+      let createdDate = new Date(0);
+      if (curr.createdAt) {
+        createdDate = typeof curr.createdAt.toDate === 'function' ? curr.createdAt.toDate() : new Date(curr.createdAt);
+      }
+      if (timeFilter === 'all' || (createdDate >= periodStart && createdDate <= periodEnd)) {
+        return acc + (curr.projectValue ?? curr.budget ?? 0);
+      }
+      return acc;
+    }, 0);
+    
+    // EVENT-BASED PAYMENTS: Only count payments PAID in the period
+    const totalCollected = projects.reduce((acc, proj) => { // we use all projects here just in case a past project received payment now
+      if (!proj.payments) return acc;
+      const projCollected = proj.payments.filter(p => {
+        if (p.status !== 'paid') return false;
+        if (timeFilter === 'all') return true;
+        let paidDate = new Date(0);
+        if (p.paidAt) {
+           paidDate = typeof p.paidAt.toDate === 'function' ? p.paidAt.toDate() : new Date(p.paidAt);
+        } else if (p.date) {
+           paidDate = typeof p.date.toDate === 'function' ? p.date.toDate() : new Date(p.date);
+        }
+        return paidDate >= periodStart && paidDate <= periodEnd;
+      }).reduce((sum, p) => sum + (p.amount || 0), 0);
+      return acc + projCollected;
+    }, 0);
+    
+    // Outstanding should ideally be totalBudget (of all active projects) - totalCollected (of all active projects)
+    // But since totalBudget here is filtered by creation date, outstanding might become negative.
+    // Let's recalculate full budget for outstanding calculation, or just use the filtered one if that's what the user wants.
+    // Usually, outstanding is a snapshot metric: "What is the current outstanding amount for all ongoing projects?"
+    const fullActiveBudget = activeProjects.reduce((acc, curr) => acc + (curr.projectValue ?? curr.budget ?? 0), 0);
+    const fullActiveCollected = activeProjects.reduce((acc, proj) => {
+      if (!proj.payments) return acc;
+      return acc + proj.payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + (p.amount || 0), 0);
+    }, 0);
+    const outstanding = fullActiveBudget - fullActiveCollected > 0 ? fullActiveBudget - fullActiveCollected : 0;
+
+    return { 
+      active, 
+      completed, 
+      planning,
+      maintenance,
+      delayed,
+      portalUsers,
+      activeWorkers: activeWorkers.size,
+      totalBudget, 
+      totalCollected,
+      outstanding,
+      totalValid: activeProjects.length 
+    };
   }, [projects]);
 
   // تجميع كافة المهام من كافة المشاريع
@@ -652,6 +801,60 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
           </div>
         </Card>
       </motion.div>
+    );
+  };
+
+  const renderCardList = (type: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const activeProjects = projects.filter(p => p.status !== 'cancelled');
+    
+    let list: any[] = [];
+    if (type === 'active') {
+      list = activeProjects.filter(p => p.status === 'active' || p.status === 'in-progress');
+    } else if (type === 'planning') {
+      list = activeProjects.filter(p => p.status === 'planning');
+    } else if (type === 'completed') {
+      list = activeProjects.filter(p => p.status === 'completed');
+    } else if (type === 'delayed') {
+      list = activeProjects.filter(p => p.status !== 'completed' && p.status !== 'maintenance' && p.endDate && p.endDate < today);
+    } else if (type === 'portal') {
+      list = activeProjects.filter(p => !!p.clientPin);
+    } else if (type === 'workers') {
+      const activeWorkers = new Set<string>();
+      activeProjects.filter(p => p.status === 'active' || p.status === 'in-progress').forEach(p => {
+        if (p.workerIds) p.workerIds.forEach(w => activeWorkers.add(w));
+      });
+      if (activeWorkers.size === 0) return <div className="hidden group-hover:block"><p className="text-center text-slate-400 text-xs py-4 mt-4 border-t border-slate-100">لا يوجد بيانات</p></div>;
+      return (
+        <div className="hidden group-hover:flex flex-col gap-2 mt-4 pt-4 border-t border-slate-100 max-h-48 overflow-y-auto custom-scrollbar w-full">
+          {Array.from(activeWorkers).map(wId => {
+            const worker = usersList.find(u => u.id === wId || u.uid === wId);
+            return (
+              <div key={wId as string} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100 w-full">
+                <div className="w-6 h-6 rounded-md bg-teal-100 text-teal-600 flex items-center justify-center shrink-0 text-[10px] font-black">
+                  {worker?.name?.charAt(0) || '?'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-slate-800 text-[10px] truncate">{worker?.name || 'غير معروف'}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    if (list.length === 0) return <div className="hidden group-hover:block"><p className="text-center text-slate-400 text-xs py-4 border-t border-slate-100 mt-4">لا يوجد بيانات</p></div>;
+
+    return (
+      <div className="hidden group-hover:flex flex-col gap-2 mt-4 pt-4 border-t border-slate-100 max-h-48 overflow-y-auto custom-scrollbar w-full">
+        {list.map(p => (
+          <div key={p.id} className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer border border-slate-100 w-full" onClick={() => { setDetailsDialog(null); setSelectedProjectId(p.id); }}>
+            <p className="font-black text-slate-800 text-[10px] truncate mb-1" title={p.title}>{p.title}</p>
+            <Badge className="bg-white text-slate-600 border border-slate-200 text-[8px] px-1 py-0">{p.status === 'active' ? 'نشط' : p.status === 'planning' ? 'تخطيط' : p.status}</Badge>
+          </div>
+        ))}
+      </div>
     );
   };
 
@@ -874,21 +1077,51 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
     <div className="w-full px-4 md:px-6 py-6 animate-in fade-in duration-700" dir="rtl">
       {/* 🌌 High-End Header */}
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-1 md:space-y-2">
-          <div className="flex items-center gap-2">
-             <div className="h-5 w-5 md:h-7 md:w-7 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
-                <Briefcase className="w-3 h-3 md:w-4 md:h-4" />
-             </div>
-             <span className="text-[7px] md:text-[9px] font-black text-primary uppercase tracking-[0.2em]">لوحة التحكم بالمشاريع الميدانية</span>
+        {/* 🗓️ Global Time Filter */}
+        <div className="overflow-x-auto no-scrollbar flex-1">
+          <div className="flex items-center gap-2 bg-slate-100/50 p-1.5 rounded-2xl border border-slate-200/50 w-fit">
+            <Button
+              variant={timeFilter === 'all' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setTimeFilter('all')}
+              className={`rounded-xl px-4 text-xs font-bold transition-all ${timeFilter === 'all' ? 'bg-primary text-primary-foreground shadow-md' : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'}`}
+            >
+              جميع الأوقات
+            </Button>
+            <Button
+              variant={timeFilter === 'today' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setTimeFilter('today')}
+              className={`rounded-xl px-4 text-xs font-bold transition-all ${timeFilter === 'today' ? 'bg-primary text-primary-foreground shadow-md' : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'}`}
+            >
+              اليوم
+            </Button>
+            <Button
+              variant={timeFilter === 'week' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setTimeFilter('week')}
+              className={`rounded-xl px-4 text-xs font-bold transition-all ${timeFilter === 'week' ? 'bg-primary text-primary-foreground shadow-md' : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'}`}
+            >
+              هذا الأسبوع
+            </Button>
+            <Button
+              variant={timeFilter === 'month' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setTimeFilter('month')}
+              className={`rounded-xl px-4 text-xs font-bold transition-all ${timeFilter === 'month' ? 'bg-primary text-primary-foreground shadow-md' : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'}`}
+            >
+              هذا الشهر
+            </Button>
+            <Button
+              variant={timeFilter === 'year' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setTimeFilter('year')}
+              className={`rounded-xl px-4 text-xs font-bold transition-all ${timeFilter === 'year' ? 'bg-primary text-primary-foreground shadow-md' : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'}`}
+            >
+              هذا العام
+            </Button>
           </div>
-          <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-none">
-            المشاريع <span className="text-primary italic">الميدانية</span>
-          </h1>
-          <p className="text-slate-500 font-bold max-w-lg text-[10px] md:text-sm leading-relaxed">
-            متابعة دقيقة لسير العمليات والبيانات ميدانياً في مواقع العمل المختلفة.
-          </p>
         </div>
-
         <div className="flex flex-wrap items-center gap-2">
           <Button 
             variant="outline"
@@ -1459,61 +1692,238 @@ export default function ProjectsV2({ viewModeType = 'projects' }: { viewModeType
         </div>
       </div>
 
-      {/* 📊 Smart Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-        <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex items-center gap-4 hover:shadow-md transition-all">
-          <div className="h-10 w-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0">
-            <Briefcase className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-500 mb-0.5">إجمالي المشاريع</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-black text-slate-900">{projects.length}</span>
-              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">{stats.active} نشط</span>
-            </div>
-          </div>
-        </Card>
+      {/* 📋 Details Dialog */}
+      <Dialog open={detailsDialog !== null} onOpenChange={(open) => !open && setDetailsDialog(null)}>
+        <DialogContent className="max-w-3xl rounded-[2.5rem] p-6 border-none max-h-[85vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right font-black text-xl mb-4">{detailsDialog?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            {detailsDialog && (() => {
+              const today = new Date().toISOString().split('T')[0];
+              const activeProjects = projects.filter(p => p.status !== 'cancelled');
+              
+              let list: any[] = [];
+              if (detailsDialog.type === 'active') {
+                list = activeProjects.filter(p => p.status === 'active' || p.status === 'in-progress');
+              } else if (detailsDialog.type === 'planning') {
+                list = activeProjects.filter(p => p.status === 'planning');
+              } else if (detailsDialog.type === 'completed') {
+                list = activeProjects.filter(p => p.status === 'completed');
+              } else if (detailsDialog.type === 'delayed') {
+                list = activeProjects.filter(p => p.status !== 'completed' && p.status !== 'maintenance' && p.endDate && p.endDate < today);
+              } else if (detailsDialog.type === 'portal') {
+                list = activeProjects.filter(p => !!p.clientPin);
+              } else if (detailsDialog.type === 'workers') {
+                const activeWorkers = new Set<string>();
+                activeProjects.filter(p => p.status === 'active' || p.status === 'in-progress').forEach(p => {
+                  if (p.workerIds) p.workerIds.forEach(w => activeWorkers.add(w));
+                });
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Array.from(activeWorkers).map(wId => {
+                      const worker = usersList.find(u => u.id === wId || u.uid === wId);
+                      return (
+                        <div key={wId as string} className="flex items-center gap-3 p-3 rounded-2xl border border-slate-100 bg-slate-50">
+                          <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-600 flex items-center justify-center shrink-0 font-black">
+                            {worker?.name?.charAt(0) || '?'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 text-sm">{worker?.name || 'غير معروف'}</p>
+                            <p className="text-xs text-slate-500 font-bold">{worker?.role === 'supervisor' ? 'مشرف' : 'موظف / فني'}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
 
-        <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex items-center gap-4 hover:shadow-md transition-all">
-          <div className="h-10 w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-500 mb-0.5">إجمالي الميزانيات</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-black text-slate-900">{stats.totalBudget.toLocaleString()}</span>
-              <span className="text-[9px] font-bold text-slate-500">SAR</span>
-            </div>
-          </div>
-        </Card>
+              if (list.length === 0) {
+                return <p className="text-center text-slate-500 font-bold py-8">لا يوجد بيانات لعرضها</p>;
+              }
 
-        <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex items-center gap-4 hover:shadow-md transition-all">
-          <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {list.map(p => (
+                    <div key={p.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => { setDetailsDialog(null); setSelectedProjectId(p.id); }}>
+                      <p className="font-black text-slate-900 text-sm mb-1">{p.title}</p>
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-500 mt-2">
+                        <span>{p.clientName || 'بدون عميل'}</span>
+                        <Badge className="bg-slate-200 text-slate-700 hover:bg-slate-300 font-black">{p.status === 'active' ? 'نشط' : p.status === 'planning' ? 'تخطيط' : p.status}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
-          <div className="w-full pr-2">
-            <div className="flex justify-between items-center mb-1">
-              <p className="text-[10px] font-black text-slate-500">مشاريع مكتملة</p>
-              <span className="text-sm font-black text-slate-900">{stats.completed}</span>
-            </div>
-            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-               <div className="h-full bg-blue-500 rounded-full" style={{ width: `${projects.length > 0 ? (stats.completed / projects.length) * 100 : 0}%` }} />
-            </div>
-          </div>
-        </Card>
+        </DialogContent>
+      </Dialog>
 
-        <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-slate-900 flex items-center gap-4 hover:shadow-md transition-all">
-          <div className="h-10 w-10 bg-white/10 text-white rounded-xl flex items-center justify-center shrink-0 border border-white/10">
-            <Target className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-400 mb-0.5">معدل الإنجاز العام</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-black text-white">{projects.length > 0 ? Math.round((stats.completed / projects.length) * 100) : 0}</span>
-              <span className="text-[9px] font-bold text-emerald-400">%</span>
+
+      {/* 📊 Smart Stats Row */}
+      <div className="w-full overflow-hidden max-w-[calc(100vw-2rem)] xl:max-w-full">
+        <div className="flex flex-row overflow-x-auto no-scrollbar gap-3 mb-8 pb-2 snap-x w-full items-start">
+        <div className="snap-start min-w-[160px] flex-1 group">
+          <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex flex-col items-start gap-0 hover:shadow-md hover:border-primary/30 transition-all duration-300">
+            <div className="flex items-center gap-3 w-full">
+               <div className="h-10 w-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0">
+                 <Briefcase className="w-5 h-5" />
+               </div>
+               <div className="flex flex-col flex-1">
+                 <p className="text-[10px] font-black text-slate-500 mb-0.5">إجمالي المشاريع</p>
+                 <div className="flex items-baseline gap-2">
+                   <span className="text-lg font-black text-slate-900">{stats.totalValid}</span>
+                   <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">{stats.active} نشط</span>
+                 </div>
+               </div>
             </div>
-          </div>
-        </Card>
+            {renderCardList('active')}
+          </Card>
+        </div>
+
+        <div className="snap-start min-w-[160px] flex-1 group">
+          <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex flex-col items-start gap-0 hover:shadow-md hover:border-indigo-300 transition-all duration-300">
+            <div className="flex items-center gap-3 w-full">
+               <div className="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                 <Layers className="w-5 h-5" />
+               </div>
+               <div className="flex flex-col flex-1">
+                 <p className="text-[10px] font-black text-slate-500 mb-0.5">قيد التخطيط</p>
+                 <div className="flex items-baseline gap-2">
+                   <span className="text-lg font-black text-slate-900">{stats.planning}</span>
+                   <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md">تسعير</span>
+                 </div>
+               </div>
+            </div>
+            {renderCardList('planning')}
+          </Card>
+        </div>
+
+        <div className="snap-start min-w-[160px] flex-1">
+          <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex flex-col items-start gap-0 hover:shadow-md transition-all h-full">
+            <div className="flex items-center gap-3 w-full">
+              <div className="h-10 w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col flex-1">
+                <p className="text-[10px] font-black text-slate-500 mb-0.5">إجمالي الميزانيات</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-black text-slate-900">{stats.totalBudget.toLocaleString()}</span>
+                  <span className="text-[9px] font-bold text-slate-500">SAR</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="snap-start min-w-[160px] flex-1 group">
+          <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex flex-col items-start gap-0 hover:shadow-md hover:border-rose-300 transition-all duration-300">
+            <div className="flex items-center gap-3 w-full">
+               <div className="h-10 w-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center shrink-0">
+                 <Clock className="w-5 h-5" />
+               </div>
+               <div className="flex flex-col flex-1">
+                 <p className="text-[10px] font-black text-slate-500 mb-0.5">مشاريع متأخرة</p>
+                 <div className="flex items-baseline gap-2">
+                   <span className="text-lg font-black text-slate-900">{stats.delayed}</span>
+                   <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md">مستعجل</span>
+                 </div>
+               </div>
+            </div>
+            {renderCardList('delayed')}
+          </Card>
+        </div>
+
+        <div className="snap-start min-w-[160px] flex-1 group">
+          <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex flex-col items-start gap-0 hover:shadow-md hover:border-blue-300 transition-all duration-300">
+            <div className="flex items-center gap-3 w-full">
+               <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+                 <Globe className="w-5 h-5" />
+               </div>
+               <div className="flex flex-col flex-1">
+                 <p className="text-[10px] font-black text-slate-500 mb-0.5">بوابة العملاء</p>
+                 <div className="flex items-baseline gap-2">
+                   <span className="text-lg font-black text-slate-900">{stats.portalUsers}</span>
+                   <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">عميل مرتبط</span>
+                 </div>
+               </div>
+            </div>
+            {renderCardList('portal')}
+          </Card>
+        </div>
+
+        <div className="snap-start min-w-[160px] flex-1 group">
+          <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex flex-col items-start gap-0 hover:shadow-md hover:border-teal-300 transition-all duration-300">
+            <div className="flex items-center gap-3 w-full">
+               <div className="h-10 w-10 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center shrink-0">
+                 <HardHat className="w-5 h-5" />
+               </div>
+               <div className="flex flex-col flex-1">
+                 <p className="text-[10px] font-black text-slate-500 mb-0.5">العمالة النشطة</p>
+                 <div className="flex items-baseline gap-2">
+                   <span className="text-lg font-black text-slate-900">{stats.activeWorkers}</span>
+                   <span className="text-[9px] font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded-md">في المواقع</span>
+                 </div>
+               </div>
+            </div>
+            {renderCardList('workers')}
+          </Card>
+        </div>
+
+        <div className="snap-start min-w-[160px] flex-1">
+          <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex flex-col items-start gap-0 hover:shadow-md transition-all h-full">
+            <div className="flex items-center gap-3 w-full">
+              <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col flex-1">
+                <p className="text-[10px] font-black text-slate-500 mb-0.5">التحصيل (الدفعات)</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-black text-slate-900">{stats.totalCollected.toLocaleString()}</span>
+                  <span className="text-[9px] font-bold text-slate-500">SAR</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="snap-start min-w-[160px] flex-1">
+          <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-white flex flex-col items-start gap-0 hover:shadow-md transition-all h-full">
+            <div className="flex items-center gap-3 w-full">
+              <div className="h-10 w-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center shrink-0">
+                <Receipt className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col flex-1">
+                <p className="text-[10px] font-black text-slate-500 mb-0.5">المبالغ المعلقة</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-black text-rose-600">{stats.outstanding.toLocaleString()}</span>
+                  <span className="text-[9px] font-bold text-rose-400">SAR</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="snap-start min-w-[160px] flex-1 group">
+          <Card className="rounded-2xl border border-slate-200/60 shadow-sm p-4 bg-slate-900 flex flex-col items-start gap-0 hover:shadow-md hover:border-emerald-500/50 transition-all duration-300">
+            <div className="flex flex-col justify-center gap-1 w-full">
+              <div className="flex justify-between items-center w-full">
+                <p className="text-[10px] font-black text-slate-400">نسبة الإنجاز ({stats.completed})</p>
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-sm font-black text-white">{stats.totalValid > 0 ? Math.round((stats.completed / stats.totalValid) * 100) : 0}</span>
+                  <span className="text-[9px] font-bold text-emerald-400">%</span>
+                </div>
+              </div>
+              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mt-1">
+                 <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${stats.totalValid > 0 ? (stats.completed / stats.totalValid) * 100 : 0}%` }} />
+              </div>
+            </div>
+            {renderCardList('completed')}
+          </Card>
+        </div>
+      </div>
       </div>
 
       {/* 🔍 Search and Filters */}

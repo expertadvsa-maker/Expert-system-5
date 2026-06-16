@@ -265,7 +265,7 @@ export default function SalesRepsManagement({ onSelectRep }: SalesRepsManagement
     <div className="p-6 w-full space-y-6" dir="rtl" style={{ fontFamily: "'Cairo', sans-serif" }}>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-black text-slate-800">إدارة مناديب المبيعات</h1>
+
           <p className="text-slate-500 mt-1">راجع طلبات المناديب واعتمدها.</p>
         </div>
       </div>

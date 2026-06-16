@@ -121,7 +121,7 @@ export default function Quotations() {
           <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl mb-4 shadow-inner">
             <FileText className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">عروض الأسعار</h1>
+
           <p className="text-slate-500 font-bold mt-2 text-sm max-w-xl leading-relaxed">
             مساحة إدارة عروض الأسعار، والمقترحات الفنية. مدعومة بالذكاء الاصطناعي لمساعدتك في التسعير.
           </p>

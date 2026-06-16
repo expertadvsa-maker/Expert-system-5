@@ -468,7 +468,7 @@ export default function Analytics({
             </Button>
           )}
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">ذكاء الأعمال والتحليلات (Business BI)</h1>
+
             <p className="text-slate-500 text-xs font-semibold flex items-center gap-2 mt-0.5">
                مركز التقارير وقراءة مؤشرات كفاءة الأداء المالي والتشغيلي للمشاريع ثانية بثانية
                <Badge className="bg-emerald-50 text-emerald-600 border-none px-2 py-0.5 h-4.5 text-[9px] font-bold animate-pulse">مباشر</Badge>

@@ -238,7 +238,7 @@ export default function BankingAndVault() {
     <div className="space-y-6 pb-20" dir="rtl">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="w-full md:w-auto">
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">إدارة البنوك والخزينة</h1>
+
           <p className="text-xs md:text-sm text-slate-500 font-medium">النظام المالي المركزي لمراقبة وإدارة النقدية والحسابات المصرفية للمؤسسة</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={(open) => {

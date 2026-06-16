@@ -25,6 +25,7 @@ import {
   ChevronRight,
   ShieldCheck,
   CalendarDays,
+  Calendar,
   FileText,
   User,
   Info,
@@ -84,6 +85,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { 
@@ -159,6 +161,41 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
   const [invoices, setInvoices] = useState<Quotation[]>([]);
   const [showDocBuilder, setShowDocBuilder] = useState<'quotation' | 'invoice' | null>(null);
 
+  // ── GPS Tracking & Attendance ──
+  const [projectAttendance, setProjectAttendance] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!project?.title || !projectId) return;
+    
+    // Listen to attendance by projectId
+    const q1 = query(collection(db, 'attendance'), where('projectId', '==', projectId));
+    const unsub1 = onSnapshot(q1, (snap1) => {
+      const docs1 = snap1.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // Also fetch by locationName for old records
+      getDocs(query(collection(db, 'attendance'), where('locationName', '==', `مشروع: ${project.title}`)))
+        .then(snap2 => {
+          const docs2 = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
+          // Merge unique records
+          const merged = [...docs1];
+          docs2.forEach(d2 => {
+            if (!merged.find(m => m.id === d2.id)) merged.push(d2);
+          });
+          
+          // Sort by date/checkIn descending
+          merged.sort((a, b) => {
+            const timeA = a.checkIn ? new Date(a.checkIn).getTime() : new Date(a.date).getTime();
+            const timeB = b.checkIn ? new Date(b.checkIn).getTime() : new Date(b.date).getTime();
+            return timeB - timeA;
+          });
+          
+          setProjectAttendance(merged);
+        }).catch(err => console.error("Error fetching old attendance:", err));
+    });
+
+    return () => unsub1();
+  }, [project?.title, projectId]);
+
   useEffect(() => {
     if (!projectId) return;
 
@@ -215,6 +252,11 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
   // Chat Input State
   const [chatInput, setChatInput] = useState('');
   const [isSendingChat, setIsSendingChat] = useState(false);
+  
+  // Deletion States
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
   const [presence, setPresence] = useState<{ online: Record<string, any>; typing: Record<string, any> }>({ online: {}, typing: {} });
   const [activeUsersList, setActiveUsersList] = useState<any[]>([]);
 
@@ -618,6 +660,87 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
     return supervisor ? supervisor.name : 'قيد التعيين';
   }, [project, projectWorkers]);
 
+  // Calculate GPS Tracking stats
+  const gpsStats = useMemo(() => {
+    if (!projectAttendance || projectAttendance.length === 0) return { totalDays: 0, totalHours: 0, uniqueWorkers: 0, workersList: [] };
+    
+    const uniqueDays = new Set<string>();
+    const uniqueWorkersMap = new Map<string, any>();
+    let totalMinutes = 0;
+
+    projectAttendance.forEach(att => {
+      // Collect unique days
+      if (att.date) uniqueDays.add(att.date);
+      
+      // Collect unique workers and their hours
+      if (att.userId) {
+        if (!uniqueWorkersMap.has(att.userId)) {
+          uniqueWorkersMap.set(att.userId, {
+            id: att.userId,
+            name: att.userName || 'غير معروف',
+            totalHours: 0,
+            days: new Set<string>(),
+          });
+        }
+        const workerStats = uniqueWorkersMap.get(att.userId);
+        if (att.date) workerStats.days.add(att.date);
+        
+        // Calculate hours if checkIn and checkOut exist
+        if (att.checkIn && att.checkOut) {
+          const inTime = new Date(att.checkIn).getTime();
+          const outTime = new Date(att.checkOut).getTime();
+          const diffMins = Math.max(0, (outTime - inTime) / (1000 * 60));
+          totalMinutes += diffMins;
+          workerStats.totalHours += diffMins / 60;
+        }
+      }
+    });
+
+    const workersList = Array.from(uniqueWorkersMap.values()).map(w => ({
+      ...w,
+      daysCount: w.days.size,
+      totalHours: Math.round(w.totalHours * 10) / 10
+    })).sort((a, b) => b.totalHours - a.totalHours);
+
+    return {
+      totalDays: uniqueDays.size,
+      totalHours: Math.round(totalMinutes / 60),
+      uniqueWorkers: uniqueWorkersMap.size,
+      workersList
+    };
+  }, [projectAttendance]);
+
+  const handleDeleteProject = async (action: 'soft' | 'hard') => {
+    if (!project) return;
+    if (action === 'hard' && deleteConfirmationName !== project.title) {
+       toast.error("اسم المشروع غير مطابق للتأكيد");
+       return;
+    }
+    
+    setIsDeleting(true);
+    try {
+       if (action === 'hard') {
+         await deleteDoc(doc(db, 'projects', projectId));
+         toast.success("تم الحذف النهائي للمشروع بنجاح");
+         onBack();
+       } else {
+         await updateDoc(doc(db, 'projects', projectId), {
+           status: 'cancelled',
+           workerIds: [], // Release all workers
+           projectStatus: 'تم الإلغاء والأرشفة',
+           updatedAt: serverTimestamp()
+         });
+         toast.success("تم الحذف الآمن وإلغاء المشروع وإضافته للأرشيف وتسريح العمالة");
+         onBack();
+       }
+    } catch(err) {
+      handleFirestoreError(err, OperationType.UPDATE, `projects/${projectId}`, auth);
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+
   const handleUpdateProject = async () => {
     try {
       let updatedCoords = editForm.locationCoords;
@@ -850,6 +973,8 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                  </button>
               )}
 
+
+
             <Dialog open={isEditOpen} onOpenChange={(open) => {
               if (open && profile?.role !== 'manager' && profile?.role !== 'owner') {
                  toast.error("صلاحيات الإدارة محصورة على المالك والمدير فقط لمنع التلاعب.");
@@ -1031,6 +1156,82 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                            </div>
                         </div>
 
+
+                        {/* GPS Tracking Stats */}
+                        <div className="bg-white border border-slate-100 shadow-sm rounded-[2.5rem] p-8">
+                           <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+                              <h3 className="text-lg font-black text-slate-900 flex items-center gap-3">
+                                 <MapPin className="w-5 h-5 text-emerald-500" />
+                                 رقابة الحضور الميداني (GPS)
+                              </h3>
+                              <Badge className="bg-emerald-50 text-emerald-600 border-emerald-200">
+                                 {projectAttendance.length} سجل حضور
+                              </Badge>
+                           </div>
+
+                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
+                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-emerald-500 shrink-0">
+                                    <Calendar className="w-5 h-5" />
+                                 </div>
+                                 <div className="flex flex-col min-w-0">
+                                    <span className="text-[10px] font-bold text-slate-400">إجمالي أيام العمل</span>
+                                    <span className="text-xl font-black text-slate-800">{gpsStats.totalDays} <span className="text-xs text-slate-500 font-bold">يوم</span></span>
+                                 </div>
+                              </div>
+
+                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
+                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-amber-500 shrink-0">
+                                    <Clock className="w-5 h-5" />
+                                 </div>
+                                 <div className="flex flex-col min-w-0">
+                                    <span className="text-[10px] font-bold text-slate-400">ساعات العمل الفعلية</span>
+                                    <span className="text-xl font-black text-slate-800">{gpsStats.totalHours} <span className="text-xs text-slate-500 font-bold">ساعة</span></span>
+                                 </div>
+                              </div>
+
+                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
+                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-indigo-500 shrink-0">
+                                    <Users className="w-5 h-5" />
+                                 </div>
+                                 <div className="flex flex-col min-w-0">
+                                    <span className="text-[10px] font-bold text-slate-400">عدد الكوادر بالموقع</span>
+                                    <span className="text-xl font-black text-slate-800">{gpsStats.uniqueWorkers} <span className="text-xs text-slate-500 font-bold">موظف</span></span>
+                                 </div>
+                              </div>
+                           </div>
+
+                           {gpsStats.workersList.length > 0 && (
+                              <div className="mt-4 border border-slate-100 rounded-2xl overflow-hidden">
+                                 <div className="bg-slate-50 px-4 py-2 text-xs font-black text-slate-600 border-b border-slate-100 grid grid-cols-3 text-right">
+                                    <span>الموظف / المشرف</span>
+                                    <span className="text-center">أيام الحضور</span>
+                                    <span className="text-left">إجمالي الساعات</span>
+                                 </div>
+                                 <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                                    {gpsStats.workersList.map((w: any, idx: number) => (
+                                       <div key={idx} className="px-4 py-3 text-sm font-bold text-slate-800 grid grid-cols-3 items-center hover:bg-slate-50/50">
+                                          <span className="flex items-center gap-2">
+                                             <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] text-slate-600 shrink-0">
+                                                {w.name.charAt(0)}
+                                             </div>
+                                             <span className="truncate">{w.name}</span>
+                                          </span>
+                                          <span className="text-center text-emerald-600 bg-emerald-50 w-fit mx-auto px-2 py-0.5 rounded-lg text-xs">{w.daysCount} أيام</span>
+                                          <span className="text-left font-black">{w.totalHours > 0 ? `${w.totalHours} ساعة` : 'بدون انصراف'}</span>
+                                       </div>
+                                    ))}
+                                 </div>
+                              </div>
+                           )}
+                           {gpsStats.workersList.length === 0 && (
+                              <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+                                 <MapPin className="w-8 h-8 mb-2 opacity-50" />
+                                 <p className="text-xs font-bold">لم يتم تسجيل أي حضور ميداني عبر الـ GPS في هذا المشروع بعد</p>
+                              </div>
+                           )}
+                        </div>
+
                         {/* Specs Bento Box */}
                         <div className="bg-white border border-slate-100 shadow-sm rounded-[2.5rem] p-8">
                            <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
@@ -1207,6 +1408,87 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                                  عرض باقي المراحل
                               </Button>
                            )}
+                        </div>
+                     </div>
+
+                     {/* Danger Zone */}
+                     <div className="xl:col-span-3 mt-2">
+                        <div className="bg-rose-50/50 border border-rose-100 rounded-[2rem] p-6 shadow-sm">
+                           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                              <div>
+                                 <h4 className="text-rose-700 font-black text-lg flex items-center gap-2">
+                                    <AlertCircle className="w-5 h-5" />
+                                    منطقة الخطر (إدارة المشروع)
+                                 </h4>
+                                 <p className="text-rose-600/70 text-xs font-bold mt-1">
+                                    هذه المنطقة مخصصة للإجراءات الحساسة مثل إيقاف المشروع أو حذفه بالكامل من النظام.
+                                 </p>
+                              </div>
+                              <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+                                if (open && profile?.role !== 'manager' && profile?.role !== 'owner') {
+                                  toast.error("صلاحيات الحذف محصورة على المالك والمدير فقط.");
+                                  return;
+                                }
+                                setIsDeleteDialogOpen(open);
+                              }}>
+                                <DialogTrigger asChild>
+                                   <Button variant="destructive" className="rounded-xl px-6 h-12 font-black shadow-lg shadow-rose-500/20 w-full md:w-auto">
+                                      <Trash2 className="w-4 h-4 ml-2" />
+                                      إلغاء أو حذف المشروع
+                                   </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none" dir="rtl">
+                                   <DialogHeader>
+                                      <div className="mx-auto w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-4">
+                                         <AlertCircle className="w-8 h-8" />
+                                      </div>
+                                      <DialogTitle className="text-center font-black text-xl">حذف أو إلغاء المشروع</DialogTitle>
+                                      <DialogDescription className="text-center text-slate-500 font-bold mt-2">
+                                         يرجى اختيار طريقة الحذف المناسبة بناءً على حالة المشروع المالية والتشغيلية
+                                      </DialogDescription>
+                                   </DialogHeader>
+                                   
+                                   <div className="space-y-6 mt-6">
+                                      <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200">
+                                         <h4 className="font-black text-amber-800 text-sm mb-1">إلغاء وحذف آمن (موصى به)</h4>
+                                         <p className="text-[10px] text-amber-700 font-bold leading-relaxed mb-3">
+                                            يتم تغيير حالة المشروع إلى "ملغى"، وتسريح العمالة فوراً للحفاظ على استمرارية العمل، مع الحفاظ على الفواتير والمصروفات السابقة لضمان عدم توازن الحسابات.
+                                         </p>
+                                         <Button 
+                                            onClick={() => handleDeleteProject('soft')}
+                                            disabled={isDeleting}
+                                            className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl h-10"
+                                         >
+                                            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "إلغاء وأرشفة المشروع بأمان"}
+                                         </Button>
+                                      </div>
+
+                                      <div className="p-4 bg-rose-50 rounded-2xl border border-rose-200">
+                                         <h4 className="font-black text-rose-800 text-sm mb-1">حذف نهائي تدميري</h4>
+                                         <p className="text-[10px] text-rose-700 font-bold leading-relaxed mb-3">
+                                            استخدم هذا الخيار فقط للمشاريع "التجريبية" أو "الجديدة كلياً" التي لا تملك أي عمليات مالية أو عمال. لا يمكن التراجع عن هذا الإجراء أبداً.
+                                         </p>
+                                         <div className="space-y-3">
+                                            <Input 
+                                               placeholder="اكتب اسم المشروع لتأكيد الحذف"
+                                               value={deleteConfirmationName}
+                                               onChange={e => setDeleteConfirmationName(e.target.value)}
+                                               className="bg-white border-rose-200 focus:ring-rose-500 rounded-xl font-bold text-xs"
+                                            />
+                                            <Button 
+                                               onClick={() => handleDeleteProject('hard')}
+                                               disabled={isDeleting || deleteConfirmationName !== project.title}
+                                               variant="destructive"
+                                               className="w-full font-black rounded-xl h-10 shadow-lg shadow-rose-500/20"
+                                            >
+                                               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "المشروع فارغ - حذف نهائي"}
+                                            </Button>
+                                         </div>
+                                      </div>
+                                   </div>
+                                </DialogContent>
+                              </Dialog>
+                           </div>
                         </div>
                      </div>
                   </motion.div>

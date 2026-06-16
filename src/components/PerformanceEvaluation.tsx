@@ -122,7 +122,7 @@ export default function PerformanceEvaluation() {
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-primary tracking-tight">رادار الأداء والمراقبة</h1>
+
           <p className="text-[13px] text-muted-foreground font-bold">تقييم آلي للـ 60 يوماً الماضية بناءً على الحضور الميداني</p>
         </div>
         <div className="flex bg-slate-100 p-1 rounded-xl">

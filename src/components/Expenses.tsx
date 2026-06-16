@@ -261,7 +261,7 @@ export default function Expenses() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">المصروفات الإدارية والتشغيلية</h1>
+
           <p className="text-sm font-bold text-slate-500 tracking-tight">تتبع المصروفات النثرية، الرواتب، النثريات، والمصروفات الإدارية اليومية.</p>
         </div>
         <div className="flex gap-2">

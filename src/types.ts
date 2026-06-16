@@ -84,7 +84,7 @@ export interface Project {
   title: string;
   name?: string; // Compatibility
   description?: string;
-  status: 'planning' | 'active' | 'completed' | 'on-hold' | 'in-progress' | 'handover_pending' | 'maintenance' | 'closed';
+  status: 'planning' | 'active' | 'completed' | 'on-hold' | 'in-progress' | 'handover_pending' | 'maintenance' | 'closed' | 'cancelled';
   locationLink?: string;
   locationCoords?: { lat: number, lng: number };
   clientName?: string;

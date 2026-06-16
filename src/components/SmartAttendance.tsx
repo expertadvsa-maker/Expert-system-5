@@ -102,7 +102,8 @@ export default function SmartAttendance() {
               name: `مشروع: ${data.title}`,
               lat: parseFloat(data.latitude),
               lng: parseFloat(data.longitude),
-              type: 'project'
+              type: 'project',
+              projectId: d.id
             });
           }
         });
@@ -250,7 +251,8 @@ export default function SmartAttendance() {
           department: profile?.department,
           locationName: locationLabel,
           location: { lat, lng },
-          distanceFromTarget: loc ? Math.round(dist) : -1
+          distanceFromTarget: loc ? Math.round(dist) : -1,
+          projectId: loc?.projectId || null
         });
 
         await sendNotification({

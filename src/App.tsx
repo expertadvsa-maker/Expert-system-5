@@ -68,7 +68,11 @@ import {
   Search,
   Radar,
   Bug,
-  Terminal
+  Terminal,
+  Plus,
+  Download,
+  UserPlus,
+  PackagePlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -1447,6 +1451,102 @@ function AppContent() {
     );
   }
 
+  const getActiveTabTitle = (tab: string) => {
+    switch (tab) {
+      case 'dashboard': return { title: 'الرئيسية', subtitle: 'نظرة عامة على النظام' };
+      case 'projects': case 'projects_v2': return { title: 'المشاريع الميدانية', subtitle: 'متابعة وإدارة سير العمليات' };
+      case 'company_profile': return { title: 'ملف الشركة', subtitle: 'بيانات الشركة الأساسية' };
+      case 'analytics': return { title: 'التحليلات', subtitle: 'إحصائيات وأرقام' };
+      case 'financials': return { title: 'المالية والمحاسبة', subtitle: 'الإدارة المالية المتقدمة' };
+      case 'banking': return { title: 'البنوك والخزينة', subtitle: 'إدارة الحسابات البنكية' };
+      case 'expenses': return { title: 'المصروفات', subtitle: 'إدارة مصروفات التشغيل' };
+      case 'sales': return { title: 'المبيعات', subtitle: 'متابعة وتحليل المبيعات' };
+      case 'clients': return { title: 'العملاء', subtitle: 'إدارة وتتبع العملاء' };
+      case 'invoices': return { title: 'الفواتير', subtitle: 'إدارة الفواتير والإيصالات' };
+      case 'quotations': return { title: 'عروض الأسعار', subtitle: 'إعداد ومتابعة العروض' };
+      case 'inventory': return { title: 'المخزون والمواد', subtitle: 'إدارة المستودعات' };
+      case 'production': return { title: 'الإنتاج', subtitle: 'متابعة خطوط الإنتاج' };
+      case 'assets': return { title: 'الأصول', subtitle: 'إدارة أصول الشركة' };
+      case 'employees': return { title: 'شؤون الموظفين', subtitle: 'إدارة الموارد البشرية' };
+      case 'workers_management': return { title: 'إدارة العمال', subtitle: 'متابعة شؤون العمال' };
+      case 'tasks': return { title: 'المهام', subtitle: 'متابعة وتوزيع المهام' };
+      case 'payrolls': return { title: 'الرواتب', subtitle: 'إعداد مسيرات الرواتب' };
+      case 'settings': return { title: 'الإعدادات', subtitle: 'إعدادات النظام الشاملة' };
+      case 'profile': case 'sales_rep_profile': return { title: 'الملف الشخصي', subtitle: 'إعدادات حسابك وتفضيلاتك' };
+      case 'subcontractors': return { title: 'مقاولي الباطن', subtitle: 'إدارة مقاولي الباطن' };
+      case 'purchases': return { title: 'المشتريات', subtitle: 'إدارة ومتابعة المشتريات' };
+      case 'suppliers': return { title: 'الموردين', subtitle: 'دليل وحسابات الموردين' };
+      case 'rep_dashboard': return { title: 'لوحة التحكم', subtitle: 'بوابة مندوب المبيعات' };
+      default: return { title: 'الخبير للمقاولات', subtitle: 'نظام إدارة الموارد الشامل' };
+    }
+  };
+
+  const renderContextMenuActions = (tab: string) => {
+    const actions = [];
+    
+    const addAction = (label: string, icon: any, shortcut: string, eventName?: string, action?: () => void, textClass="text-slate-700") => {
+      actions.push(
+        <button
+          key={label}
+          onClick={() => {
+            setContextMenu(prev => ({ ...prev, visible: false }));
+            if (eventName) window.dispatchEvent(new Event(eventName));
+            if (action) action();
+          }}
+          className={`w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 rounded-lg cursor-pointer transition-colors text-right group text-[11px] font-bold ${textClass}`}
+        >
+          <div className="flex items-center gap-2">
+            {icon}
+            <span>{label}</span>
+          </div>
+          <span className="text-[9px] opacity-50 font-mono tracking-tighter">{shortcut}</span>
+        </button>
+      );
+    };
+
+    switch (tab) {
+      case 'dashboard':
+        addAction("تحديث الإحصائيات", <RefreshCw className="w-3.5 h-3.5" />, "Ref", undefined, () => window.location.reload(), "text-primary");
+        addAction("طباعة الملخص", <Download className="w-3.5 h-3.5" />, "Prt", undefined, () => window.print());
+        break;
+      case 'projects': case 'projects_v2':
+        addAction("إضافة مشروع جديد", <Plus className="w-3.5 h-3.5" />, "New", "open-add-project", undefined, "text-primary");
+        addAction("طباعة التقرير العام", <Download className="w-3.5 h-3.5" />, "Prt", undefined, () => window.print());
+        break;
+      case 'employees': case 'workers_management':
+        addAction("إضافة موظف/عامل", <UserPlus className="w-3.5 h-3.5" />, "Add", "open-add-employee", undefined, "text-primary");
+        addAction("كشف المسيرات", <FileText className="w-3.5 h-3.5" />, "Rep", "open-payroll-report");
+        break;
+      case 'financials': case 'banking': case 'expenses':
+        addAction("إضافة سند جديد", <CreditCard className="w-3.5 h-3.5" />, "New", "open-add-transaction", undefined, "text-emerald-600");
+        addAction("تصدير التقرير المالي", <Download className="w-3.5 h-3.5" />, "Exp", undefined, () => window.print());
+        break;
+      case 'sales': case 'clients': case 'invoices': case 'quotations':
+        addAction("إنشاء فاتورة/عرض", <FileText className="w-3.5 h-3.5" />, "New", "open-add-invoice", undefined, "text-primary");
+        addAction("إضافة عميل جديد", <UserPlus className="w-3.5 h-3.5" />, "Add", "open-add-client");
+        break;
+      case 'inventory': case 'assets': case 'purchases': case 'suppliers':
+        addAction("إضافة مادة/أصل", <PackagePlus className="w-3.5 h-3.5" />, "New", "open-add-item", undefined, "text-orange-600");
+        addAction("تصدير الجرد", <Download className="w-3.5 h-3.5" />, "Exp", undefined, () => window.print());
+        break;
+      case 'settings':
+        addAction("حفظ الإعدادات", <Settings className="w-3.5 h-3.5" />, "Sav", "save-settings", undefined, "text-primary");
+        break;
+    }
+
+    if (actions.length > 0) {
+      return (
+        <>
+          {actions}
+          <div className="h-[1px] bg-slate-100 dark:bg-zinc-800/50 my-1 mx-1" />
+        </>
+      );
+    }
+    return null;
+  };
+
+  const currentTabInfo = getActiveTabTitle(activeTab);
+
   return (
     <div
       className="min-h-screen bg-background flex flex-col lg:flex-row text-right"
@@ -1917,9 +2017,9 @@ function AppContent() {
               <Menu className="w-5 h-5" />
             </button>
             <div>
-              <p className="text-[10px] text-slate-400 font-semibold leading-none mb-0.5">مرحباً</p>
-              <p className="text-sm font-black text-slate-900 leading-none">
-                {profile?.role === "manager" ? "مدير النظام" : profile?.name}
+              <p className="text-[10px] text-primary font-black uppercase tracking-wider mb-0.5 leading-none">{currentTabInfo.title}</p>
+              <p className="text-sm font-bold text-slate-500 leading-none">
+                {currentTabInfo.subtitle}
               </p>
             </div>
           </div>
@@ -2343,6 +2443,9 @@ function AppContent() {
               </>
             ) : (
               <>
+                {/* Context-Specific Actions */}
+                {renderContextMenuActions(activeTab)}
+
                 {/* 1. Back */}
                 <button
                   disabled={tabHistory.length <= 1}

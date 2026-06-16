@@ -222,7 +222,7 @@ export default function GeneralLedger() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">دفتر الأستاذ (General Ledger)</h1>
+
           <p className="text-slate-500 text-xs font-semibold mt-0.5">
             دفتر القيود اليومية والحركات المحاسبية المدونة وتتبع كشف الحساب المالي للمنشأة
           </p>

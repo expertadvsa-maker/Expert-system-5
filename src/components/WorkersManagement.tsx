@@ -255,7 +255,7 @@ export default function WorkersManagement() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 md:gap-4 mb-2 md:mb-6">
         <div>
-          <h1 className="text-lg md:text-2xl font-black text-slate-800">إدارة العمالة اليومية</h1>
+
           <p className="text-[10px] md:text-sm font-bold text-slate-500">مراقبة حضور العمال وإسنادهم ميدانياً.</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">

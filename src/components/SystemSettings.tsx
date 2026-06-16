@@ -664,12 +664,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
           {/* Title Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div className="space-y-1">
-              <h1 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-zinc-150 tracking-tight flex items-center gap-3">
-                <span className="p-2.5 bg-primary/10 rounded-2xl text-primary inline-flex">
-                  <SettingsIcon className="w-8 h-8 animate-[spin_20s_linear_infinite]" />
-                </span>
-                لوحة الإعدادات والتحكم
-              </h1>
+
               <p className="text-slate-500 font-bold text-sm">إدارة هوية الشركة، نظام الأمان، تفضيلات المظهر والذكاء الاصطناعي</p>
             </div>
             <div className="flex items-center gap-3 bg-white/80 border border-slate-200/60 backdrop-blur-md rounded-2xl py-2.5 px-4 shadow-sm h-fit">

@@ -142,8 +142,7 @@ export default function ApprovalCenter() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-2xl font-black text-primary tracking-tight">مركز الاعتمادات الإدارية</h1>
-        <p className="text-[13px] text-muted-foreground">صلاحيات المدير للموافقة على الإجازات، الفواتير، والتعديلات المالية</p>
+        <p className="text-slate-500 font-medium">مراجعة واعتماد الطلبات والقرارات الإدارية الخاصة بالإجازات، الفواتير، والتعديلات المالية</p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-6">

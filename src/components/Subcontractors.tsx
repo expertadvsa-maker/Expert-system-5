@@ -944,7 +944,7 @@ export default function Subcontractors() {
     <div className="space-y-6 animate-in fade-in duration-500 pb-20 select-none">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-primary tracking-tight">مقاولي الباطن</h1>
+
           <p className="text-muted-foreground text-sm font-bold">تتبع العقود، المدفوعات، والالتزامات مع المقاولين</p>
         </div>
         <div className="flex items-center gap-2">

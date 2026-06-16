@@ -457,7 +457,7 @@ export default function Employees({ onSelectEmployee, filterRole }: { onSelectEm
     <div className="space-y-6 animate-in fade-in duration-500 w-full px-4 sm:px-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg md:text-2xl font-bold text-primary tracking-tight">إدارة الكوادر البشرية</h1>
+
           <p className="text-[10px] md:text-[13px] text-muted-foreground">فريق عمل مؤسسة خبراء الرسم - الرياض</p>
         </div>
         

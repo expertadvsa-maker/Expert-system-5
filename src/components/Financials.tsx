@@ -847,7 +847,7 @@ export default function Financials() {
       <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg md:text-2xl font-bold text-primary tracking-tight">المالية والمصروفات</h1>
+
           <p className="text-[10px] md:text-[13px] text-muted-foreground">إدارة العمليات المالية والمشتريات</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

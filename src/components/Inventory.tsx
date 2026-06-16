@@ -187,7 +187,7 @@ export default function Inventory() {
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-primary tracking-tight">إدارة المخازن والمواد</h1>
+
           <p className="text-[13px] text-muted-foreground font-bold">مراقبة مستويات البنرات، الفينيل، الأحبار ومواد اللوحات</p>
         </div>
         {isElevated && (

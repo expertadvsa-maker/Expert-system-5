@@ -111,7 +111,7 @@ export default function Clients() {
           <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl mb-4 shadow-inner">
             <Users className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">إدارة العملاء</h1>
+
           <p className="text-slate-500 font-bold mt-2 text-sm max-w-xl leading-relaxed">
             استعرض وأدر جميع عملائك من منصة ألف ياء بنظام النوافذ الذكية وتتبع المعاملات المالية بسهولة.
           </p>

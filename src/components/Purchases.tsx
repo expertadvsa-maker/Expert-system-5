@@ -651,7 +651,7 @@ export default function Purchases() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-primary tracking-tight">إدارة الفاتورة والمشتريات</h1>
+
           <p className="text-[13px] text-muted-foreground">تتبع طلبات الشراء، فواتير الموردين، والذكاء الاصطناعي لتفريغ البيانات.</p>
         </div>
         <div className="flex items-center gap-2">
