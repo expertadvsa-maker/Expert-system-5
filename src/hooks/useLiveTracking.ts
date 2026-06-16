@@ -189,8 +189,21 @@ export function useLiveTracking() {
         if (lastLocation.current) {
           const dist = GeoEngine.calculateDistance(lastLocation.current.lat, lastLocation.current.lng, lat, lng);
           const timeIdle = Date.now() - lastLocation.current.timestamp;
-          if (dist < 5 && timeIdle > 45 * 60 * 1000) {
-             finalStatus = 'idle'; // idle after 45 minutes of no movement
+          if (dist < 5 && timeIdle > 10 * 60 * 1000) {
+             finalStatus = 'idle'; // idle after 10 minutes of no movement
+          }
+        }
+        
+        // 🔋 Device Telemetry: Get Battery Level
+        let batteryLevel: number | undefined;
+        let isCharging = false;
+        if ('getBattery' in navigator) {
+          try {
+            const battery: any = await (navigator as any).getBattery();
+            batteryLevel = Math.round(battery.level * 100);
+            isCharging = battery.charging;
+          } catch (e) {
+            console.warn("Battery API error:", e);
           }
         }
         
@@ -203,6 +216,8 @@ export function useLiveTracking() {
           lat,
           lng,
           speed: speedKmh,
+          batteryLevel: batteryLevel !== undefined ? batteryLevel : null,
+          isCharging,
           currentZoneId: currentZoneId,
           timestamp: nowStr,
           status: finalStatus,
@@ -239,9 +254,9 @@ export function useLiveTracking() {
           longitude
         );
 
-        // Only update if moved more than 20 meters OR 5 minutes have passed
+        // Only update if moved more than 2 meters OR 10 seconds have passed (for true real-time feeling)
         const timeDiff = now - lastLocation.current.timestamp;
-        if (dist > 20 || timeDiff > 5 * 60 * 1000) {
+        if (dist > 2 || timeDiff > 10 * 1000) {
           lastLocation.current = { lat: latitude, lng: longitude, timestamp: now };
           updateLocation(latitude, longitude, speed);
         }

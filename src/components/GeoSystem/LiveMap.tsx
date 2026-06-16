@@ -26,12 +26,13 @@ const createAvatarIcon = (color: string, photoURL?: string, zoom: number = 12, s
     innerHtml = `<div style="background-color: ${color}; width: 100%; height: 100%; border-radius: 50%; border: ${borderWidth}px solid white; position: relative; z-index: 2;"></div>`;
   }
 
-  // Add the pulsing rings if active
-  const pulseHtml = isActive ? `
+  // Add the pulsing rings if active or idle
+  const isPulsing = status === 'active' || status === 'idle';
+  const pulseHtml = isPulsing ? `
     <div class="radar-pulse ring-1" style="border-color: ${color}"></div>
     <div class="radar-pulse ring-2" style="border-color: ${color}"></div>
-    <div class="status-dot"></div>
-  ` : '';
+    <div class="status-dot" style="background-color: ${color}"></div>
+  ` : `<div class="status-dot" style="background-color: ${color}"></div>`;
 
   return L.divIcon({
     className: 'custom-map-marker',
@@ -62,7 +63,6 @@ const createAvatarIcon = (color: string, photoURL?: string, zoom: number = 12, s
           right: 0;
           width: ${size/3}px;
           height: ${size/3}px;
-          background-color: #10b981;
           border-radius: 50%;
           border: 2px solid white;
           z-index: 3;
@@ -85,8 +85,9 @@ interface LiveMapProps {
   zoom?: number;
   onMapClick?: (lat: number, lng: number) => void;
   tempZoneRadius?: number;
-  mapType?: 'default' | 'satellite';
+  mapTheme?: 'light' | 'dark' | 'satellite';
   historyTrack?: TrackerPoint[];
+  selectedUserId?: string | null;
 }
 
 // Component to recenter map dynamically
@@ -121,8 +122,9 @@ export default function LiveMap({
   onMapClick, 
   tempZoneCenter,
   tempZoneRadius = 50, 
-  mapType = 'default',
-  historyTrack = []
+  mapTheme = 'dark',
+  historyTrack = [],
+  selectedUserId
 }: LiveMapProps) {
   const [currentZoom, setCurrentZoom] = React.useState(zoom);
 
@@ -134,12 +136,33 @@ export default function LiveMap({
     .filter(p => p.lat !== undefined && p.lng !== undefined && !isNaN(p.lat) && !isNaN(p.lng))
     .map(p => [p.lat, p.lng] as [number, number]);
 
+  // Mock Task-Path for selected user
+  const selectedUserPt = selectedUserId ? validPoints.find(p => p.userId === selectedUserId) : null;
+  const [mockTasks, setMockTasks] = React.useState<{id:string, lat:number, lng:number, title:string}[]>([]);
+  const lastSelectedUserId = React.useRef<string | null>(null);
+  
+  React.useEffect(() => {
+    if (selectedUserId && selectedUserId !== lastSelectedUserId.current) {
+      const userPt = validPoints.find(p => p.userId === selectedUserId);
+      if (userPt) {
+        setMockTasks([
+          { id: 't1', lat: userPt.lat + 0.002, lng: userPt.lng + 0.002, title: 'زيارة موقع أ' },
+          { id: 't2', lat: userPt.lat - 0.003, lng: userPt.lng + 0.001, title: 'صيانة وقائية ب' }
+        ]);
+        lastSelectedUserId.current = selectedUserId;
+      }
+    } else if (!selectedUserId) {
+      setMockTasks([]);
+      lastSelectedUserId.current = null;
+    }
+  }, [selectedUserId, validPoints]);
+
   // Google Maps Arabic URLs
   const defaultUrl = "https://mt1.google.com/vt/lyrs=m&hl=ar&x={x}&y={y}&z={z}";
   const satelliteUrl = "https://mt1.google.com/vt/lyrs=y&hl=ar&x={x}&y={y}&z={z}";
 
   return (
-    <div className={`w-full h-full rounded-2xl overflow-hidden shadow-inner border border-slate-200 dark:border-zinc-800 relative z-0 ${mapType === 'default' ? 'map-dark-filter' : ''}`}>
+    <div className={`w-full h-full rounded-2xl overflow-hidden shadow-inner border border-slate-200 dark:border-zinc-800 relative z-0 ${mapTheme === 'dark' ? 'map-dark-filter' : ''}`}>
       <style>{`
         .map-dark-filter .leaflet-tile-pane {
           filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
@@ -148,11 +171,11 @@ export default function LiveMap({
       <MapContainer 
         center={[center.lat, center.lng]} 
         zoom={zoom} 
-        style={{ width: '100%', height: '100%', background: mapType === 'default' ? '#0f172a' : '#000' }}
+        style={{ width: '100%', height: '100%', background: mapTheme === 'dark' ? '#0f172a' : '#e5e7eb' }}
         zoomControl={false}
       >
         <TileLayer
-          url={mapType === 'satellite' ? satelliteUrl : defaultUrl}
+          url={mapTheme === 'satellite' ? satelliteUrl : defaultUrl}
           attribution='&copy; Google Maps'
         />
         <MapUpdater center={center} zoom={zoom} />
@@ -226,6 +249,35 @@ export default function LiveMap({
             positions={polylinePositions} 
             pathOptions={{ color: '#8b5cf6', weight: 4, dashArray: '8 8', opacity: 0.8 }} 
           />
+        )}
+
+        {/* Render Task Paths for Selected User */}
+        {selectedUserPt && mockTasks.length > 0 && (
+          <>
+            <Polyline 
+              positions={[[selectedUserPt.lat, selectedUserPt.lng], [mockTasks[0].lat, mockTasks[0].lng]]} 
+              pathOptions={{ color: '#10b981', weight: 3, dashArray: '5 5', opacity: 0.6 }} 
+            />
+            {mockTasks.map(task => (
+              <Marker 
+                key={task.id} 
+                position={[task.lat, task.lng]}
+                icon={L.divIcon({
+                  className: 'custom-task-marker',
+                  html: `<div style="background-color:#10b981; width:16px; height:16px; border-radius:50%; border:2px solid white; box-shadow:0 0 10px rgba(16,185,129,0.5);"></div>`,
+                  iconSize: [16,16],
+                  iconAnchor: [8,8]
+                })}
+              >
+                <Popup>
+                  <div className="text-right font-sans" dir="rtl">
+                    <p className="font-bold text-sm text-slate-800">{task.title}</p>
+                    <p className="text-xs text-slate-500 mt-1">مهمة قادمة</p>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+          </>
         )}
 
         {/* Render Live Tracker Points */}

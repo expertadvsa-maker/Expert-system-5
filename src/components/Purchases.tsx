@@ -22,7 +22,8 @@ import {
   X,
   FileText,
   Eye,
-  MoreVertical
+  MoreVertical,
+  ArrowRightLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportToCSV } from '../lib/export';
@@ -93,6 +94,8 @@ export default function Purchases() {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isDateRangeDialogOpen, setIsDateRangeDialogOpen] = useState(false);
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
+  const [isReturnConfirmOpen, setIsReturnConfirmOpen] = useState(false);
+  const [purchaseToReturn, setPurchaseToReturn] = useState<any>(null);
   
   // Custom Approve State
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
@@ -106,14 +109,30 @@ export default function Purchases() {
 
   // AI Scanner State
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [captureGeo, setCaptureGeo] = useState<{lat: number, lng: number} | null>(null);
+  const [captureTime, setCaptureTime] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      toast.info('جاري جلب بيانات التحقيق (الموقع والوقت)...');
+      let currentGeo = null;
+      let currentTime = new Date().toISOString();
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+        });
+        currentGeo = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      } catch (err) {
+        console.warn('GPS not available');
+      }
+
       const reader = new FileReader();
       reader.onload = (event) => {
         setCapturedImage(event.target?.result as string);
+        setCaptureGeo(currentGeo);
+        setCaptureTime(currentTime);
       };
       reader.readAsDataURL(file);
     }
@@ -122,12 +141,18 @@ export default function Purchases() {
   // Form State
   const [formData, setFormData] = useState({
     amount: '',
+    supplierName: '',
     description: '',
+    invoiceDate: new Date().toISOString().split('T')[0],
+    hasVat: false,
     category: 'مواد وإنتاج',
-    projectId: '',
-    paymentMethod: 'cash' as 'cash' | 'transfer',
+    projectId: 'none',
+    paymentMethod: 'cash' as 'cash' | 'transfer' | 'credit',
     bankAccountId: '',
-    attachmentBase64: ''
+    attachmentBase64: '',
+    items: [] as string[],
+    supplierPhone: '',
+    invoiceNumber: ''
   });
 
   const processAIScan = async () => {
@@ -135,14 +160,19 @@ export default function Purchases() {
     setIsAnalyzing(true);
     const toastId = toast.loading('جاري تحليل الفاتورة بالذكاء الاصطناعي...');
     try {
-      const result = await analyzeInvoice(capturedImage);
+      const result = await analyzeInvoice(capturedImage, captureGeo, captureTime);
       if (result) {
         setFormData({
           ...formData,
           amount: result.amount.toString(),
-          description: result.vendor,
+          supplierName: result.vendor || 'مورد مجهول',
+          description: result.description || 'مشتريات',
+          hasVat: (result.taxAmount || 0) > 0,
           category: 'مواد وإنتاج',
-          attachmentBase64: capturedImage
+          attachmentBase64: capturedImage,
+          items: result.items || [],
+          supplierPhone: result.vendorPhone || '',
+          invoiceNumber: result.invoiceNumber || ''
         });
         toast.success('تم استخراج البيانات بنجاح', { id: toastId });
         setCapturedImage(null);
@@ -223,17 +253,112 @@ export default function Purchases() {
     });
   }, [searchTerm, statusFilter, purchases]);
 
+  const handleReturnPurchase = async (p: any) => {
+    setIsSubmitting(true);
+    try {
+      // Create return transaction
+      const returnData: any = {
+        type: 'purchase_return',
+        amount: p.amount,
+        taxAmount: p.taxAmount || 0,
+        hasVat: p.hasVat || false,
+        supplierName: p.supplierName || 'غير محدد',
+        description: `إرجاع فاتورة شراء: ${p.description}`,
+        category: p.category,
+        date: serverTimestamp(),
+        createdBy: profile?.uid,
+        status: 'approved',
+        projectId: p.projectId || null,
+        originalPaymentMethod: p.paymentMethod || 'cash',
+        bankAccountId: p.bankAccountId || null,
+      };
+      
+      await addDoc(collection(db, 'transactions'), returnData);
+
+      // Refund bank if applicable
+      if (p.bankAccountId && p.paymentMethod !== 'credit') {
+        const bankRef = doc(db, 'bankAccounts', p.bankAccountId);
+        await updateDoc(bankRef, {
+          balance: increment(p.amount)
+        });
+      }
+
+      toast.success('تم تسجيل المرتجع بنجاح');
+      setIsReturnConfirmOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('حدث خطأ أثناء تسجيل المرتجع');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleAddPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
-    if (!formData.amount || !formData.description) {
-      toast.error('يرجى ملء كافة الحقول');
+    if (!formData.amount || !formData.supplierName || !formData.description) {
+      toast.error('يرجى تعبئة الحقول الأساسية');
       return;
     }
-
+    
     setIsSubmitting(true);
     try {
-      const isManager = profile.role === 'manager';
+      const amountNum = parseFloat(formData.amount);
+      
+      // Project Budget Validation
+      if (formData.projectId && formData.projectId !== 'none') {
+        const proj = projects.find(p => p.id === formData.projectId);
+        const budget = proj?.budget || proj?.projectValue || 0;
+        if (budget > 0) {
+          const txSnap = await getDocs(query(collection(db, 'transactions'), where('projectId', '==', formData.projectId)));
+          let totalProjExp = 0;
+          txSnap.docs.forEach(d => {
+             const data = d.data();
+             if ((data.type === 'expense' || data.type === 'purchase' || data.type === 'worker_payment') && data.status !== 'cancelled') {
+                totalProjExp += data.amount || 0;
+             }
+          });
+          
+          if (totalProjExp + amountNum > budget) {
+            if (profile?.role !== 'manager') {
+              toast.error('عذراً، الطلب يتجاوز الميزانية المخصصة للمشروع. يرجى مراجعة الإدارة.');
+              setIsSubmitting(false);
+              return;
+            } else {
+              toast.warning('تنبيه: هذا الطلب سيتجاوز الميزانية المحددة للمشروع.');
+            }
+          }
+        }
+      }
+
+      // Check for duplicate invoice (Same amount and same supplier within the same day)
+      const duplicateQuery = query(
+        collection(db, "transactions"),
+        where("type", "==", "purchase"),
+        where("amount", "==", amountNum)
+      );
+      const duplicateSnap = await getDocs(duplicateQuery);
+      
+      let isDuplicate = false;
+      const inputDateStr = formData.invoiceDate ? new Date(formData.invoiceDate).toISOString().split('T')[0] : '';
+      
+      duplicateSnap.docs.forEach(d => {
+        const data = d.data();
+        if (data.status !== 'cancelled' && data.supplierName === formData.supplierName) {
+           const existingDateStr = data.invoiceDate ? (data.invoiceDate.toDate ? data.invoiceDate.toDate() : new Date(data.invoiceDate)).toISOString().split('T')[0] : '';
+           if (existingDateStr === inputDateStr || (data.invoiceNumber && formData.invoiceNumber && data.invoiceNumber === formData.invoiceNumber)) {
+             isDuplicate = true;
+           }
+        }
+      });
+
+      if (isDuplicate) {
+        toast.error('هذه الفاتورة مسجلة مسبقاً في النظام (نفس المورد والمبلغ والتاريخ)');
+        setIsSubmitting(false);
+        return;
+      }
+
+      let finalSupplierName = formData.supplierName.trim();
       let finalDescription = formData.description.trim();
       let finalCategory = formData.category;
 
@@ -241,7 +366,7 @@ export default function Purchases() {
       const shouldAutoCategorize = systemSettings?.enableAutoCategorization !== false;
 
       // Smart Matching Logic for Suppliers
-      if (shouldMatchSupplier && (formData.category === 'موردين' || formData.category === 'مواد خام' || formData.description)) {
+      if (shouldMatchSupplier && (formData.category === 'موردين' || formData.category === 'مواد خام' || formData.supplierName)) {
         try {
           const normalizedInput = normalizeArabic(finalDescription);
           
@@ -265,13 +390,13 @@ export default function Purchases() {
           // If match is > 90%, we refer to the existing supplier
           if (bestMatch && highestScore >= 0.9) {
             console.log(`Matched existing supplier: ${bestMatch.name} (Score: ${highestScore})`);
-            finalDescription = bestMatch.name; // Use the canonical name
+            finalSupplierName = bestMatch.name; // Use the canonical name
 
             // Suggest category based on supplier history (Auto-Categorization)
             if (shouldAutoCategorize) {
               const historyQuery = query(
                 collection(db, 'transactions'),
-                where('description', '==', bestMatch.name),
+                where('supplierName', '==', bestMatch.name),
                 where('type', '==', 'purchase')
               );
               const historySnap = await getDocs(historyQuery);
@@ -292,35 +417,68 @@ export default function Purchases() {
           } else {
             // Create new supplier if no good match
             await addDoc(collection(db, "suppliers"), {
-              name: finalDescription,
+              name: finalSupplierName,
+              phone: formData.supplierPhone || '',
               createdAt: serverTimestamp()
             });
-            console.log(`Created new supplier: ${finalDescription}`);
+            console.log(`Created new supplier: ${finalSupplierName} with phone: ${formData.supplierPhone}`);
           }
         } catch (error) {
           console.error("Error auto-adding supplier:", error);
         }
       }
 
-      await addDoc(collection(db, 'transactions'), {
+      const taxAmount = formData.hasVat ? parseFloat((amountNum - (amountNum / 1.15)).toFixed(2)) : 0;
+      const invoiceDateObj = formData.invoiceDate ? new Date(formData.invoiceDate) : new Date();
+      
+      const isAutoApproved = profile.role === 'manager' && (formData.bankAccountId || formData.paymentMethod === 'credit');
+      const finalStatus = isAutoApproved ? 'approved' : 'pending';
+
+      const transactionData: any = {
         type: 'purchase',
-        amount: parseFloat(formData.amount),
+        amount: amountNum,
+        taxAmount: taxAmount,
+        hasVat: formData.hasVat,
+        supplierName: finalSupplierName,
         description: finalDescription,
         category: finalCategory,
+        invoiceDate: invoiceDateObj,
         date: serverTimestamp(),
         createdBy: profile.uid,
-        status: 'pending', // All manual invoices require approval as per new rule
+        status: finalStatus,
         projectId: formData.projectId || null,
-        paymentMethod: isManager ? formData.paymentMethod : 'cash',
-        bankAccountId: isManager ? formData.bankAccountId : null,
-        supervisorId: !isManager ? profile.uid : null,
-        attachmentUrl: formData.attachmentBase64 || null
-      });
+        paymentMethod: profile.role === 'manager' ? formData.paymentMethod : 'cash',
+        bankAccountId: profile.role === 'manager' ? formData.bankAccountId : null,
+        supervisorId: profile.role !== 'manager' ? profile.uid : null,
+        attachmentUrl: formData.attachmentBase64 || null,
+        location: captureGeo || null,
+        isVerifiedAI: !!captureGeo && !!formData.attachmentBase64,
+        items: formData.items || [],
+        invoiceNumber: formData.invoiceNumber || ''
+      };
+
+      if (isAutoApproved) {
+        transactionData.approvedAt = serverTimestamp();
+        transactionData.approvedBy = profile.uid;
+      }
+
+      const docRef = await addDoc(collection(db, 'transactions'), transactionData);
+
+      if (isAutoApproved && formData.bankAccountId && formData.paymentMethod !== 'credit') {
+        const bankRef = doc(db, 'bankAccounts', formData.bankAccountId);
+        const bankSnap = await getDoc(bankRef);
+        if (bankSnap.exists()) {
+          const currentBalance = bankSnap.data().balance || bankSnap.data().initialBalance || 0;
+          await updateDoc(bankRef, {
+            balance: currentBalance - amountNum
+          });
+        }
+      }
 
       const projectTitle = projects.find(p => p.id === formData.projectId)?.title;
       await logActivity(
         'طلب شراء جديد',
-        `تم تسجيل طلب شراء للمورد: ${finalDescription} بمبلغ ${formData.amount} ر.س ${projectTitle ? `للمشروع: ${projectTitle}` : ''} بانتظار الاعتماد`,
+        `تم تسجيل طلب شراء للمورد: ${finalSupplierName} بمبلغ ${formData.amount} ر.س ${projectTitle ? `للمشروع: ${projectTitle}` : ''} ${isAutoApproved ? '(تم الاعتماد تلقائياً)' : 'بانتظار الاعتماد'}`,
         'info',
         'purchase',
         profile.uid
@@ -340,14 +498,14 @@ export default function Purchases() {
       // WhatsApp Logic
       const isSupervisor = profile.role === 'supervisor';
       const projectName = projects.find(p => p.id === formData.projectId)?.title || 'عام/غير محدد';
-      const message = `🛒 *طلب شراء جديد بانتظار الاعتماد*\n\n📝 *البيان:* ${finalDescription}\n💰 *المبلغ المطلوب:* ${Number(formData.amount).toLocaleString('ar-SA')} ر.س\n📁 *المشروع:* ${projectName}\n👤 *مُقدم الطلب:* ${profile.name}\n\nيرجى الدخول للنظام للمراجعة والاعتماد.`;
+      const message = `🛒 *طلب شراء جديد ${isAutoApproved ? 'وتم اعتماده' : 'بانتظار الاعتماد'}*\n\nمورد: ${finalSupplierName}\n📝 *البيان:* ${finalDescription}\n💰 *المبلغ:* ${Number(formData.amount).toLocaleString('ar-SA')} ر.س\n📁 *المشروع:* ${projectName}\n👤 *مُقدم الطلب:* ${profile.name}\n\nيرجى الدخول للنظام للمراجعة.`;
       
       // إرسال إشعار للمدير تلقائياً عبر واتساب
       await sendWhatsappToManager(message);
 
-      toast.success('تم إرسال الطلب للاعتماد المباشر وإخطار المدير');
+      toast.success(isAutoApproved ? 'تم تسجيل واعتماد الفاتورة بنجاح' : 'تم إرسال الطلب للاعتماد المباشر وإخطار المدير');
       setIsDialogOpen(false);
-      setFormData({ amount: '', description: '', category: 'مواد وإنتاج', projectId: '', paymentMethod: 'cash', bankAccountId: '', attachmentBase64: '' });
+      setFormData({ amount: '', supplierName: '', description: '', invoiceDate: new Date().toISOString().split('T')[0], hasVat: false, category: 'مواد وإنتاج', projectId: '', paymentMethod: 'cash', bankAccountId: '', attachmentBase64: '' });
     } catch (error) {
       toast.error('فشل في تسجيل طلب الشراء');
     } finally {
@@ -541,29 +699,112 @@ export default function Purchases() {
                 <DialogTitle className="text-xl font-bold text-primary">تسجيل فاتورة مشتريات</DialogTitle>
                 <DialogDescription className="text-muted-foreground">أدخل تفاصيل المواد والمبالغ المطلوبة أو استخدم المسح الذكي.</DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleAddPurchase} className="space-y-4 py-4">
+              <form onSubmit={handleAddPurchase} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto px-2">
                 <div className="space-y-2">
-                  <Label htmlFor="desc_p" className="font-bold text-gray-700">المورد / المواد</Label>
+                  <Label htmlFor="supplier_p" className="font-bold text-gray-700">المورد</Label>
                   <Input 
-                    id="desc_p" 
+                    id="supplier_p" 
                     required
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    value={formData.supplierName}
+                    onChange={(e) => setFormData({...formData, supplierName: e.target.value})}
                     placeholder="مثال: شركة المواد الأساسية..." 
                     className="h-11 rounded-lg text-right"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="amount_p" className="font-bold text-gray-700">المبلغ الإجمالي (ر.س)</Label>
+                  <Label htmlFor="desc_p" className="font-bold text-gray-700">البيان / المواد</Label>
                   <Input 
-                    id="amount_p" 
-                    type="number"
+                    id="desc_p" 
                     required
-                    value={formData.amount}
-                    onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                    placeholder="0.00" 
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    placeholder="مثال: أسمنت، حديد، إلخ..." 
                     className="h-11 rounded-lg text-right"
                   />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="amount_p" className="font-bold text-gray-700">المبلغ الإجمالي (ر.س)</Label>
+                    <Input 
+                      id="amount_p" 
+                      type="number"
+                      required
+                      value={formData.amount}
+                      onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                      placeholder="0.00" 
+                      className="h-11 rounded-lg text-right"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="invoice_date" className="font-bold text-gray-700">تاريخ الفاتورة</Label>
+                    <Input 
+                      id="invoice_date" 
+                      type="date"
+                      required
+                      value={formData.invoiceDate}
+                      onChange={(e) => setFormData({...formData, invoiceDate: e.target.value})}
+                      className="h-11 rounded-lg text-right"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-2 space-x-reverse bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  <input
+                    type="checkbox"
+                    id="has_vat"
+                    checked={formData.hasVat}
+                    onChange={(e) => setFormData({...formData, hasVat: e.target.checked})}
+                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="has_vat" className="font-bold text-gray-700 cursor-pointer">الفاتورة شاملة ضريبة القيمة المضافة (15%)</Label>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="font-bold text-gray-700">مرفق الفاتورة</Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 h-11 border-dashed text-slate-500 hover:text-primary hover:border-primary"
+                      onClick={() => document.getElementById('manual-upload')?.click()}
+                    >
+                      <Scan className="w-4 h-4 ml-2" />
+                      {formData.attachmentBase64 ? 'تغيير المرفق' : 'اختر صورة/ملف'}
+                    </Button>
+                    <input 
+                      type="file" 
+                      id="manual-upload" 
+                      accept="image/*,application/pdf" 
+                      className="hidden" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          toast.info('جاري جلب بيانات التحقيق للمرفق...');
+                          let currentGeo = null;
+                          try {
+                            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                              navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 });
+                            });
+                            currentGeo = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                          } catch(err) {}
+                          
+                          setCaptureGeo(currentGeo);
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setFormData({...formData, attachmentBase64: ev.target?.result as string});
+                            toast.success('تم إضافة المرفق وتوثيق الموقع');
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </div>
+                  {formData.attachmentBase64 && (
+                    <div className="text-xs text-emerald-600 font-bold flex items-center justify-end mt-1">
+                      <ShieldCheck className="w-3 h-3 ml-1" />
+                      يوجد مرفق
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="font-bold text-gray-700">التصنيف</Label>
@@ -609,10 +850,10 @@ export default function Purchases() {
                         <SelectContent>
                           <SelectItem value="cash">كاش (الخزينة)</SelectItem>
                           <SelectItem value="transfer">تحويل من الحساب</SelectItem>
+                          <SelectItem value="credit">آجل (ذمم موردين)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-
                     {formData.paymentMethod === 'transfer' && (
                       <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
                         <Label className="font-bold text-gray-700">الحساب البنكي</Label>
@@ -779,7 +1020,12 @@ export default function Purchases() {
                       <TableCell className="px-6 py-4 text-[13px] font-bold text-primary">#{p.id.slice(0, 6)}</TableCell>
                       <TableCell className="px-6 py-4">
                         <div className="flex flex-col min-w-[200px] max-w-[400px]">
-                          <span className="text-[13px] font-bold text-primary" title={p.description}>{p.description}</span>
+                          <span className="text-[13px] font-bold text-primary" title={p.supplierName || p.description}>
+                            {p.supplierName || 'مورد غير محدد'}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1" title={p.description}>
+                            {p.description}
+                          </span>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-[10px] text-muted-foreground">{p.category}</span>
                             {p.projectId && projects.find(proj => proj.id === p.projectId) && (
@@ -790,7 +1036,14 @@ export default function Purchases() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="px-6 py-4 text-[13px] font-bold text-primary">{p.amount.toLocaleString()} ر.س</TableCell>
+                      <TableCell className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-[13px] font-bold text-primary">{p.amount.toLocaleString()} ر.س</span>
+                          {p.hasVat && (
+                            <span className="text-[10px] text-emerald-600 font-bold">شامل الضريبة ({p.taxAmount} ر.س)</span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="px-6 py-4 text-[12px] text-muted-foreground font-medium">{p.date}</TableCell>
                       <TableCell className="px-6 py-4">
                         <div className="flex justify-center">
@@ -832,6 +1085,18 @@ export default function Purchases() {
                                 <span>عرض التفاصيل مع الفاتورة</span>
                                 <Eye className="w-4 h-4" />
                               </DropdownMenuItem>
+                              {profile?.role === 'manager' && p.status === 'approved' && (
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    setPurchaseToReturn(p);
+                                    setIsReturnConfirmOpen(true);
+                                  }} 
+                                  className="flex items-center justify-end gap-2 text-[13px] text-amber-600 font-bold cursor-pointer hover:bg-amber-50 transition-colors"
+                                >
+                                  <span>تسجيل مرتجع (إشعار دائن)</span>
+                                  <ArrowRightLeft className="w-4 h-4" />
+                                </DropdownMenuItem>
+                              )}
                               {isManager && (
                                 <DropdownMenuItem 
                                   onClick={() => {
@@ -869,10 +1134,13 @@ export default function Purchases() {
                   <div key={p.id} className="p-3 flex items-center justify-between active:bg-slate-50 transition-all">
                      <div className="flex flex-col gap-1 min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                           <span className="text-[11px] font-black text-primary truncate max-w-[150px]">{p.description}</span>
+                           <span className="text-[11px] font-black text-primary truncate max-w-[150px]">{p.supplierName || 'مورد'}</span>
                            <Badge variant="outline" className="text-[7px] px-1 py-0 h-3.5 border-slate-100 text-muted-foreground font-bold">{p.id.slice(0, 4)}</Badge>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 mt-0.5">
+                           <span className="text-[9px] text-slate-500 truncate max-w-[150px]">{p.description}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
                            <span className="text-[8px] text-muted-foreground font-bold">{p.date?.split(',')?.[0] || '...'}</span>
                            <span className={`text-[7px] font-bold px-1 py-0 rounded-sm uppercase ${
                             p.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
@@ -886,6 +1154,7 @@ export default function Purchases() {
                            <p className="text-[12px] font-black text-primary">
                               {(p.amount || 0).toLocaleString()} <span className="text-[8px] font-normal">ر.س</span>
                            </p>
+                           {p.hasVat && <p className="text-[8px] text-emerald-600 font-bold text-left">شامل الضريبة</p>}
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 p-0 hover:bg-slate-100 text-slate-400 rounded-lg focus:outline-none">
@@ -952,7 +1221,7 @@ export default function Purchases() {
               {capturedImage && <img src={capturedImage} alt="Captured" className="w-full h-full object-contain" />}
             </div>
           </div>
-          <DialogFooter className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3 mt-2">
             <Button 
               onClick={processAIScan} 
               disabled={isAnalyzing}
@@ -968,7 +1237,7 @@ export default function Purchases() {
             >
               إعادة التصوير
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1088,16 +1357,53 @@ export default function Purchases() {
             <div className="py-4 space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="space-y-1">
-                  <span className="text-slate-500 font-bold block">المورد / البيان</span>
+                  <span className="text-slate-500 font-bold block">المورد</span>
+                  <p className="font-medium">{selectedPurchase.supplierName || 'مورد غير محدد'}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-slate-500 font-bold block">المواد / البيان</span>
                   <p className="font-medium">{selectedPurchase.description}</p>
                 </div>
                 <div className="space-y-1">
+                  <span className="text-slate-500 font-bold block">رقم الفاتورة</span>
+                  <p className="font-medium">{selectedPurchase.invoiceNumber || 'غير متوفر'}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-slate-500 font-bold block">التصنيف</span>
+                  <p className="font-medium">{selectedPurchase.category}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-slate-500 font-bold block">طريقة الدفع</span>
+                  <p className="font-medium">
+                    {selectedPurchase.paymentMethod === 'cash' ? 'نقدي/شبكة' : 
+                     selectedPurchase.paymentMethod === 'transfer' ? 'حوالة بنكية' : 'آجل (ذمم)'}
+                  </p>
+                </div>
+                <div className="space-y-1">
                   <span className="text-slate-500 font-bold block">المبلغ</span>
-                  <p className="font-bold text-primary">{selectedPurchase.amount?.toLocaleString()} ر.س</p>
+                  <div className="flex flex-col">
+                    <p className="font-bold text-primary">{selectedPurchase.amount?.toLocaleString()} ر.س</p>
+                    {selectedPurchase.hasVat && (
+                      <span className="text-[11px] text-emerald-600 font-bold">شامل ضريبة ({selectedPurchase.taxAmount} ر.س)</span>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <span className="text-slate-500 font-bold block">التاريخ</span>
-                  <p className="font-medium text-slate-700">{selectedPurchase.date}</p>
+                  <p className="font-medium text-slate-700">{selectedPurchase.invoiceDate ? (selectedPurchase.invoiceDate.toDate ? selectedPurchase.invoiceDate.toDate().toLocaleDateString('ar-SA') : new Date(selectedPurchase.invoiceDate).toLocaleDateString('ar-SA')) : selectedPurchase.date}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-slate-500 font-bold block">التحقيق والموقع</span>
+                  {selectedPurchase.location ? (
+                    <div className="flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-50 px-2 py-1 rounded w-fit">
+                      <ShieldCheck className="w-3 h-3" />
+                      موثق ({selectedPurchase.location.lat.toFixed(4)}, {selectedPurchase.location.lng.toFixed(4)})
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-slate-400 font-medium text-[11px] bg-slate-50 px-2 py-1 rounded w-fit">
+                      غير موثق (إدخال يدوي)
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <span className="text-slate-500 font-bold block">الحالة</span>
@@ -1106,6 +1412,17 @@ export default function Purchases() {
                   </Badge>
                 </div>
               </div>
+
+              {Array.isArray(selectedPurchase.items) && selectedPurchase.items.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                   <h4 className="font-bold text-slate-700 mb-2 block text-sm">الأصناف المستخرجة بالذكاء الاصطناعي</h4>
+                   <ul className="list-disc list-inside text-xs text-slate-600 space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                     {selectedPurchase.items.map((item: string, idx: number) => (
+                       <li key={idx}>{item}</li>
+                     ))}
+                   </ul>
+                </div>
+              )}
 
               {selectedPurchase.attachmentUrl && (
                 <div className="mt-4 pt-4 border-t border-slate-100">

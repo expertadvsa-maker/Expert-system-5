@@ -14,7 +14,10 @@ import {
   AlertCircle,
   Loader2,
   Calendar,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ShieldCheck,
+  MapPin,
+  ExternalLink
 } from 'lucide-react';
 import { 
   collection, 
@@ -188,12 +191,16 @@ export default function ApprovalCenter() {
             {transactions.map((tx) => (
               <ApprovalCard 
                 key={tx.id}
-                title={tx.vendor || 'مورد جديد'}
-                user="OCR كاميرا"
+                title={tx.vendor || tx.supplierName || 'مورد جديد'}
+                user={tx.createdBy ? 'فاتورة شراء' : "OCR كاميرا"}
                 details={`${tx.amount} ر.س - ${tx.description}`}
-                onApprove={() => handleApprove('transactions', tx.id, `فاتورة ${tx.vendor}`)}
-                onReject={() => handleReject('transactions', tx.id, `فاتورة ${tx.vendor}`)}
+                taxAmount={tx.taxAmount}
+                items={tx.items}
+                onApprove={() => handleApprove('transactions', tx.id, `فاتورة ${tx.vendor || tx.supplierName}`)}
+                onReject={() => handleReject('transactions', tx.id, `فاتورة ${tx.vendor || tx.supplierName}`)}
                 showPreview
+                geoCapture={tx.geoCapture || tx.location}
+                verificationData={tx.verificationData}
               />
             ))}
             {transactions.length === 0 && <EmptyState text="لا توجد فواتير بانتظار المراجعة" />}
@@ -237,7 +244,7 @@ function StatSummary({ title, count, icon: Icon, color }: any) {
   );
 }
 
-function ApprovalCard({ title, user, details, onApprove, onReject, showPreview }: any) {
+function ApprovalCard({ title, user, details, taxAmount, items, onApprove, onReject, showPreview, geoCapture, verificationData }: any) {
   return (
     <Card className="rounded-xl sm:rounded-2xl border-border bg-white shadow-sm hover:shadow-md transition-all overflow-hidden border-r-2 sm:border-r-4 border-r-amber-400 flex flex-col h-full">
       <CardContent className="p-3 sm:p-6 flex flex-col flex-1">
@@ -257,9 +264,64 @@ function ApprovalCard({ title, user, details, onApprove, onReject, showPreview }
         </div>
         
         <div className="flex-1">
-          <p className="text-[9px] sm:text-xs text-slate-600 mb-3 sm:mb-6 bg-slate-50/50 p-2 sm:p-3 rounded-lg sm:rounded-xl border border-dashed border-slate-200 line-clamp-2 sm:line-clamp-none italic sm:not-italic">
+          <p className="text-[9px] sm:text-xs text-slate-600 mb-2 bg-slate-50/50 p-2 sm:p-3 rounded-lg sm:rounded-xl border border-dashed border-slate-200 line-clamp-2 sm:line-clamp-none italic sm:not-italic">
             {details}
           </p>
+
+          {Array.isArray(items) && items.length > 0 && (
+            <div className="mb-2 flex flex-col gap-1">
+              <span className="text-[9px] sm:text-xs font-bold text-slate-500">تفاصيل الأصناف:</span>
+              <ul className="text-[9px] sm:text-[10px] text-slate-700 space-y-1 bg-slate-50 p-2 rounded-lg border border-slate-100 list-inside list-disc">
+                {items.map((item: string, idx: number) => (
+                  <li key={idx} className="truncate">{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {taxAmount !== undefined && taxAmount > 0 && (
+            <div className="mb-3 sm:mb-4 flex items-center gap-2">
+              <Badge variant="outline" className="text-[9px] border-indigo-100 text-indigo-700 bg-indigo-50">
+                ضريبة القيمة المضافة: {taxAmount} ر.س
+              </Badge>
+            </div>
+          )}
+
+          {verificationData && (
+            <div className="mb-3 sm:mb-4 p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 flex flex-col gap-2">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold text-emerald-800 flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  نسبة الموثوقية (AI)
+                </span>
+                <Badge className={`px-2 py-0 text-[10px] ${verificationData.trustScore > 80 ? 'bg-emerald-500' : verificationData.trustScore > 50 ? 'bg-amber-500' : 'bg-red-500'}`}>
+                  {verificationData.trustScore}%
+                </Badge>
+              </div>
+              {verificationData.badges?.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {verificationData.badges.map((b: string, i: number) => (
+                    <span key={i} className="text-[8px] sm:text-[9px] bg-white border border-emerald-200 text-emerald-700 px-1.5 py-0.5 rounded-full font-bold">
+                      {b}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {geoCapture && (
+            <div className="mb-3 sm:mb-4 p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+               <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
+                 <MapPin className="w-3 h-3 text-primary" />
+                 موقع الالتقاط الجغرافي
+               </div>
+               <a href={`https://maps.google.com/?q=${geoCapture.lat},${geoCapture.lng}`} target="_blank" rel="noreferrer" className="text-[10px] sm:text-xs text-indigo-600 hover:underline flex items-center gap-1">
+                 عرض موقع الالتقاط على الخريطة
+                 <ExternalLink className="w-3 h-3" />
+               </a>
+            </div>
+          )}
           
           {showPreview && (
             <div className="mb-3 sm:mb-6 p-4 sm:p-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 flex flex-col items-center justify-center gap-1 text-slate-300 group cursor-pointer hover:border-accent hover:text-accent transition-all">

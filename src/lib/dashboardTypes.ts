@@ -18,10 +18,15 @@ export type WidgetType =
   | 'stat_purchases'
   | 'ops_summary'
   | 'attendance_today'
+  | 'stat_inventory'
+  | 'stat_equipment'
+  | 'tasks_progress'
+  | 'attendance_radar'
   // Smart
   | 'ai_insight'
   | 'voice_briefing'
   | 'sticky_note'
+  | 'system_health'
   // Action
   | 'quick_actions'
   | 'list_tasks'
@@ -31,7 +36,12 @@ export type WidgetType =
   | 'btn_create_invoice'
   | 'btn_create_quote'
   | 'btn_manage_clients'
-  | 'btn_manage_reps';
+  | 'btn_manage_reps'
+  | 'btn_scan_receipt'
+  | 'btn_add_employee'
+  | 'leave_requests'
+  // Custom
+  | 'generic_custom';
 
 export type WidgetSize = 'sm' | 'md' | 'lg' | 'xl' | 'xxl';
 
@@ -45,11 +55,13 @@ export interface WidgetInstance {
   order: number;           // position (0-based)
   size: WidgetSize;        // grid size
   colorScheme: ColorScheme;
+  customColor?: string;    // custom hex color override
   customTitle?: string;    // override default title
   displayMode?: string;    // 'card' | 'chart' | 'table'
-  cardStyle?: 'default' | 'glass' | 'neon' | 'gradient';
+  cardStyle?: 'default' | 'glass' | 'neon' | 'gradient' | 'neumorphic';
   alertThreshold?: number; // smart alert threshold
   settings?: Record<string, any>;
+  customContent?: string;  // user-defined extra content (HTML/text)
 }
 
 export interface DashboardConfig {

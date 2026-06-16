@@ -22,7 +22,10 @@ import {
   Navigation,
   Compass,
   Trash2,
-  Edit2
+  Edit2,
+  Battery,
+  Zap,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -124,9 +127,13 @@ export default function CommandCenter() {
     return Array.from(combinedMap.values());
   }, [dbPoints, dbUsers]);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | undefined>();
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const notifiedAnomalies = useRef<Set<string>>(new Set());
 
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isLiveSimulating, setIsLiveSimulating] = useState(false);
+  const dbPointsRef = useRef<TrackerPoint[]>([]);
+  useEffect(() => { dbPointsRef.current = dbPoints; }, [dbPoints]);
   
   const [zoneModal, setZoneModal] = useState<{
     isOpen: boolean;
@@ -139,7 +146,7 @@ export default function CommandCenter() {
   }>({ isOpen: false, mode: 'new', zoneId: '', title: '', type: 'office', radius: 100, inputLink: '' });
 
   // New features state
-  const [mapType, setMapType] = useState<'default' | 'satellite'>('default');
+  const [mapTheme, setMapTheme] = useState<'light' | 'dark' | 'satellite'>('dark');
   const [contextMenu, setContextMenu] = useState<{x: number, y: number, zoneId: string} | null>(null);
   const [showUsersModal, setShowUsersModal] = useState<'active' | 'offline' | null>(null);
 
@@ -161,6 +168,29 @@ export default function CommandCenter() {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
+
+  // Live Simulation Loop
+  useEffect(() => {
+    if (!isLiveSimulating || !activeCompanyId) return;
+    
+    const interval = setInterval(() => {
+      const currentPoints = dbPointsRef.current;
+      currentPoints.forEach(p => {
+        if (p.status === 'active') {
+          const newLat = p.lat + (Math.random() - 0.5) * 0.0004; // small offset
+          const newLng = p.lng + (Math.random() - 0.5) * 0.0004;
+          updateDoc(doc(db, 'live_tracking', p.id), {
+            lat: newLat,
+            lng: newLng,
+            speed: Math.floor(Math.random() * 60) + 10, // random speed
+            timestamp: new Date().toISOString()
+          }).catch(e => console.error("Sim error:", e));
+        }
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isLiveSimulating, activeCompanyId]);
 
   // Fetch History Points
   useEffect(() => {
@@ -239,6 +269,13 @@ export default function CommandCenter() {
         
         if (!notifiedAnomalies.current.has(anomalyKey)) {
           notifiedAnomalies.current.add(anomalyKey);
+
+          // 🚨 Geo-Fencing Alarm Sound
+          try {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.volume = 0.6;
+            audio.play().catch(() => {});
+          } catch (e) {}
           
           // Add to Custom Live Alerts Panel
           setLiveAlerts(prev => [{
@@ -271,6 +308,13 @@ export default function CommandCenter() {
       
       if (!notifiedAnomalies.current.has(congKey)) {
         notifiedAnomalies.current.add(congKey);
+
+        // 🚨 Congregation Alarm Sound
+        try {
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+          audio.volume = 0.6;
+          audio.play().catch(() => {});
+        } catch (e) {}
         
         // Add to Custom Live Alerts Panel
         setLiveAlerts(prev => [{
@@ -448,38 +492,55 @@ export default function CommandCenter() {
         <LiveMap 
           zones={zones} 
           points={displayPoints} 
-          center={selectedPoint || { lat: 24.7136, lng: 46.6753 }} 
-          zoom={13} 
+          center={selectedUserId ? (points.find(p => p.userId === selectedUserId) || selectedPoint || { lat: 24.7136, lng: 46.6753 }) : (selectedPoint || { lat: 24.7136, lng: 46.6753 })} 
+          zoom={selectedUserId || selectedPoint ? 17 : 13} 
           onMapClick={() => {}}
-          mapType={mapType}
+          mapTheme={mapTheme}
           historyTrack={historyMode ? historyPoints.slice(0, historyIndex + 1) : undefined}
+          selectedUserId={selectedUserId}
         />
         
         {/* Floating Map Controls */}
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-6 z-[400] flex flex-row gap-4">
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-6 z-[400] flex flex-row gap-4 items-center bg-slate-900/80 backdrop-blur-xl p-2 rounded-3xl border border-slate-700/50 shadow-2xl">
           <button 
-            onClick={() => setMapType(prev => prev === 'default' ? 'satellite' : 'default')}
-            className="w-12 h-12 bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-2xl shadow-2xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 transition-all group relative hover:scale-105"
-            title="تبديل الخريطة"
+            onClick={() => setMapTheme('dark')}
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${mapTheme === 'dark' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}
+            title="خريطة ليلية"
           >
-            <Globe className="w-6 h-6" />
-            <span className="absolute bottom-full mb-3 bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-lg border border-slate-700">
-              {mapType === 'default' ? 'قمر صناعي' : 'خريطة عادية'}
-            </span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+          </button>
+          
+          <button 
+            onClick={() => setMapTheme('light')}
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${mapTheme === 'light' ? 'bg-amber-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}
+            title="خريطة نهارية"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+          </button>
+          
+          <div className="w-px h-6 bg-slate-700/50 mx-1"></div>
+
+          <button 
+            onClick={() => setMapTheme('satellite')}
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${mapTheme === 'satellite' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}
+            title="قمر صناعي"
+          >
+            <Globe className="w-5 h-5" />
           </button>
           
           <button 
             onClick={() => {
-               if (navigator.geolocation) {
-                 toast.loading('جاري تحديد موقعك...', { id: 'locating' });
-                 navigator.geolocation.getCurrentPosition(pos => {
-                   toast.success('تم التحديد بنجاح', { id: 'locating' });
-                   setSelectedPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-                 }, (error) => {
-                   toast.error('يرجى تفعيل صلاحية الموقع الجغرافي من المتصفح', { id: 'locating' });
-                 }, { enableHighAccuracy: true, timeout: 10000 });
+               // Ignore browser GPS entirely since it's a desktop and causes timeouts.
+               // Just find the user's avatar or any active avatar on the map.
+               const myLocation = dbPointsRef.current.find(p => p.userId === user?.uid);
+               if (myLocation) {
+                 setSelectedPoint({ lat: myLocation.lat, lng: myLocation.lng });
+                 setSelectedUserId(myLocation.userId);
+                 toast.success('تم تحديد موقعك بنجاح', { id: 'locating' });
                } else {
-                 toast.error('المتصفح لا يدعم تحديد الموقع');
+                 setSelectedPoint({ lat: 24.7136, lng: 46.6753 });
+                 setSelectedUserId(null);
+                 toast.success('تم تحديد الموقع الافتراضي', { id: 'locating' });
                }
             }}
             className="w-12 h-12 bg-emerald-600/90 backdrop-blur-md border border-emerald-500/50 rounded-2xl shadow-2xl flex items-center justify-center text-emerald-50 hover:text-white hover:bg-emerald-500 transition-all group relative hover:scale-105"
@@ -492,7 +553,7 @@ export default function CommandCenter() {
           </button>
 
           <button 
-            onClick={() => setSelectedPoint({ lat: 24.7136, lng: 46.6753 })}
+            onClick={() => { setSelectedPoint({ lat: 24.7136, lng: 46.6753 }); setSelectedUserId(null); }}
             className="w-12 h-12 bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-2xl shadow-2xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 transition-all group relative hover:scale-105"
             title="بوصلة / ضبط الرؤية"
           >
@@ -505,68 +566,152 @@ export default function CommandCenter() {
       </div>
 
       {/* OVERLAYS - GLASSMORPHISM PANELS */}
-      <div className="relative z-10 w-full h-full pointer-events-none flex p-4 gap-4">
+      <div className="relative z-10 w-full h-full pointer-events-none flex p-4 gap-4 justify-between">
         
+        {/* Left Panel - Deep Focus (Appears when a user is selected) */}
+        <div className="flex flex-col h-full pointer-events-none">
+          <AnimatePresence>
+            {selectedUserId && (
+              <motion.div 
+                initial={{ x: -50, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -50, opacity: 0 }}
+                className="w-[340px] mt-20 bg-slate-900/80 backdrop-blur-3xl border border-emerald-500/30 rounded-3xl p-6 shadow-[0_8px_32px_rgba(16,185,129,0.2)] flex flex-col gap-5 pointer-events-auto relative overflow-hidden"
+              >
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+                {(() => {
+                  const userPt = points.find(p => p.userId === selectedUserId);
+                  if (!userPt) return null;
+                  
+                  return (
+                    <>
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-full bg-slate-800 border-2 border-emerald-500/50 flex items-center justify-center overflow-hidden shrink-0">
+                          {userPt.photoURL ? (
+                            <img src={userPt.photoURL} alt={userPt.userName} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xl font-bold text-emerald-400">{userPt.userName?.charAt(0) || '?'}</span>
+                          )}
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-black text-white">{userPt.userName}</h2>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`w-2 h-2 rounded-full ${userPt.status === 'active' ? 'bg-emerald-500 animate-pulse' : userPt.status === 'idle' ? 'bg-amber-500 animate-pulse' : 'bg-slate-500'}`}></span>
+                            <span className="text-xs font-bold text-slate-300">
+                              {userPt.status === 'active' ? 'متحرك نشط' : userPt.status === 'idle' ? 'في حالة ركود' : 'غير متصل'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mt-2">
+                        <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 flex flex-col gap-1">
+                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Activity className="w-3 h-3"/> السرعة الحالية</span>
+                          <span className="text-lg font-black text-white">{userPt.speed || 0} <span className="text-xs text-slate-500">كم/س</span></span>
+                        </div>
+                        <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 flex flex-col gap-1">
+                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Battery className="w-3 h-3"/> بطارية الجهاز</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-lg font-black ${userPt.batteryLevel && userPt.batteryLevel < 20 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                              {userPt.batteryLevel !== undefined && userPt.batteryLevel !== null ? `${userPt.batteryLevel}%` : 'N/A'}
+                            </span>
+                            {userPt.isCharging && <Zap className="w-4 h-4 text-amber-400" />}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 flex flex-col gap-2 mt-1">
+                         <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3"/> العنوان الأقرب (تقريبي)</span>
+                         <span className="text-sm font-bold text-white leading-relaxed">
+                           شارع الملك فهد، بالقرب من حي العليا، الرياض
+                         </span>
+                      </div>
+                      
+                      <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 flex flex-col gap-2">
+                         <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Clock className="w-3 h-3"/> آخر تحديث</span>
+                         <span className="text-sm font-bold text-slate-300">
+                           {new Date(userPt.timestamp).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                         </span>
+                      </div>
+
+                      <button 
+                        onClick={() => setSelectedUserId(null)}
+                        className="mt-2 w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm transition-colors"
+                      >
+                        إغلاق لوحة التركيز
+                      </button>
+                    </>
+                  );
+                })()}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         {/* Right Panel - Stats & Controls */}
         <motion.div 
           initial={{ x: 50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          className="w-80 h-full flex flex-col gap-4 pointer-events-auto"
+          className="w-[340px] h-full flex flex-col gap-4 pointer-events-auto"
         >
-          {/* Header */}
-          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-2xl flex flex-col gap-4">
-            <div className="flex justify-between items-center">
-              <h1 className="text-xl font-black flex items-center gap-2 text-white">
+          {/* Header Card */}
+          <div className="bg-slate-900/60 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col gap-5 relative overflow-hidden">
+            {/* Subtle glow effect */}
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"></div>
+            <div className="absolute -top-20 -right-20 w-40 h-40 bg-emerald-500/10 blur-[50px] rounded-full pointer-events-none"></div>
+
+            <div className="flex justify-between items-center relative z-10">
+              <h1 className="text-xl font-black flex items-center gap-2 text-white bg-clip-text text-transparent bg-gradient-to-l from-white to-slate-400">
                 <Radar className="w-6 h-6 text-emerald-400" />
                 الرادار الميداني
               </h1>
               
               <button 
                 onClick={() => setHistoryMode(!historyMode)}
-                className={`text-xs px-3 py-1 rounded-full font-bold transition-all border ${historyMode ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}
+                className={`text-[11px] px-3 py-1.5 rounded-full font-bold transition-all border ${historyMode ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:text-white hover:bg-slate-700/80'}`}
               >
                 {historyMode ? 'إيقاف الأرشيف' : 'تشغيل الأرشيف'}
               </button>
             </div>
             
             {!historyMode ? (
-              <div className="grid grid-cols-2 gap-3 mt-2">
+              <div className="grid grid-cols-2 gap-3 mt-1 relative z-10">
                 <div 
                   onClick={() => setShowUsersModal('active')}
-                  className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 cursor-pointer hover:bg-slate-700/80 hover:border-emerald-500/50 transition-all active:scale-95"
+                  className="group bg-gradient-to-br from-slate-800/60 to-slate-900/80 p-4 rounded-2xl border border-slate-700/50 cursor-pointer hover:border-emerald-500/50 transition-all active:scale-95 shadow-inner"
                 >
-                  <div className="text-emerald-400 flex items-center gap-1.5 mb-1 text-xs font-bold">
-                    <Activity className="w-3.5 h-3.5" />
+                  <div className="text-emerald-400 flex items-center gap-2 mb-2 text-xs font-bold group-hover:scale-105 transition-transform origin-right">
+                    <Activity className="w-4 h-4" />
                     نشط حالياً
                   </div>
-                  <div className="text-2xl font-black text-white">{activeCount}</div>
+                  <div className="text-3xl font-black text-white tracking-tight">{activeCount}</div>
                 </div>
                 <div 
                   onClick={() => setShowUsersModal('offline')}
-                  className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 cursor-pointer hover:bg-slate-700/80 hover:border-slate-500/50 transition-all active:scale-95"
+                  className="group bg-gradient-to-br from-slate-800/60 to-slate-900/80 p-4 rounded-2xl border border-slate-700/50 cursor-pointer hover:border-slate-400/50 transition-all active:scale-95 shadow-inner"
                 >
-                  <div className="text-slate-400 flex items-center gap-1.5 mb-1 text-xs font-bold">
-                    <Users className="w-3.5 h-3.5" />
-                    غير نشط (أوفلاين)
+                  <div className="text-slate-400 flex items-center gap-2 mb-2 text-xs font-bold group-hover:scale-105 transition-transform origin-right">
+                    <Users className="w-4 h-4" />
+                    غير نشط
                   </div>
-                  <div className="text-2xl font-black text-white">{offlineCount}</div>
+                  <div className="text-3xl font-black text-white tracking-tight">{offlineCount}</div>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-3 mt-2 border-t border-slate-800 pt-3">
+              <div className="flex flex-col gap-3 mt-1 border-t border-slate-800/50 pt-4 relative z-10">
                 <label className="text-xs text-slate-400 font-bold">تاريخ المسار</label>
                 <input 
                   type="date" 
                   value={historyDate}
                   onChange={(e) => setHistoryDate(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                  className="bg-slate-950/50 border border-slate-700/50 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-colors"
                 />
                 
-                <label className="text-xs text-slate-400 font-bold">الموظف</label>
+                <label className="text-xs text-slate-400 font-bold mt-1">الموظف</label>
                 <select 
                   value={historyUserId || ''}
                   onChange={(e) => setHistoryUserId(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                  className="bg-slate-950/50 border border-slate-700/50 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-colors"
                 >
                   <option value="">اختر الموظف...</option>
                   {dbUsers.map(u => (
@@ -575,8 +720,8 @@ export default function CommandCenter() {
                 </select>
 
                 {historyPoints.length > 0 && (
-                  <div className="mt-2">
-                    <div className="flex justify-between text-xs text-indigo-300 mb-1">
+                  <div className="mt-3 bg-slate-950/30 p-3 rounded-xl border border-slate-800/50">
+                    <div className="flex justify-between text-[10px] text-indigo-300 font-bold mb-2">
                       <span>بداية اليوم</span>
                       <span>نهاية اليوم</span>
                     </div>
@@ -586,9 +731,9 @@ export default function CommandCenter() {
                       max={historyPoints.length - 1} 
                       value={historyIndex}
                       onChange={(e) => setHistoryIndex(parseInt(e.target.value))}
-                      className="w-full accent-indigo-500"
+                      className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
                     />
-                    <div className="text-center text-xs text-slate-300 mt-2 font-mono">
+                    <div className="text-center text-xs text-white mt-3 font-mono bg-indigo-500/10 py-1.5 rounded-lg border border-indigo-500/20 inline-block px-4 w-full">
                       الوقت: {new Date(historyPoints[historyIndex]?.timestamp || Date.now()).toLocaleTimeString('ar-SA')}
                     </div>
                   </div>
@@ -598,10 +743,14 @@ export default function CommandCenter() {
           </div>
 
           {/* Zones List */}
-          <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-2xl flex-1 overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-primary" />
+          <div className="bg-slate-900/60 backdrop-blur-3xl border border-white/10 rounded-3xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex-1 overflow-hidden flex flex-col relative">
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+            
+            <div className="flex justify-between items-center mb-5 mt-1 relative z-10">
+              <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
+                  <MapPin className="w-3.5 h-3.5 text-primary" />
+                </div>
                 النطاقات الجغرافية
               </h2>
               <button 
@@ -622,12 +771,12 @@ export default function CommandCenter() {
               </button>
             </div>
 
-            <div className="overflow-y-auto pr-1 no-scrollbar space-y-3 flex-1">
+            <div className="overflow-y-auto pr-2 no-scrollbar space-y-3 flex-1 relative z-10">
               {zones.map(z => (
                 <div 
                   key={z.id} 
-                  className="p-3 rounded-xl bg-slate-800/40 border border-slate-700 hover:bg-slate-700/50 cursor-pointer transition-colors"
-                  onClick={() => setSelectedPoint(z.center)}
+                  className="p-3.5 rounded-2xl bg-gradient-to-r from-slate-800/50 to-slate-800/10 border border-slate-700/50 hover:bg-slate-700/50 hover:border-slate-500/50 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)] cursor-pointer transition-all group"
+                  onClick={() => { setSelectedPoint(z.center); setSelectedUserId(null); }}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -642,17 +791,17 @@ export default function CommandCenter() {
                     });
                   }}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${
-                      z.type === 'office' ? 'bg-blue-500/20 text-blue-400' : 
-                      z.type === 'project' ? 'bg-amber-500/20 text-amber-400' : 
-                      'bg-purple-500/20 text-purple-400'
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2.5 rounded-xl shadow-inner transition-transform group-hover:scale-110 ${
+                      z.type === 'office' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20' : 
+                      z.type === 'project' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/20' : 
+                      'bg-purple-500/20 text-purple-400 border border-purple-500/20'
                     }`}>
                       {z.type === 'office' ? <Building2 className="w-4 h-4" /> : z.type === 'project' ? <Crosshair className="w-4 h-4" /> : <Home className="w-4 h-4" />}
                     </div>
                     <div>
-                      <p className="font-bold text-sm text-white">{z.name}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{z.radiusMeters} متر</p>
+                      <p className="font-bold text-sm text-slate-100 group-hover:text-white transition-colors">{z.name}</p>
+                      <p className="text-[11px] font-bold text-slate-500 mt-0.5">{z.radiusMeters} متر</p>
                     </div>
                   </div>
                 </div>
@@ -660,8 +809,8 @@ export default function CommandCenter() {
             </div>
 
             {missingLocationProjects.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-3">
-                <h3 className="text-xs font-bold text-amber-400 flex items-center gap-2 mb-2">
+              <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-3 relative z-10">
+                <h3 className="text-xs font-bold text-amber-400 flex items-center gap-2 mb-3">
                   <AlertTriangle className="w-4 h-4" />
                   مشاريع نشطة بلا نطاق راداري
                 </h3>
@@ -680,22 +829,24 @@ export default function CommandCenter() {
                           inputLink: ''
                         });
                       }}
-                      className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer group"
+                      className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-400/50 transition-all cursor-pointer group shadow-sm"
                       title="اضغط لإضافة رابط أو إحداثيات الموقع"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/20 group-hover:scale-110 transition-transform shadow-inner">
                             <MapPin className="w-4 h-4" />
                           </div>
                           <div>
-                            <p className="font-bold text-sm text-white">{proj.title || proj.name || 'مشروع بدون اسم'}</p>
-                            <p className="text-[10px] text-amber-300 mt-0.5 flex items-center gap-1">
-                              اضغط لإضافة رابط أو إحداثيات الموقع
+                            <p className="font-bold text-sm text-slate-100 group-hover:text-white transition-colors">{proj.title || proj.name || 'مشروع بدون اسم'}</p>
+                            <p className="text-[11px] font-bold text-amber-400/80 mt-0.5">
+                              اضغط لإضافة الموقع
                             </p>
                           </div>
                         </div>
-                        <Plus className="w-4 h-4 text-amber-500 opacity-50 group-hover:opacity-100" />
+                        <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center opacity-50 group-hover:opacity-100 group-hover:bg-amber-500/20 transition-all">
+                          <Plus className="w-4 h-4 text-amber-400" />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -705,14 +856,24 @@ export default function CommandCenter() {
 
             {/* Clean Mock Data Button */}
             {points.some(p => ['أحمد سعد', 'محمود علي', 'فارس المشرف', 'سعيد يوسف'].includes(p.userName)) && (
-              <button 
-                onClick={handleCleanMockData}
-                disabled={isSeeding}
-                className="mt-4 w-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded-xl py-2 text-xs font-bold transition-colors flex items-center justify-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                {isSeeding ? 'جاري التنظيف...' : 'حذف البيانات الوهمية'}
-              </button>
+              <div className="flex gap-2 mt-4">
+                <button 
+                  onClick={() => setIsLiveSimulating(!isLiveSimulating)}
+                  className={`flex-1 border py-2 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 ${isLiveSimulating ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-slate-800/80 text-slate-300 border-slate-700/50 hover:bg-slate-700/80'}`}
+                >
+                  <Activity className="w-4 h-4" />
+                  {isLiveSimulating ? 'إيقاف الحركة' : 'محاكاة حركة الموظفين'}
+                </button>
+
+                <button 
+                  onClick={handleCleanMockData}
+                  disabled={isSeeding}
+                  className="w-10 flex-shrink-0 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded-xl flex items-center justify-center transition-colors"
+                  title="حذف البيانات الوهمية"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
         </motion.div>
@@ -822,7 +983,10 @@ export default function CommandCenter() {
                           onClick={() => {
                             if (point.lat && point.lng) {
                               setSelectedPoint({ lat: point.lat, lng: point.lng });
+                              setSelectedUserId(point.userId);
                               setShowUsersModal(null);
+                            } else {
+                              toast.error('الموقع الجغرافي غير متوفر حالياً لهذا الموظف');
                             }
                           }}
                         >

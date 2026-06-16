@@ -23,6 +23,8 @@ export default function CameraCapture() {
   const [analyzing, setAnalyzing] = useState(false);
   const [parsedData, setParsedData] = useState<InvoiceData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [geoCapture, setGeoCapture] = useState<{lat: number, lng: number} | null>(null);
+  const [captureTime, setCaptureTime] = useState<string | null>(null);
 
   // Auto-Scan States
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -287,16 +289,20 @@ export default function CameraCapture() {
         toast.info(mode === 'invoice' ? 'جاري معالجة الفاتورة...' : 'جاري إضافة الختم الزمني والمكاني...');
         
         let coords: { lat: number; lng: number } | null = null;
-        if (mode === 'project' || mode === 'marketing') {
-           try {
-             const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-               navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, maximumAge: 10000 });
-             });
-             coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-           } catch (e) {
-             console.warn("Could not get geolocation for watermark", e);
-             toast.warning("لم نتمكن من جلب الموقع الجغرافي للختم.");
-           }
+        let captureTimestamp = new Date().toISOString();
+        
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, maximumAge: 10000 });
+          });
+          coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setGeoCapture(coords);
+          setCaptureTime(captureTimestamp);
+        } catch (e) {
+          console.warn("Could not get geolocation", e);
+          if (mode === 'project' || mode === 'marketing') {
+            toast.warning("لم نتمكن من جلب الموقع الجغرافي للختم.");
+          }
         }
 
         const downscaled = await downscaleImageWithWatermark(file, coords, profile?.name || 'مستخدم النظام');
@@ -360,7 +366,7 @@ export default function CameraCapture() {
     if (!capturedImage) return;
     setAnalyzing(true);
     try {
-      const result = await analyzeInvoice(capturedImage);
+      const result = await analyzeInvoice(capturedImage, geoCapture, captureTime);
       if (result) {
         setParsedData(result);
         toast.success('تم تحليل الفاتورة بنجاح');
@@ -375,14 +381,59 @@ export default function CameraCapture() {
   const saveInvoice = async () => {
     if (!parsedData || !profile) return;
     try {
+      // Check for duplicate invoice
+      const duplicateQuery = query(
+        collection(db, "transactions"),
+        where("type", "==", "purchase"),
+        where("amount", "==", parsedData.amount)
+      );
+      const duplicateSnap = await getDocs(duplicateQuery);
+      
+      let isDuplicate = false;
+      const inputDateStr = parsedData.date ? new Date(parsedData.date).toISOString().split('T')[0] : '';
+      
+      duplicateSnap.docs.forEach(d => {
+        const data = d.data();
+        const vendorName = data.vendor || data.supplierName;
+        if (data.status !== 'cancelled' && vendorName === parsedData.vendor) {
+           const dateField = data.date || data.invoiceDate;
+           const existingDateStr = dateField ? (dateField.toDate ? dateField.toDate() : new Date(dateField)).toISOString().split('T')[0] : '';
+           if (existingDateStr === inputDateStr || (data.invoiceNumber && parsedData.invoiceNumber && data.invoiceNumber === parsedData.invoiceNumber)) {
+             isDuplicate = true;
+           }
+        }
+      });
+
+      if (isDuplicate) {
+        toast.error('هذه الفاتورة مسجلة مسبقاً في النظام (نفس المورد والمبلغ والتاريخ)');
+        return;
+      }
+
+      if (parsedData.vendor) {
+        const suppliersSnap = await getDocs(collection(db, "suppliers"));
+        const existing = suppliersSnap.docs.find(d => d.data().name === parsedData.vendor);
+        if (!existing) {
+          await addDoc(collection(db, "suppliers"), {
+            name: parsedData.vendor,
+            phone: parsedData.vendorPhone || '',
+            createdAt: serverTimestamp()
+          });
+          toast.success(`تم إنشاء سجل مورد جديد: ${parsedData.vendor}`);
+        }
+      }
+
       await addCompanyDoc('transactions', {
         type: 'purchase',
         amount: parsedData.amount,
+        taxAmount: parsedData.taxAmount || 0,
         vendor: parsedData.vendor,
         description: parsedData.description || `فاتورة من ${parsedData.vendor}`,
+        items: parsedData.items || [],
         date: parsedData.date || new Date().toISOString(),
         createdBy: profile.uid,
         status: 'pending', // Manual save always needs approval as per new rule
+        geoCapture: geoCapture,
+        verificationData: parsedData.verificationData || null,
         createdAt: serverTimestamp()
       }, activeCompanyId);
       toast.success('تمت إضافة الفاتورة للنظام بنجاح');

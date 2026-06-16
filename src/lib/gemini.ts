@@ -14,12 +14,39 @@ const getGeminiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+// --- Caching layer to reduce API consumption ---
+const hashPrompt = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return `ai_cache_${hash}`;
+};
+
+const getCachedResponse = (prompt: string): string | null => {
+  try { return sessionStorage.getItem(hashPrompt(prompt)); } catch (e) { return null; }
+};
+
+const setCachedResponse = (prompt: string, response: string) => {
+  try { sessionStorage.setItem(hashPrompt(prompt), response); } catch (e) {}
+};
+// ------------------------------------------------
+
 export interface InvoiceData {
   amount: number;
   date: string;
   vendor: string;
+  vendorPhone?: string;
+  invoiceNumber?: string;
   items: string[];
   description: string;
+  taxAmount?: number;
+  verificationData?: {
+    trustScore: number;
+    timeDiscrepancyHours: number;
+    badges: string[];
+  };
 }
 
 export interface QuickScanResult {
@@ -28,6 +55,8 @@ export interface QuickScanResult {
   data?: {
     amount: number;
     vendor: string;
+    vendorPhone?: string;
+    invoiceNumber?: string;
     date: string;
     items?: string[];
     description?: string;
@@ -100,7 +129,11 @@ export const quickAnalyzeInvoice = async (dataUrl: string): Promise<QuickScanRes
   }
 };
 
-export const analyzeInvoice = async (dataUrl: string): Promise<InvoiceData> => {
+export const analyzeInvoice = async (
+  dataUrl: string, 
+  geoCapture?: {lat: number, lng: number} | null, 
+  captureTime?: string | null
+): Promise<InvoiceData> => {
   const ai = getGeminiClient();
   if (!ai) throw new Error("مفتاح API غير متوفر. يرجى إضافة GEMINI_API_KEY في النظام.");
   
@@ -119,15 +152,22 @@ export const analyzeInvoice = async (dataUrl: string): Promise<InvoiceData> => {
       contents: [
         {
           parts: [
-            { text: `قم بتحليل المستند أو الفاتورة المرفقة (سواء صورة أو ملف PDF) واستخراج المعلومات بدقة واحترافية:
+            { text: `قم بتحليل المستند أو الفاتورة المرفقة (سواء صورة أو ملف PDF) واستخراج المعلومات بدقة واحترافية.
+**ملاحظة هامة جداً:** يجب إعطاء الأولوية المطلقة للغة العربية في استخراج اسم المورد، الأصناف، والوصف. لا تستخدم الإنجليزية إلا إذا كان النص غير متوفر بالعربية.
 1. المبلغ الإجمالي: استخرج الرقم فقط.
-2. التاريخ: بصيغة YYYY-MM-DD.
-3. اسم المورد: الاسم التجاري الصريح بدون فروع.
-4. الأصناف: قائمة بأسماء المنتجات أو الخدمات.
-5. الوصف: وصف عام للمستند ومحتواه.
+2. مبلغ الضريبة (taxAmount): استخرج مبلغ ضريبة القيمة المضافة أو الضرائب الأخرى إن وجدت. إذا لم تكن موجودة أرجع 0.
+3. التاريخ: بصيغة YYYY-MM-DD و الوقت.
+4. اسم المورد: الاسم التجاري الصريح بدون فروع (استخرجه باللغة العربية كأولوية قصوى).
+5. رقم الهاتف (vendorPhone): استخرج رقم هاتف المورد إن وجد في الفاتورة (مثلاً: يبدأ بـ 05 أو 966 أو رقم أرضي). إذا لم يتوفر، اترك الحقل فارغاً أو غير موجود.
+6. رقم الفاتورة (invoiceNumber): استخرج رقم الفاتورة التسلسلي (Invoice No / رقم الفاتورة) إن وجد.
+7. الأصناف: قائمة بأسماء المنتجات أو الخدمات مع الكميات والأسعار إن وجدت (استخرجها باللغة العربية كأولوية قصوى واكتب كل صنف بالتفصيل مثال: برغي صغير - الكمية 1.66 - السعر 15).
+8. الوصف: وصف عام للمستند ومحتواه (بالعربية).
+9. بيانات التحقق الذكي (verificationData):
+   - وقت الالتقاط الفعلي من النظام: ${captureTime || 'غير متوفر'}
+   - إحداثيات الالتقاط: ${geoCapture ? `${geoCapture.lat}, ${geoCapture.lng}` : 'غير متوفر'}
+   - المطلوب: قارن وقت الالتقاط بوقت/تاريخ الفاتورة المطبوع. إذا كان الفارق كبيراً، قلل trustScore. إذا كان الوقت قريباً جداً، ارفع الثقة. أعطِ أوسمة (badges) مثل "وقت متطابق", "فاتورة قديمة", "موقع مسجل".
 
-اعتمد على الدقة في قراءة النصوص العربية والإنجليزية بالأرقام حتى من داخل ملفات PDF.
-رد بصيغة JSON فقط متطابقة مع المخطط.` },
+اعتمد على الدقة في القراءة. رد بصيغة JSON فقط متطابقة مع المخطط.` },
             {
               inlineData: {
                 data: base64Data,
@@ -143,10 +183,21 @@ export const analyzeInvoice = async (dataUrl: string): Promise<InvoiceData> => {
           type: Type.OBJECT,
           properties: {
             amount: { type: Type.NUMBER },
+            taxAmount: { type: Type.NUMBER },
             date: { type: Type.STRING },
             vendor: { type: Type.STRING },
+            vendorPhone: { type: Type.STRING },
+            invoiceNumber: { type: Type.STRING },
             items: { type: Type.ARRAY, items: { type: Type.STRING } },
             description: { type: Type.STRING },
+            verificationData: {
+              type: Type.OBJECT,
+              properties: {
+                trustScore: { type: Type.NUMBER },
+                timeDiscrepancyHours: { type: Type.NUMBER },
+                badges: { type: Type.ARRAY, items: { type: Type.STRING } }
+              }
+            }
           },
           required: ["amount", "vendor"],
         },
@@ -215,12 +266,17 @@ export const analyzeProjectSpending = async (projectData: Partial<Project>, tran
       أرجو إعطاء تحليل مختصر جداً (جملة واحدة) وتنبيه إذا كان الصرف يتجاوز 70% من الميزانية المرصودة للمرحلة الحالية.
     `;
 
+    const cached = getCachedResponse(prompt);
+    if (cached) return cached;
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: prompt }] }],
     });
 
-    return response.text || generateLocalSpendingAnalysis(projectData, transactions);
+    const result = response.text || generateLocalSpendingAnalysis(projectData, transactions);
+    if (response.text) setCachedResponse(prompt, result);
+    return result;
   } catch (error: unknown) {
     const err = error as any;
     console.warn("Project spending analysis fell back to local calculations:", err.message || err);
@@ -424,12 +480,17 @@ export const analyzeCompanyPortfolioCredit = async (projects: any[], transaction
       اجعل الرد بصيغة نقاط قوية، واضحة، مهنية، ومكتوبة للمدير التنفيذي فوراً.
     `;
 
+    const cached = getCachedResponse(prompt);
+    if (cached) return cached;
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: prompt }] }],
     });
 
-    return response.text || "فشل توليد التقرير.";
+    const result = response.text || "فشل توليد التقرير.";
+    if (response.text) setCachedResponse(prompt, result);
+    return result;
   } catch (error: any) {
     console.warn("Portfolio analysis error:", error);
     return "حدث خطأ أثناء فحص محفظة الائتمان بالذكاء الاصطناعي: " + error.message;
@@ -451,11 +512,17 @@ export const askGeminiAdvisor = async (question: string, contextStats: any): Pro
       
       أجب عن سؤال المستخدم بدقة وبشكل مختصر ومباشر وبطريقة مهنية باللغة العربية وبلهجة إيجابية وعملية.
     `;
+    const cached = getCachedResponse(prompt);
+    if (cached) return cached;
+    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: prompt }] }],
     });
-    return response.text || "لم أتمكن من صياغة إجابة حالياً.";
+    
+    const result = response.text || "لم أتمكن من صياغة إجابة حالياً.";
+    if (response.text) setCachedResponse(prompt, result);
+    return result;
   } catch (error: any) {
     console.error("Gemini Advisor query failed:", error);
     return "حدث خطأ أثناء التواصل مع المستشار الذكي: " + error.message;

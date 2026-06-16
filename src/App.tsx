@@ -1930,14 +1930,10 @@ function AppContent() {
             {/* زر البحث */}
             <button
               onClick={() => setIsGlobalSearchOpen(true)}
-              className="hidden md:flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-400 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors w-48 lg:w-64"
+              className="hidden md:flex items-center justify-center w-9 h-9 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl transition-colors"
+              title="بحث في النظام (Ctrl+K)"
             >
-              <Search className="w-4 h-4 shrink-0" />
-              <span className="flex-1 text-right">ابحث في النظام...</span>
-              <div className="flex items-center gap-0.5" dir="ltr">
-                <span className="bg-white rounded px-1.5 py-0.5 text-[9px] shadow-sm">Ctrl</span>
-                <span className="bg-white rounded px-1.5 py-0.5 text-[9px] shadow-sm">K</span>
-              </div>
+              <Search className="w-4 h-4" />
             </button>
 
             {/* الإعلان */}

@@ -109,6 +109,42 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
     type: 'btn_manage_reps', nameAr: 'إدارة المناديب', descriptionAr: 'اختصار للذهاب لإدارة مناديب المبيعات',
     icon: 'Briefcase', category: 'actions', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'owner', defaultColorScheme: 'amber'
   },
+  {
+    type: 'btn_scan_receipt', nameAr: 'مسح فاتورة', descriptionAr: 'فتح الكاميرا الذكية لمسح الفواتير واستخراج الضريبة',
+    icon: 'Camera', category: 'actions', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'all', defaultColorScheme: 'emerald'
+  },
+  {
+    type: 'btn_add_employee', nameAr: 'إضافة موظف', descriptionAr: 'اختصار لإضافة موظف أو عامل جديد للنظام',
+    icon: 'UserPlus', category: 'actions', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'elevated', defaultColorScheme: 'indigo'
+  },
+  {
+    type: 'leave_requests', nameAr: 'طلبات الإجازة', descriptionAr: 'مراجعة طلبات الإجازة المعلقة للموظفين',
+    icon: 'Calendar', category: 'actions', defaultSize: 'sm', availableSizes: ['sm', 'md', 'lg'], requiredRole: 'elevated', defaultColorScheme: 'rose'
+  },
+  {
+    type: 'generic_custom', nameAr: 'بطاقة حرة (مخصصة)', descriptionAr: 'بطاقة فارغة تتيح لك إضافة أي محتوى، نص، أو أزرار HTML بحرية مطلقة',
+    icon: 'PenTool', category: 'actions', defaultSize: 'lg', availableSizes: ['sm', 'md', 'lg', 'xl', 'xxl'], requiredRole: 'all', defaultColorScheme: 'slate'
+  },
+  {
+    type: 'stat_inventory', nameAr: 'حالة المخزون', descriptionAr: 'مراقبة عدد المنتجات ونواقص المستودع',
+    icon: 'Package', category: 'operations', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'elevated', defaultColorScheme: 'amber'
+  },
+  {
+    type: 'stat_equipment', nameAr: 'معدات وأصول', descriptionAr: 'عدد الأصول النشطة والمعطلة',
+    icon: 'Archive', category: 'operations', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'elevated', defaultColorScheme: 'slate'
+  },
+  {
+    type: 'tasks_progress', nameAr: 'تقدم المهام', descriptionAr: 'رسم بياني يوضح إنجاز المهام في المشاريع',
+    icon: 'CheckCircle', category: 'operations', defaultSize: 'md', availableSizes: ['sm', 'md', 'lg'], requiredRole: 'all', defaultColorScheme: 'emerald'
+  },
+  {
+    type: 'attendance_radar', nameAr: 'رادار الحضور', descriptionAr: 'عرض رادار تتبع الحضور الجغرافي للموظفين',
+    icon: 'Pin', category: 'operations', defaultSize: 'md', availableSizes: ['md', 'lg', 'xl'], requiredRole: 'elevated', defaultColorScheme: 'indigo'
+  },
+  {
+    type: 'system_health', nameAr: 'صحة النظام', descriptionAr: 'مراقبة حالة الذكاء الاصطناعي والمزامنة',
+    icon: 'Activity', category: 'smart', defaultSize: 'sm', availableSizes: ['sm', 'md'], requiredRole: 'owner', defaultColorScheme: 'teal'
+  },
 ];
 
 export const COLOR_SCHEMES: Record<string, { bg: string; ring: string; icon: string; border: string; text: string; light: string }> = {

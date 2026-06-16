@@ -99,7 +99,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
   
   // Dialog States
   const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
-  const [isAttendanceDialogOpen, setIsAttendanceDialogOpen] = useState(false);
+
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
   const [isSpecialRequestDialogOpen, setIsSpecialRequestDialogOpen] = useState(false);
@@ -109,7 +109,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form States
-  const [attendanceForm, setAttendanceForm] = useState({ date: new Date().toISOString().split('T')[0], status: 'present', note: '' });
+
   const [leaveForm, setLeaveForm] = useState({ type: 'annual', startDate: '', endDate: '', reason: '' });
   const [adjustmentForm, setAdjustmentForm] = useState({ type: 'deduction', amount: '', reason: '' });
   const [loanForm, setLoanForm] = useState({ amount: '', reason: '' });
@@ -188,35 +188,6 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
     };
   }, [employeeId, activeCompanyId]);
 
-  const handleAddAttendance = async () => {
-    if (!attendanceForm.date) return;
-    setIsSubmitting(true);
-    try {
-      await addCompanyDoc('attendance', {
-        ...attendanceForm,
-        userId: employeeId,
-        timestamp: serverTimestamp(),
-        createdBy: profile?.uid
-      }, activeCompanyId);
-
-      await sendNotification({
-        title: 'تسجيل حضور يدوي',
-        message: `قام ${profile?.name} بتسجيل حضور لـ ${employee?.name} بتاريخ ${attendanceForm.date}`,
-        type: 'info',
-        category: 'employee',
-        targetRole: 'manager',
-        tab: 'attendance_manager',
-        priority: 'medium'
-      });
-
-      setIsAttendanceDialogOpen(false);
-      toast.success('تم تسجيل الحضور بنجاح');
-    } catch (e) {
-      toast.error('فشل في تسجيل الحضور');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleAddLeave = async () => {
     if (!leaveForm.startDate || !leaveForm.endDate) return;
@@ -660,10 +631,6 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
                   <h3 className="text-lg font-black text-primary">سجل الحضور والانصراف</h3>
                   <p className="text-xs text-muted-foreground font-bold">مراجعة ساعات العمل والالتزام</p>
                 </div>
-                <Button onClick={() => setIsAttendanceDialogOpen(true)} className="rounded-xl gap-2 font-black bg-primary">
-                  <Fingerprint className="w-4 h-4" />
-                  تسجيل اليدوي
-                </Button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -905,53 +872,7 @@ export default function EmployeeProfile({ employeeId, onBack }: EmployeeProfileP
         </DialogContent>
       </Dialog>
 
-      {/* Attendance Dialog */}
-      <Dialog open={isAttendanceDialogOpen} onOpenChange={setIsAttendanceDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] text-right" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black text-primary">تسجيل حضور/انصراف يدوي</DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label>التاريخ</Label>
-              <Input 
-                type="date"
-                value={attendanceForm.date}
-                onChange={(e) => setAttendanceForm({...attendanceForm, date: e.target.value})}
-                className="rounded-xl"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>الحالة</Label>
-              <Select value={attendanceForm.status} onValueChange={(v) => setAttendanceForm({...attendanceForm, status: v})}>
-                <SelectTrigger className="rounded-xl h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="present">حاضر</SelectItem>
-                  <SelectItem value="absent">غائب</SelectItem>
-                  <SelectItem value="late">متأخر</SelectItem>
-                  <SelectItem value="excused">إجازة/عذر</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>ملاحظة</Label>
-              <Input 
-                value={attendanceForm.note}
-                onChange={(e) => setAttendanceForm({...attendanceForm, note: e.target.value})}
-                placeholder="أضف ملاحظة (اختياري)..."
-                className="rounded-xl"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleAddAttendance} disabled={isSubmitting} className="w-full h-11 rounded-xl font-black">
-              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ السجل'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
 
       {/* Leave Dialog */}
       <Dialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>

@@ -13,6 +13,7 @@ import {
   ShoppingCart, Package, Search, ArrowRight, Star, Wand2,
   Archive, Camera, Calendar, Lock, Unlock, Undo, Redo, UserPlus, StickyNote, Trash2, FileText, Pin, BellRing
 } from 'lucide-react';
+import * as Icons from 'lucide-react';
 import {
   collection, query, limit, onSnapshot, orderBy, where,
   getDocs, doc, addDoc, updateDoc, getDoc
@@ -40,6 +41,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { createAliphiaClient } from '../lib/aliphia';
 import ReportGeneratorModal from './ReportGeneratorModal';
 
@@ -94,18 +96,39 @@ const SCHEME_COLORS: Record<ColorScheme, string> = {
   cyan: '#06b6d4', orange: '#f97316',
 };
 
-function ColorPicker({ value, onChange }: { value: ColorScheme; onChange: (c: ColorScheme) => void }) {
+function ColorPicker({ widget, onUpdate }: { widget: WidgetInstance; onUpdate: (data: Partial<WidgetInstance>) => void }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {(Object.entries(SCHEME_COLORS) as [ColorScheme, string][]).map(([key, hex]) => (
-        <button
-          key={key}
-          onClick={() => onChange(key)}
-          className={`w-6 h-6 rounded-full border-2 transition-all ${value === key ? 'border-slate-900 scale-125' : 'border-transparent hover:scale-110'}`}
-          style={{ backgroundColor: hex }}
-          title={key}
-        />
-      ))}
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-1">
+        {(Object.entries(SCHEME_COLORS) as [ColorScheme, string][]).map(([key, hex]) => (
+          <button
+            key={key}
+            onClick={() => onUpdate({ colorScheme: key as ColorScheme, customColor: undefined })}
+            className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${widget.colorScheme === key && !widget.customColor ? 'border-slate-800 scale-110' : 'border-transparent'}`}
+            style={{ backgroundColor: hex }}
+            title={key}
+          />
+        ))}
+      </div>
+      <div className="flex items-center gap-3">
+        <label className="text-[10px] font-bold text-slate-500">أو اختر لوناً مخصصاً (Hex):</label>
+        <div className="relative">
+          <input 
+            type="color" 
+            value={widget.customColor || SCHEME_COLORS[widget.colorScheme as ColorScheme] || '#ffffff'}
+            onChange={(e) => onUpdate({ customColor: e.target.value })}
+            className="w-10 h-8 rounded cursor-pointer border-0 p-0"
+          />
+        </div>
+        {widget.customColor && (
+          <button 
+            onClick={() => onUpdate({ customColor: undefined })}
+            className="text-[9px] text-red-500 font-bold hover:underline"
+          >
+            إلغاء المخصص
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -172,29 +195,37 @@ function WidgetSettingsPanel({
       {/* Color */}
       <div>
         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">اللون</label>
-        <ColorPicker value={widget.colorScheme} onChange={c => onUpdate({ colorScheme: c })} />
+        <ColorPicker widget={widget} onUpdate={onUpdate} />
       </div>
 
       {/* Card Style Selector */}
       <div>
-        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">نمط المظهر</label>
-        <div className="grid grid-cols-4 gap-1">
-          {([
-            { id: 'default', label: 'افتراضي' },
-            { id: 'glass', label: 'زجاجي' },
-            { id: 'neon', label: 'نيون' },
-            { id: 'gradient', label: 'تدرج' }
-          ] as const).map(style => (
-            <button
-              key={style.id}
-              onClick={() => onUpdate({ cardStyle: style.id })}
-              className={`py-1 rounded-lg text-[9px] font-black transition ${widget.cardStyle === style.id || (!widget.cardStyle && style.id === 'default') ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-            >
-              {style.label}
-            </button>
-          ))}
-        </div>
+        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">نمط المظهر (Card Style)</label>
+        <select
+          value={widget.cardStyle || 'default'}
+          onChange={(e) => onUpdate({ cardStyle: e.target.value as any })}
+          className="w-full px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 transition cursor-pointer appearance-none"
+        >
+          <option value="default">افتراضي (مسطح)</option>
+          <option value="glass">زجاجي شفاف (Glassmorphism)</option>
+          <option value="neon">متوهج (Neon)</option>
+          <option value="gradient">تدرج لوني حيوي (Gradient)</option>
+          <option value="neumorphic">محفور / ثنائي الأبعاد (Neumorphic)</option>
+        </select>
       </div>
+
+      {/* Custom Content For Operations & Generic Widgets */}
+      {(meta.category === 'operations' || widget.type === 'generic_custom') && (
+        <div className="mt-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">محتوى إضافي مخصص للبطاقة</label>
+          <textarea
+            value={widget.customContent || ''}
+            onChange={e => onUpdate({ customContent: e.target.value })}
+            placeholder="أضف أي نص، ملاحظة، أو كود HTML مخصص ليظهر في البطاقة..."
+            className="w-full px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl min-h-[80px] resize-y focus:outline-none focus:border-indigo-400 transition"
+          />
+        </div>
+      )}
 
       {/* Smart Threshold Alert */}
       {(meta.category === 'financial' || meta.category === 'operations') && widget.type.startsWith('stat_') && (
@@ -454,17 +485,21 @@ function WidgetPickerPanel({
         </div>
       </div>
 
-      {/* Category tabs */}
-      <div className="flex gap-1 p-2 border-b border-slate-100 overflow-x-auto">
-        {(['all', 'financial', 'operations', 'smart', 'actions']).map(cat => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black transition ${activeCategory === cat ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-          >
-            {cat === 'all' ? '🔹 الكل' : CATEGORY_LABELS[cat]}
-          </button>
-        ))}
+      {/* Category filter */}
+      <div className="p-3 border-b border-slate-100">
+        <Select value={activeCategory} onValueChange={setActiveCategory}>
+          <SelectTrigger className="w-full bg-slate-50 border-slate-100 rounded-xl h-10 text-xs font-bold text-slate-700" dir="rtl">
+            <SelectValue placeholder="تصفية حسب القسم...">
+              {activeCategory === 'all' ? '🔹 الكل' : CATEGORY_LABELS[activeCategory]}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent dir="rtl">
+            <SelectItem value="all" className="text-xs font-bold">🔹 الكل</SelectItem>
+            {Object.keys(CATEGORY_LABELS).map(cat => (
+              <SelectItem key={cat} value={cat} className="text-xs font-bold">{CATEGORY_LABELS[cat]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Widgets list */}
@@ -479,12 +514,10 @@ function WidgetPickerPanel({
                   onClick={() => { onAdd(w.type); }}
                   className="w-full text-right flex items-center gap-3 p-3 bg-slate-50 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 rounded-xl transition group"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-sm group-hover:border-indigo-300 transition">
-                    <span className="text-base">{
-                      w.category === 'financial' ? '💰' :
-                      w.category === 'operations' ? '⚙️' :
-                      w.category === 'smart' ? '🤖' : '⚡'
-                    }</span>
+                  <div className={`w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-sm group-hover:border-indigo-300 transition text-${w.defaultColorScheme}-500`}>
+                    {Icons[w.icon as keyof typeof Icons] 
+                      ? React.createElement(Icons[w.icon as keyof typeof Icons] as React.ElementType, { className: "w-4 h-4" }) 
+                      : <LayoutGrid className="w-4 h-4" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-black text-slate-800 group-hover:text-indigo-700 transition">{w.nameAr}</p>
@@ -638,14 +671,20 @@ function WidgetShell({
   const meta = WIDGET_REGISTRY.find(m => m.type === widget.type)!;
 
   const shellClass =
+    widget.customColor ? 'widget-shell-custom' :
     widget.cardStyle === 'glass' ? 'widget-shell-glass' :
     widget.cardStyle === 'neon' ? 'widget-shell-neon' :
+    widget.cardStyle === 'neumorphic' ? 'widget-shell-neumorphic' :
     widget.cardStyle === 'gradient' ? `widget-shell-gradient-${widget.colorScheme}` : '';
 
   return (
     <div
       className={`relative group transition-all duration-200 ${isDragging ? 'opacity-50 scale-95' : ''} ${shellClass}`}
-      style={{ gridColumn: `span ${getColSpan(widget.size)}`, gridRow: `span ${getRowSpan(widget.size)}` }}
+      style={{ 
+        gridColumn: `span ${getColSpan(widget.size)}`, 
+        gridRow: `span ${getRowSpan(widget.size)}`,
+        ...(widget.customColor ? { '--widget-custom-bg': widget.customColor } as React.CSSProperties : {})
+      }}
     >
       {/* Edit mode overlay */}
       {isEditMode && !isLocked && (
@@ -854,6 +893,61 @@ function renderWidget(widget: WidgetInstance, data: WidgetData, fmtNum: (n: numb
         onClick={() => data.goToTab('purchases')} fmtNum={fmtNum}
         tooltip={`المشتريات ${fmtNum(data.stats.purchases)}`}
       />;
+    case 'stat_inventory':
+      return <MiniStatCard
+        label={title || 'المخزون المتوفر'} value={data.inventory?.length || 0}
+        icon={Package} color="#f59e0b" bgLight="bg-amber-50" iconColor="text-amber-600"
+        ringPct={100} sub="صنف في المستودع"
+        onClick={() => data.goToTab('inventory')} fmtNum={fmtNum}
+      />;
+    case 'stat_equipment':
+      return <MiniStatCard
+        label={title || 'معدات وأصول'} value={data.assets?.length || 0}
+        icon={Archive} color="#64748b" bgLight="bg-slate-50" iconColor="text-slate-600"
+        ringPct={100} sub="أصل مسجل"
+        onClick={() => data.goToTab('assets')} fmtNum={fmtNum}
+      />;
+    case 'leave_requests':
+      return <MiniStatCard
+        label={title || 'طلبات الإجازة'} value={data.leaveRequests?.length || 0}
+        icon={Calendar} color="#f43f5e" bgLight="bg-rose-50" iconColor="text-rose-600"
+        ringPct={data.leaveRequests?.length ? 100 : 0} alert={data.leaveRequests?.length > 0}
+        sub={data.leaveRequests?.length > 0 ? 'بانتظار المراجعة' : 'لا توجد طلبات'}
+        onClick={() => data.goToTab('approvals')} fmtNum={fmtNum}
+      />;
+    case 'system_health':
+      return <MiniStatCard
+        label={title || 'صحة النظام'} value="100%"
+        icon={Activity} color="#14b8a6" bgLight="bg-teal-50" iconColor="text-teal-600"
+        ringPct={100} sub="جميع الأنظمة تعمل"
+        onClick={() => {}} fmtNum={(v: any) => v}
+      />;
+    case 'tasks_progress':
+      return <MiniStatCard
+        label={title || 'تقدم المهام'} value={data.generalTasks?.filter((t:any) => t.status==='completed').length || 0}
+        icon={CheckCircle} color="#10b981" bgLight="bg-emerald-50" iconColor="text-emerald-600"
+        ringPct={data.generalTasks?.length ? Math.round(((data.generalTasks?.filter((t:any) => t.status==='completed').length || 0) / data.generalTasks.length) * 100) : 0} 
+        sub={`من أصل ${data.generalTasks?.length || 0} مهمة`}
+        onClick={() => data.goToTab('tasks')} fmtNum={fmtNum}
+      />;
+    case 'attendance_radar':
+      return (
+        <button onClick={() => data.goToTab('attendance_manager')} className="w-full h-full rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 flex flex-col items-center justify-center gap-3 text-white hover:shadow-lg transition-all">
+          <Pin className="w-8 h-8 animate-bounce" />
+          <p className="font-black text-sm">فتح الرادار الشامل</p>
+          <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full font-bold">تتبع حي</span>
+        </button>
+      );
+    case 'btn_create_quote':
+      return <ActionWidgetBtn title="إنشاء عرض سعر" icon={FileText} color="bg-blue-500" onClick={() => { /* assuming quotes tab */ toast('قريباً: فتح منشئ العروض'); }} />;
+    case 'btn_manage_clients':
+      return <ActionWidgetBtn title="إدارة العملاء" icon={Users} color="bg-slate-700" onClick={() => data.goToTab('clients')} />;
+    case 'btn_manage_reps':
+      return <ActionWidgetBtn title="إدارة المناديب" icon={Briefcase} color="bg-amber-500" onClick={() => data.goToTab('reps')} />;
+    case 'btn_scan_receipt':
+      return <ActionWidgetBtn title="مسح فاتورة" icon={Camera} color="bg-emerald-600" onClick={() => data.goToTab('camera')} />;
+    case 'btn_add_employee':
+      return <ActionWidgetBtn title="إضافة موظف" icon={UserPlus} color="bg-indigo-600" onClick={() => data.goToTab('employees')} />;
 
     /* ── SUMMARY CARDS ── */
     case 'financial_summary':
@@ -974,7 +1068,8 @@ function FinancialSummaryWidget({ data, fmtNum, title, settings }: any) {
     stat_profit: { type: 'stat_profit', colorScheme: 'indigo' },
     stat_pending: { type: 'stat_pending', colorScheme: 'amber' },
     stat_tax_income: { type: 'stat_tax_income', colorScheme: 'slate' },
-    stat_tax_purchases: { type: 'stat_tax_purchases', colorScheme: 'blue' }
+    stat_tax_purchases: { type: 'stat_tax_purchases', colorScheme: 'blue' },
+    generic_custom: { type: 'generic_custom', colorScheme: 'slate' }
   };
 
   const activeCards = enabledCards
@@ -2682,5 +2777,17 @@ function StickyNotesBoard({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+/* ─── Generic Action Button Widget ─── */
+function ActionWidgetBtn({ title, icon: Icon, color, onClick }: any) {
+  return (
+    <button onClick={onClick} className={`w-full h-full rounded-2xl ${color} p-4 flex flex-col items-center justify-center gap-3 text-white shadow-sm hover:shadow-md transition-all active:scale-95`}>
+      <div className="bg-white/20 p-3 rounded-xl">
+        <Icon className="w-6 h-6" />
+      </div>
+      <span className="font-black text-sm">{title}</span>
+    </button>
   );
 }
