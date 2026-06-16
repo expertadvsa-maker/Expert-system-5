@@ -159,7 +159,6 @@ export default function CommandCenter() {
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | undefined>();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const notifiedAnomalies = useRef<Set<string>>(new Set());
-  const [liveAlerts, setLiveAlerts] = useState<GeoAnomaly[]>([]);
   const [nearestAddress, setNearestAddress] = useState<string>('جاري تحديد الموقع...');
 
   // Reverse Geocoding for Focus Panel
