@@ -159,8 +159,30 @@ export default function CommandCenter() {
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | undefined>();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const notifiedAnomalies = useRef<Set<string>>(new Set());
+  const [liveAlerts, setLiveAlerts] = useState<GeoAnomaly[]>([]);
+  const [nearestAddress, setNearestAddress] = useState<string>('جاري تحديد الموقع...');
 
-  const [isSeeding, setIsSeeding] = useState(false);
+  // Reverse Geocoding for Focus Panel
+  useEffect(() => {
+    if (selectedUserId) {
+      const userPt = points.find(p => p.userId === selectedUserId);
+      if (userPt && userPt.lat && userPt.lng) {
+        setNearestAddress('جاري تحديد الموقع...');
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${userPt.lat}&lon=${userPt.lng}&accept-language=ar`)
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.display_name) {
+              const parts = data.display_name.split(',');
+              const shortAddress = parts.slice(0, 3).join('، ');
+              setNearestAddress(shortAddress);
+            } else {
+              setNearestAddress('موقع غير معروف');
+            }
+          })
+          .catch(() => setNearestAddress('تعذر جلب العنوان'));
+      }
+    }
+  }, [selectedUserId, points]);
   const [isLiveSimulating, setIsLiveSimulating] = useState(false);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const dbPointsRef = useRef<TrackerPoint[]>([]);
@@ -714,7 +736,7 @@ export default function CommandCenter() {
                 initial={{ x: -50, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: -50, opacity: 0 }}
-                className="w-[340px] mt-20 bg-slate-900/80 backdrop-blur-3xl border border-emerald-500/30 rounded-3xl p-6 shadow-[0_8px_32px_rgba(16,185,129,0.2)] flex flex-col gap-5 pointer-events-auto relative overflow-hidden"
+                className="w-[380px] mt-20 bg-slate-900/80 backdrop-blur-3xl border border-emerald-500/30 rounded-3xl p-6 shadow-[0_8px_32px_rgba(16,185,129,0.2)] flex flex-col gap-5 pointer-events-auto relative overflow-hidden"
               >
                 <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
                 {(() => {
@@ -724,18 +746,18 @@ export default function CommandCenter() {
                   return (
                     <>
                       <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-full bg-slate-800 border-2 border-emerald-500/50 flex items-center justify-center overflow-hidden shrink-0">
+                        <div className="w-16 h-16 rounded-full bg-slate-800 border-2 border-emerald-500/50 flex items-center justify-center overflow-hidden shrink-0">
                           {userPt.photoURL ? (
                             <img src={userPt.photoURL} alt={userPt.userName} className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-xl font-bold text-emerald-400">{userPt.userName?.charAt(0) || '?'}</span>
+                            <span className="text-2xl font-bold text-emerald-400">{userPt.userName?.charAt(0) || '?'}</span>
                           )}
                         </div>
-                        <div>
-                          <h2 className="text-lg font-black text-white">{userPt.userName}</h2>
-                          <div className="flex items-center gap-2 mt-1">
+                        <div className="flex-1">
+                          <h2 className="text-xl font-black text-white">{userPt.userName}</h2>
+                          <div className="flex items-center gap-2 mt-1.5">
                             <span className={`w-2 h-2 rounded-full ${userPt.status === 'active' ? 'bg-emerald-500 animate-pulse' : userPt.status === 'idle' ? 'bg-amber-500 animate-pulse' : 'bg-slate-500'}`}></span>
-                            <span className="text-xs font-bold text-slate-300">
+                            <span className="text-sm font-bold text-slate-300">
                               {userPt.status === 'active' ? 'متحرك نشط' : userPt.status === 'idle' ? 'في حالة ركود' : 'غير متصل'}
                             </span>
                           </div>
@@ -743,30 +765,30 @@ export default function CommandCenter() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 mt-2">
-                        <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 flex flex-col gap-1">
-                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Activity className="w-3 h-3"/> السرعة الحالية</span>
-                          <span className="text-lg font-black text-white">{userPt.speed || 0} <span className="text-xs text-slate-500">كم/س</span></span>
+                        <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50 flex flex-col gap-1.5">
+                          <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1.5"><Activity className="w-3.5 h-3.5"/> السرعة الحالية</span>
+                          <span className="text-2xl font-black text-white">{userPt.speed || 0} <span className="text-xs text-slate-500 font-bold">كم/س</span></span>
                         </div>
-                        <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 flex flex-col gap-1">
-                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Battery className="w-3 h-3"/> بطارية الجهاز</span>
+                        <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50 flex flex-col gap-1.5">
+                          <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1.5"><Battery className="w-3.5 h-3.5"/> بطارية الجهاز</span>
                           <div className="flex items-center gap-2">
-                            <span className={`text-lg font-black ${userPt.batteryLevel && userPt.batteryLevel < 20 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            <span className={`text-2xl font-black ${userPt.batteryLevel && userPt.batteryLevel < 20 ? 'text-rose-400' : 'text-emerald-400'}`}>
                               {userPt.batteryLevel !== undefined && userPt.batteryLevel !== null ? `${userPt.batteryLevel}%` : 'N/A'}
                             </span>
-                            {userPt.isCharging && <Zap className="w-4 h-4 text-amber-400" />}
+                            {userPt.isCharging && <Zap className="w-5 h-5 text-amber-400" />}
                           </div>
                         </div>
                       </div>
 
-                      <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 flex flex-col gap-2 mt-1">
-                         <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3"/> العنوان الأقرب (تقريبي)</span>
+                      <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50 flex flex-col gap-2 mt-1">
+                         <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5"/> العنوان الأقرب (مباشر)</span>
                          <span className="text-sm font-bold text-white leading-relaxed">
-                           شارع الملك فهد، بالقرب من حي العليا، الرياض
+                           {nearestAddress}
                          </span>
                       </div>
                       
-                      <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 flex flex-col gap-2">
-                         <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Clock className="w-3 h-3"/> آخر تحديث</span>
+                      <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50 flex flex-col gap-2">
+                         <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> آخر تحديث للإشارة</span>
                          <span className="text-sm font-bold text-slate-300">
                            {new Date(userPt.timestamp).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                          </span>
@@ -774,9 +796,9 @@ export default function CommandCenter() {
 
                       <button 
                         onClick={() => setSelectedUserId(null)}
-                        className="mt-2 w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm transition-colors"
+                        className="mt-2 w-full py-3.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-bold text-sm transition-colors"
                       >
-                        إغلاق لوحة التركيز
+                        إغلاق التركيز
                       </button>
                     </>
                   );
