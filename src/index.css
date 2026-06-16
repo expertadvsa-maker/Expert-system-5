@@ -463,5 +463,45 @@ input[type=number] {
   box-shadow: inset 8px 8px 16px #bebebe, inset -8px -8px 16px #ffffff !important;
 }
 .dark .widget-shell-neumorphic > div > button:active {
-  box-shadow: inset 8px 8px 16px #11111f, inset -8px -8px 16px #23233d !important;
+}
+
+/* Radar System Styles */
+.custom-map-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radar-pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid;
+  opacity: 0;
+  z-index: 1;
+}
+
+.radar-pulse.ring-1 {
+  animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.radar-pulse.ring-2 {
+  animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite 1.25s;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 25%;
+  height: 25%;
+  border-radius: 50%;
+  border: 2px solid white;
+  z-index: 3;
 }

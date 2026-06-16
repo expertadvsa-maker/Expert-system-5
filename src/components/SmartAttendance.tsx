@@ -275,6 +275,15 @@ export default function SmartAttendance() {
         toast.success('تم تسجيل الانصراف من: ' + locationLabel);
       }
 
+      // Fetch real battery safely
+      let currentBatteryLevel = null;
+      if ('getBattery' in navigator) {
+        try {
+          const battery: any = await (navigator as any).getBattery();
+          currentBatteryLevel = Math.round(battery.level * 100);
+        } catch(e) {}
+      }
+
       // Update Live Tracking (Radar)
       if (user?.uid) {
         await setDoc(doc(db, 'live_tracking', user.uid), {
@@ -286,7 +295,7 @@ export default function SmartAttendance() {
           lng,
           timestamp,
           status: type === 'checkIn' ? 'active' : 'offline',
-          batteryLevel: Math.floor(Math.random() * (100 - 40 + 1) + 40), // Simulating battery level
+          batteryLevel: currentBatteryLevel,
         }, { merge: true });
       }
 

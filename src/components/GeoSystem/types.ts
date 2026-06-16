@@ -38,11 +38,12 @@ export interface GeoAnomaly {
   companyId: string;
   userId?: string;
   userName?: string;
-  type: 'wrong_location' | 'curfew_violation' | 'unauthorized_exit' | 'congregation';
+  type: 'wrong_location' | 'curfew_violation' | 'unauthorized_exit' | 'congregation' | 'out_of_bounds' | 'inactivity' | 'speeding';
   message: string;
   timestamp: string;
   severity: 'low' | 'medium' | 'high';
   resolved: boolean;
   lat?: number;
   lng?: number;
+  pointIds?: string[];
 }

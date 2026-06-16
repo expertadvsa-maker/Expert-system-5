@@ -3,6 +3,27 @@ import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap, useMa
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { GeoZone, TrackerPoint } from './types';
+import RoutedPath from './RoutedPath';
+
+export const getUserColor = (userId: string) => {
+  const colors = [
+    '#f43f5e', // rose
+    '#8b5cf6', // violet
+    '#0ea5e9', // sky
+    '#10b981', // emerald
+    '#f59e0b', // amber
+    '#6366f1', // indigo
+    '#ec4899', // pink
+    '#14b8a6', // teal
+    '#eab308', // yellow
+    '#a855f7', // purple
+  ];
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
 
 // Fix for default marker icons in Leaflet with Webpack/Vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -41,37 +62,6 @@ const createAvatarIcon = (color: string, photoURL?: string, zoom: number = 12, s
         ${innerHtml}
         ${pulseHtml}
       </div>
-      <style>
-        .radar-pulse {
-          position: absolute;
-          width: 100%;
-          height: 100%;
-          border-radius: 50%;
-          border: 2px solid;
-          opacity: 0;
-          z-index: 1;
-        }
-        .radar-pulse.ring-1 {
-          animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
-        }
-        .radar-pulse.ring-2 {
-          animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite 1.25s;
-        }
-        .status-dot {
-          position: absolute;
-          bottom: 0;
-          right: 0;
-          width: ${size/3}px;
-          height: ${size/3}px;
-          border-radius: 50%;
-          border: 2px solid white;
-          z-index: 3;
-        }
-        @keyframes pulse-ring {
-          0% { transform: scale(1); opacity: 0.8; }
-          100% { transform: scale(2.5); opacity: 0; }
-        }
-      </style>
     `,
     iconSize: [size, size],
     iconAnchor: [anchor, anchor]
@@ -120,7 +110,6 @@ export default function LiveMap({
   center = { lat: 24.7136, lng: 46.6753 }, 
   zoom = 12, 
   onMapClick, 
-  tempZoneCenter,
   tempZoneRadius = 50, 
   mapTheme = 'dark',
   historyTrack = [],
@@ -181,20 +170,6 @@ export default function LiveMap({
         <MapUpdater center={center} zoom={zoom} />
         <MapEvents onClick={onMapClick} onZoom={setCurrentZoom} />
 
-        {/* Render Temp Zone if drawing */}
-        {tempZoneCenter && (
-          <Circle
-            center={[tempZoneCenter.lat, tempZoneCenter.lng]}
-            radius={tempZoneRadius}
-            pathOptions={{
-              color: '#10b981',
-              fillColor: '#10b981',
-              fillOpacity: 0.3,
-              weight: 2,
-              dashArray: '4 4'
-            }}
-          />
-        )}
 
         {/* Render Zones */}
         {/* Draw User Paths */}
@@ -202,18 +177,18 @@ export default function LiveMap({
           if (point.path && point.path.length > 1) {
             const positions = point.path.map(p => [p.lat, p.lng] as [number, number]);
             
-            // Determine path color based on latest speed (or default to cyan)
-            let pathColor = '#06b6d4'; // Cyan
-            if (point.speed) {
-               if (point.speed > 120) pathColor = '#ef4444'; // Red
-               else if (point.speed > 80) pathColor = '#f97316'; // Orange
-            }
+            // Determine path color based on userId to give each user a distinct color
+            const pathColor = getUserColor(point.userId);
 
             return (
-              <Polyline 
+              <RoutedPath 
                 key={`path-${point.id}`}
                 positions={positions} 
-                pathOptions={{ color: pathColor, weight: 4, opacity: 0.8, dashArray: '5, 10', lineCap: 'round' }} 
+                color={pathColor}
+                weight={4}
+                opacity={0.8}
+                dashArray="5, 10"
+                lineCap="round"
               />
             );
           }
@@ -245,18 +220,23 @@ export default function LiveMap({
 
         {/* Render History Track */}
         {polylinePositions.length > 1 && (
-          <Polyline 
+          <RoutedPath 
             positions={polylinePositions} 
-            pathOptions={{ color: '#8b5cf6', weight: 4, dashArray: '8 8', opacity: 0.8 }} 
+            color={historyTrack[0] ? getUserColor(historyTrack[0].userId) : '#8b5cf6'}
+            weight={4}
+            opacity={0.8}
           />
         )}
 
         {/* Render Task Paths for Selected User */}
         {selectedUserPt && mockTasks.length > 0 && (
           <>
-            <Polyline 
+            <RoutedPath 
               positions={[[selectedUserPt.lat, selectedUserPt.lng], [mockTasks[0].lat, mockTasks[0].lng]]} 
-              pathOptions={{ color: '#10b981', weight: 3, dashArray: '5 5', opacity: 0.6 }} 
+              color="#10b981"
+              weight={3}
+              dashArray="5 5"
+              opacity={0.6}
             />
             {mockTasks.map(task => (
               <Marker 
@@ -282,10 +262,8 @@ export default function LiveMap({
 
         {/* Render Live Tracker Points */}
         {points.filter(p => p.lat !== undefined && p.lng !== undefined).map(point => {
-          let color = '#22c55e'; // Green for active
-          if (point.status === 'offline') color = '#94a3b8'; // Slate
-          else if (point.status === 'idle') color = '#f59e0b'; // Amber
-          else if (point.userRole === 'manager' || point.userRole === 'owner') color = '#3b82f6'; // Blue
+          // Use the exact same color as their path timeline
+          const color = getUserColor(point.userId);
 
           const icon = createAvatarIcon(color, point.photoURL, currentZoom, point.status);
 

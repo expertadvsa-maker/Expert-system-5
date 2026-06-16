@@ -81,20 +81,45 @@ export default function CommandCenter() {
 
   const missingLocationProjects = useMemo(() => {
     return parsedProjects.filter(proj => 
-      !proj.dynamicCoords && 
-      proj.status === 'active'
+      !proj.dynamicCoords && proj.status === 'active'
     );
   }, [parsedProjects]);
 
+  const [liveFilter, setLiveFilter] = useState<'all' | 'low_battery' | 'speeding' | 'idle'>('all');
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  useEffect(() => {
+    // Update current time every minute to force recalculation of true live status
+    const interval = setInterval(() => setCurrentTime(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const points = useMemo(() => {
     const combinedMap = new Map<string, TrackerPoint>();
+    const now = Date.now();
     
     // First, add all active tracking points for this company.
     // If a point is here, it means the user tracked themselves.
     dbPoints.forEach(p => {
        if (p.userRole !== 'client') {
+          let actualStatus = p.status;
+          
+          if (p.timestamp) {
+            const pointTime = new Date(p.timestamp).getTime();
+            const diffMins = (now - pointTime) / 1000 / 60;
+            
+            // If no ping for > 15 mins, they are offline
+            if (diffMins > 15) {
+              actualStatus = 'offline';
+            } 
+            // If no ping for > 3 mins or they are actively tracking but speed is 0 for a while, mark as idle
+            else if (diffMins > 3 && actualStatus === 'active') {
+              actualStatus = 'idle';
+            }
+          }
+          
           // Use userId or id as the key
-          combinedMap.set(p.userId || p.id, p);
+          combinedMap.set(p.userId || p.id, { ...p, status: actualStatus });
        }
     });
 
@@ -124,14 +149,20 @@ export default function CommandCenter() {
       }
     });
 
-    return Array.from(combinedMap.values());
-  }, [dbPoints, dbUsers]);
+    const allUsers = Array.from(combinedMap.values());
+    if (liveFilter === 'all') return allUsers;
+    if (liveFilter === 'low_battery') return allUsers.filter(u => u.batteryLevel !== undefined && u.batteryLevel < 20);
+    if (liveFilter === 'speeding') return allUsers.filter(u => u.speed !== undefined && u.speed > 120);
+    if (liveFilter === 'idle') return allUsers.filter(u => u.status === 'idle');
+    return allUsers;
+  }, [dbPoints, dbUsers, liveFilter, currentTime]);
   const [selectedPoint, setSelectedPoint] = useState<{lat: number, lng: number} | undefined>();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const notifiedAnomalies = useRef<Set<string>>(new Set());
 
   const [isSeeding, setIsSeeding] = useState(false);
   const [isLiveSimulating, setIsLiveSimulating] = useState(false);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const dbPointsRef = useRef<TrackerPoint[]>([]);
   useEffect(() => { dbPointsRef.current = dbPoints; }, [dbPoints]);
   
@@ -144,6 +175,13 @@ export default function CommandCenter() {
     radius: number;
     inputLink: string;
   }>({ isOpen: false, mode: 'new', zoneId: '', title: '', type: 'office', radius: 100, inputLink: '' });
+
+  const [dispatchModal, setDispatchModal] = useState<{
+    isOpen: boolean;
+    lat: number;
+    lng: number;
+    nearestUser: TrackerPoint | null;
+  } | null>(null);
 
   // New features state
   const [mapTheme, setMapTheme] = useState<'light' | 'dark' | 'satellite'>('dark');
@@ -220,6 +258,65 @@ export default function CommandCenter() {
     
     fetchHistory();
   }, [historyMode, historyUserId, historyDate, activeCompanyId]);
+
+  // Time Machine Auto Play Loop
+  useEffect(() => {
+    if (!isAutoPlaying || !historyMode || historyPoints.length === 0) return;
+    
+    const interval = setInterval(() => {
+      setHistoryIndex(prev => {
+        if (prev >= historyPoints.length - 1) {
+          setIsAutoPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 1000); // 1 point per second
+
+    return () => clearInterval(interval);
+  }, [isAutoPlaying, historyMode, historyPoints.length]);
+
+  // Congregation Alerts (Cross-Tracking)
+  useEffect(() => {
+    if (!points || points.length === 0) return;
+    
+    const activePoints = points.filter(p => p.status === 'active' && p.lat && p.lng);
+    const newAlerts: Array<{ id: string; message: string; type: 'warning' | 'error'; time: string; }> = [];
+    
+    for (let i = 0; i < activePoints.length; i++) {
+      for (let j = i + 1; j < activePoints.length; j++) {
+        const p1 = activePoints[i];
+        const p2 = activePoints[j];
+        
+        // Simple distance calculation (rough estimate for 50m)
+        // 1 degree lat is ~111km. 50m is ~0.00045 degrees
+        const dLat = p1.lat - p2.lat;
+        const dLng = p1.lng - p2.lng;
+        const distSq = dLat*dLat + dLng*dLng;
+        
+        if (distSq < 0.0000002) { // approx 50m squared
+          // Use alphabetically sorted IDs to ensure consistent alert ID regardless of order
+          const sortedIds = [p1.userId, p2.userId].sort();
+          const alertId = `congregation_${sortedIds[0]}_${sortedIds[1]}`;
+          
+          if (!notifiedAnomalies.current.has(alertId)) {
+            newAlerts.push({
+              id: alertId,
+              message: `تجمع غير مجدول: ${p1.userName} و ${p2.userName} في نفس الموقع`,
+              type: 'warning',
+              time: new Date().toLocaleTimeString('ar-SA')
+            });
+            notifiedAnomalies.current.add(alertId);
+          }
+        }
+      }
+    }
+    
+    if (newAlerts.length > 0) {
+      setLiveAlerts(prev => [...prev, ...newAlerts]);
+      newAlerts.forEach(a => toast.error(a.message, { icon: '⚠️' }));
+    }
+  }, [points]);
 
   // Listen to Firebase 'geo_zones' and 'live_tracking'
   useEffect(() => {
@@ -374,19 +471,6 @@ export default function CommandCenter() {
     }
   };
 
-  const handleMapClick = (lat: number, lng: number) => {
-    if (isDrawingMode) {
-      setTempZone(prev => ({
-        ...prev,
-        lat,
-        lng,
-        radius: prev?.radius || 100,
-        name: prev?.name || '',
-        type: prev?.type || 'project',
-        projectId: prev?.projectId
-      }));
-    }
-  };
 
   const handleSaveZoneModal = async () => {
     let coords = null;
@@ -449,9 +533,7 @@ export default function CommandCenter() {
 
   const handleDeleteZone = async (zoneId: string) => {
     try {
-      if (zoneId.startsWith('z')) {
-        setZones(zones.filter(z => z.id !== zoneId));
-      } else {
+      if (!zoneId.startsWith('p_')) {
         await deleteDoc(doc(db, 'geo_zones', zoneId));
       }
       toast.success('تم حذف النطاق بنجاح');
@@ -494,11 +576,53 @@ export default function CommandCenter() {
           points={displayPoints} 
           center={selectedUserId ? (points.find(p => p.userId === selectedUserId) || selectedPoint || { lat: 24.7136, lng: 46.6753 }) : (selectedPoint || { lat: 24.7136, lng: 46.6753 })} 
           zoom={selectedUserId || selectedPoint ? 17 : 13} 
-          onMapClick={() => {}}
+          onMapClick={(lat, lng) => {
+            let nearest: TrackerPoint | null = null;
+            let minDistance = Infinity;
+            const activeUsers = points.filter(p => p.status === 'active' && p.lat && p.lng);
+            for (const u of activeUsers) {
+              const dist = Math.pow(u.lat - lat, 2) + Math.pow(u.lng - lng, 2);
+              if (dist < minDistance) {
+                minDistance = dist;
+                nearest = u;
+              }
+            }
+            setDispatchModal({ isOpen: true, lat, lng, nearestUser: nearest });
+          }}
           mapTheme={mapTheme}
           historyTrack={historyMode ? historyPoints.slice(0, historyIndex + 1) : undefined}
           selectedUserId={selectedUserId}
         />
+
+        {/* Live Filters */}
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[400] flex gap-2 bg-slate-900/80 backdrop-blur-xl p-1.5 rounded-full border border-slate-700/50 shadow-2xl">
+          <button
+            onClick={() => setLiveFilter('all')}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${liveFilter === 'all' ? 'bg-indigo-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
+          >
+            الكل
+          </button>
+          <button
+            onClick={() => setLiveFilter('low_battery')}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all flex items-center gap-1 ${liveFilter === 'low_battery' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-400 hover:text-rose-400 hover:bg-slate-800'}`}
+            title="بطارية أقل من 20%"
+          >
+            🔋 منخفض
+          </button>
+          <button
+            onClick={() => setLiveFilter('speeding')}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all flex items-center gap-1 ${liveFilter === 'speeding' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'}`}
+            title="سرعة تزيد عن 120 كم/س"
+          >
+            ⚡ مسرع
+          </button>
+          <button
+            onClick={() => setLiveFilter('idle')}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all flex items-center gap-1 ${liveFilter === 'idle' ? 'bg-slate-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
+          >
+            🛑 خمول
+          </button>
+        </div>
         
         {/* Floating Map Controls */}
         <div className="absolute left-1/2 -translate-x-1/2 bottom-6 z-[400] flex flex-row gap-4 items-center bg-slate-900/80 backdrop-blur-xl p-2 rounded-3xl border border-slate-700/50 shadow-2xl">
@@ -530,18 +654,32 @@ export default function CommandCenter() {
           
           <button 
             onClick={() => {
-               // Ignore browser GPS entirely since it's a desktop and causes timeouts.
-               // Just find the user's avatar or any active avatar on the map.
-               const myLocation = dbPointsRef.current.find(p => p.userId === user?.uid);
-               if (myLocation) {
-                 setSelectedPoint({ lat: myLocation.lat, lng: myLocation.lng });
-                 setSelectedUserId(myLocation.userId);
-                 toast.success('تم تحديد موقعك بنجاح', { id: 'locating' });
-               } else {
-                 setSelectedPoint({ lat: 24.7136, lng: 46.6753 });
-                 setSelectedUserId(null);
-                 toast.success('تم تحديد الموقع الافتراضي', { id: 'locating' });
-               }
+              if (navigator.geolocation) {
+                toast.loading('جاري تحديد الموقع...', { id: 'locating' });
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => {
+                    setSelectedPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                    setSelectedUserId(currentUser?.uid || null);
+                    toast.success('تم تحديد موقعك بنجاح', { id: 'locating' });
+                  },
+                  (err) => {
+                    console.error(err);
+                    const myLocation = dbPointsRef.current.find(p => p.userId === currentUser?.uid);
+                    if (myLocation) {
+                      setSelectedPoint({ lat: myLocation.lat, lng: myLocation.lng });
+                      setSelectedUserId(myLocation.userId);
+                      toast.success('تم تحديد موقع مسارك كبديل', { id: 'locating' });
+                    } else {
+                      setSelectedPoint({ lat: 24.7136, lng: 46.6753 });
+                      setSelectedUserId(null);
+                      toast.error('تعذر جلب الموقع. تم تحديد الرياض افتراضياً', { id: 'locating' });
+                    }
+                  },
+                  { enableHighAccuracy: true, timeout: 5000 }
+                );
+              } else {
+                toast.error('متصفحك لا يدعم تحديد الموقع', { id: 'locating' });
+              }
             }}
             className="w-12 h-12 bg-emerald-600/90 backdrop-blur-md border border-emerald-500/50 rounded-2xl shadow-2xl flex items-center justify-center text-emerald-50 hover:text-white hover:bg-emerald-500 transition-all group relative hover:scale-105"
             title="تحديد موقعي"
@@ -733,8 +871,20 @@ export default function CommandCenter() {
                       onChange={(e) => setHistoryIndex(parseInt(e.target.value))}
                       className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
                     />
-                    <div className="text-center text-xs text-white mt-3 font-mono bg-indigo-500/10 py-1.5 rounded-lg border border-indigo-500/20 inline-block px-4 w-full">
-                      الوقت: {new Date(historyPoints[historyIndex]?.timestamp || Date.now()).toLocaleTimeString('ar-SA')}
+                    <div className="flex items-center gap-2 mt-3">
+                      <button 
+                        onClick={() => setIsAutoPlaying(!isAutoPlaying)}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isAutoPlaying ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}
+                      >
+                        {isAutoPlaying ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        )}
+                      </button>
+                      <div className="flex-1 text-center text-xs text-white font-mono bg-indigo-500/10 py-2.5 rounded-xl border border-indigo-500/20">
+                        {new Date(historyPoints[historyIndex]?.timestamp || Date.now()).toLocaleTimeString('ar-SA')}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1128,6 +1278,78 @@ export default function CommandCenter() {
                     إلغاء
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Dispatch Modal */}
+      <AnimatePresence>
+        {dispatchModal?.isOpen && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm cursor-pointer"
+              onClick={() => setDispatchModal(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden flex flex-col p-6"
+            >
+              <h2 className="text-xl font-black text-white mb-2 flex items-center gap-2">
+                <Navigation className="w-5 h-5 text-emerald-400" />
+                توجيه مهمة ذكي
+              </h2>
+              <p className="text-sm text-slate-400 mb-6">
+                سيتم إرسال المهمة لأقرب موظف متاح للموقع الذي قمت بتحديده.
+              </p>
+              
+              <div className="bg-slate-950/50 rounded-2xl p-4 border border-slate-800/50 mb-6">
+                <div className="text-xs text-slate-500 mb-1">الموقع المحدد:</div>
+                <div className="text-sm font-mono text-slate-300" dir="ltr">{dispatchModal.lat.toFixed(5)}, {dispatchModal.lng.toFixed(5)}</div>
+                
+                <div className="mt-4 pt-4 border-t border-slate-800/50">
+                  <div className="text-xs text-slate-500 mb-2">أقرب موظف מتاح:</div>
+                  {dispatchModal.nearestUser ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-emerald-500/50 flex items-center justify-center overflow-hidden">
+                        {dispatchModal.nearestUser.photoURL ? (
+                          <img src={dispatchModal.nearestUser.photoURL} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="font-bold text-slate-400">{dispatchModal.nearestUser.userName?.charAt(0)}</span>
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-200">{dispatchModal.nearestUser.userName}</div>
+                        <div className="text-xs text-emerald-400">يبعد مسافة قريبة جداً</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-rose-400 text-sm font-bold">لا يوجد موظفين نشطين حالياً</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    toast.success('تم إرسال المهمة بنجاح');
+                    setDispatchModal(null);
+                  }}
+                  disabled={!dispatchModal.nearestUser}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  إرسال المهمة الآن
+                </button>
+                <button
+                  onClick={() => setDispatchModal(null)}
+                  className="px-6 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold h-12 rounded-xl transition-colors"
+                >
+                  إلغاء
+                </button>
               </div>
             </motion.div>
           </div>
