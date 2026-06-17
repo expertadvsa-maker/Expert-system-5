@@ -258,9 +258,8 @@ export default function Clients() {
         </div>
       )}
 
-      {/* ── Smart Client Modal ── */}
       <Dialog open={isModalOpen} onOpenChange={(open) => !open && setIsModalOpen(false)}>
-        <DialogContent className="max-w-5xl p-0 overflow-hidden bg-slate-50 h-[90vh] flex flex-col rounded-[2rem] border-0 shadow-2xl" dir="rtl">
+        <DialogContent className="w-[95vw] md:w-full max-w-5xl p-0 overflow-hidden bg-slate-50 h-[90vh] flex flex-col rounded-[2rem] border-0 shadow-2xl" dir="rtl">
           {selectedClient && (
             <>
               {/* Modal Header */}

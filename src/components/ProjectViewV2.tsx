@@ -50,7 +50,9 @@ import {
   Check,
   Lock,
   Receipt,
-  X
+  X,
+  FileCheck,
+  Download
 } from 'lucide-react';
 import { 
   doc, 
@@ -67,7 +69,8 @@ import {
   addDoc,
   deleteField,
   getDoc,
-  deleteDoc
+  deleteDoc,
+  getDocs
 } from 'firebase/firestore';
 import { db, auth, storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -145,6 +148,10 @@ const HelpTooltip = ({ content }: { content: string }) => {
 };
 
 import HandoverAndMaintenance from './HandoverAndMaintenance';
+import ProjectOverviewTab from './ProjectView/ProjectOverviewTab';
+import ProjectFinancialsTab from './ProjectView/ProjectFinancialsTab';
+import ProjectTeamTab from './ProjectView/ProjectTeamTab';
+import ProjectFilesTab from './ProjectView/ProjectFilesTab';
 
 export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props) {
   const { profile, activeCompanyId } = useAuth();
@@ -170,12 +177,12 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
     // Listen to attendance by projectId
     const q1 = query(collection(db, 'attendance'), where('projectId', '==', projectId));
     const unsub1 = onSnapshot(q1, (snap1) => {
-      const docs1 = snap1.docs.map(d => ({ id: d.id, ...d.data() }));
+      const docs1: any[] = snap1.docs.map(d => ({ id: d.id, ...d.data() }));
       
       // Also fetch by locationName for old records
       getDocs(query(collection(db, 'attendance'), where('locationName', '==', `مشروع: ${project.title}`)))
         .then(snap2 => {
-          const docs2 = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
+          const docs2: any[] = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
           // Merge unique records
           const merged = [...docs1];
           docs2.forEach(d2 => {
@@ -215,6 +222,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'milestones' | 'team_list'>('milestones');
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Project>>({});
@@ -486,7 +494,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
     const toastId = toast.loading("جاري رفع الملفات وتوثيقها في النظام...");
     
     try {
-      const filesArray = Array.from(e.target.files);
+      const filesArray = Array.from(e.target.files) as File[];
       for (const file of filesArray) {
         // 1. Validate file size (max 15MB)
         const maxSizeBytes = 15 * 1024 * 1024;
@@ -1101,1215 +1109,102 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
          <div className="flex flex-col gap-8 min-h-[400px]">
             <AnimatePresence mode="wait">
                {activeTab === 'overview' && (
-                  <motion.div 
-                     key="overview"
-                     initial={{ opacity: 0, y: 10 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     exit={{ opacity: 0, y: -10 }}
-                     className="grid grid-cols-1 xl:grid-cols-3 gap-6"
-                  >
-                     {/* Primary Insight & Specs Side */}
-                     <div className="xl:col-span-2 flex flex-col gap-6">
-                        
-                        {/* Highlights Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           {/* Status Progress */}
-                           <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm flex items-center justify-between relative overflow-hidden group">
-                              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-10 -mt-10 transition-transform group-hover:scale-125"></div>
-                              <div className="flex flex-col gap-2 relative z-10 w-full">
-                                 <span className="text-xs font-black text-slate-500 flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4 text-emerald-500" /> 
-                                    معدل إنجاز المشروع
-                                 </span>
-                                 <div className="flex items-end justify-between mt-2">
-                                    <div>
-                                       <span className="text-4xl font-black text-slate-900">{achievementStats}%</span>
-                                    </div>
-                                    <div className="text-left">
-                                       <span className="px-2 py-1 bg-slate-100 text-[10px] font-bold text-slate-500 rounded-lg whitespace-nowrap">
-                                          {project.milestones?.filter(m => m.status === 'completed').length || 0} من {project.milestones?.length || 0} مراحل
-                                       </span>
-                                    </div>
-                                 </div>
-                                 <div className="w-full bg-slate-100 h-2 rounded-full mt-4 overflow-hidden">
-                                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-1000" style={{ width: `${achievementStats}%` }}></div>
-                                 </div>
-                              </div>
-                           </div>
-
-                           {/* Contract Basic Stats */}
-                           <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group">
-                              <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl -ml-10 -mt-10 transition-transform group-hover:scale-125"></div>
-                              <div className="flex justify-between items-start relative z-10 mb-4">
-                                 <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-                                    <FileText className="w-6 h-6" />
-                                 </div>
-                                 <div className="text-left text-xs font-bold space-y-1">
-                                    <p className="text-slate-400">بدء العمل</p>
-                                    <p className="text-slate-800">{project.startDate ? new Date(project.startDate).toLocaleDateString('ar-SA') : '---'}</p>
-                                 </div>
-                              </div>
-                              <div className="relative z-10 flex flex-col gap-1">
-                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الميزانية الإجمالية</span>
-                                 <span className="text-2xl font-black text-slate-900">{project.budget?.toLocaleString() || 0} <span className="text-sm text-slate-400">ر.س</span></span>
-                              </div>
-                           </div>
-                        </div>
-
-
-                        {/* GPS Tracking Stats */}
-                        <div className="bg-white border border-slate-100 shadow-sm rounded-[2.5rem] p-8">
-                           <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                              <h3 className="text-lg font-black text-slate-900 flex items-center gap-3">
-                                 <MapPin className="w-5 h-5 text-emerald-500" />
-                                 رقابة الحضور الميداني (GPS)
-                              </h3>
-                              <Badge className="bg-emerald-50 text-emerald-600 border-emerald-200">
-                                 {projectAttendance.length} سجل حضور
-                              </Badge>
-                           </div>
-
-                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
-                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-emerald-500 shrink-0">
-                                    <Calendar className="w-5 h-5" />
-                                 </div>
-                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-400">إجمالي أيام العمل</span>
-                                    <span className="text-xl font-black text-slate-800">{gpsStats.totalDays} <span className="text-xs text-slate-500 font-bold">يوم</span></span>
-                                 </div>
-                              </div>
-
-                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
-                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-amber-500 shrink-0">
-                                    <Clock className="w-5 h-5" />
-                                 </div>
-                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-400">ساعات العمل الفعلية</span>
-                                    <span className="text-xl font-black text-slate-800">{gpsStats.totalHours} <span className="text-xs text-slate-500 font-bold">ساعة</span></span>
-                                 </div>
-                              </div>
-
-                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
-                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-indigo-500 shrink-0">
-                                    <Users className="w-5 h-5" />
-                                 </div>
-                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-400">عدد الكوادر بالموقع</span>
-                                    <span className="text-xl font-black text-slate-800">{gpsStats.uniqueWorkers} <span className="text-xs text-slate-500 font-bold">موظف</span></span>
-                                 </div>
-                              </div>
-                           </div>
-
-                           {gpsStats.workersList.length > 0 && (
-                              <div className="mt-4 border border-slate-100 rounded-2xl overflow-hidden">
-                                 <div className="bg-slate-50 px-4 py-2 text-xs font-black text-slate-600 border-b border-slate-100 grid grid-cols-3 text-right">
-                                    <span>الموظف / المشرف</span>
-                                    <span className="text-center">أيام الحضور</span>
-                                    <span className="text-left">إجمالي الساعات</span>
-                                 </div>
-                                 <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                                    {gpsStats.workersList.map((w: any, idx: number) => (
-                                       <div key={idx} className="px-4 py-3 text-sm font-bold text-slate-800 grid grid-cols-3 items-center hover:bg-slate-50/50">
-                                          <span className="flex items-center gap-2">
-                                             <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] text-slate-600 shrink-0">
-                                                {w.name.charAt(0)}
-                                             </div>
-                                             <span className="truncate">{w.name}</span>
-                                          </span>
-                                          <span className="text-center text-emerald-600 bg-emerald-50 w-fit mx-auto px-2 py-0.5 rounded-lg text-xs">{w.daysCount} أيام</span>
-                                          <span className="text-left font-black">{w.totalHours > 0 ? `${w.totalHours} ساعة` : 'بدون انصراف'}</span>
-                                       </div>
-                                    ))}
-                                 </div>
-                              </div>
-                           )}
-                           {gpsStats.workersList.length === 0 && (
-                              <div className="flex flex-col items-center justify-center py-6 text-slate-400">
-                                 <MapPin className="w-8 h-8 mb-2 opacity-50" />
-                                 <p className="text-xs font-bold">لم يتم تسجيل أي حضور ميداني عبر الـ GPS في هذا المشروع بعد</p>
-                              </div>
-                           )}
-                        </div>
-
-                        {/* Specs Bento Box */}
-                        <div className="bg-white border border-slate-100 shadow-sm rounded-[2.5rem] p-8">
-                           <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                              <h3 className="text-lg font-black text-slate-900 flex items-center gap-3">
-                                 <Info className="w-5 h-5 text-indigo-500" />
-                                 المواصفات الفنية وبيانات العقد
-                              </h3>
-                              <Button 
-                                 variant="outline" 
-                                 size="sm" 
-                                 onClick={() => window.print()}
-                                 className="rounded-xl border-slate-200 font-black text-[10px] gap-2 h-9"
-                              >
-                                 <FileText className="w-3.5 h-3.5" />
-                                 تصدير PDF
-                              </Button>
-                           </div>
-
-                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
-                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-slate-400 shrink-0">
-                                    <User className="w-5 h-5" />
-                                 </div>
-                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-400">العميل / المالك</span>
-                                    <span className="text-sm font-black text-slate-800 truncate">{project.clientName || '---'}</span>
-                                 </div>
-                              </div>
-
-                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
-                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-slate-400 shrink-0">
-                                    <Layers className="w-5 h-5" />
-                                 </div>
-                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-400">نوع أعمال الإعلان</span>
-                                    <span className="text-sm font-black text-slate-800 truncate">{projectTypeLabels[project.projectType || ''] || project.projectType || '---'}</span>
-                                 </div>
-                              </div>
-
-                              <div className="flex bg-slate-50 rounded-2xl p-4 gap-4 items-center">
-                                 <div className="w-10 h-10 bg-white rounded-[10px] shadow-sm flex items-center justify-center text-slate-400 shrink-0">
-                                    <Maximize className="w-5 h-5" />
-                                 </div>
-                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-400">المقاسات الكلية</span>
-                                    <span className="text-sm font-black text-slate-800 truncate" dir="ltr">{project.totalArea || '---'}</span>
-                                 </div>
-                              </div>
-                           </div>
-                           
-                           {/* Client access section */}
-                           {project.clientPin && (
-                              <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 shrink-0">
-                                       <Lock className="w-5 h-5" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                       <span className="text-sm font-black text-slate-800">بيانات وصول العميل</span>
-                                       <span className="text-[10px] font-bold text-slate-400 mt-1 max-w-[200px]">يمكن للعميل تسجيل الدخول والاطلاع على تقدم المشروع.</span>
-                                    </div>
-                                 </div>
-                                 <div className="flex flex-col gap-2 w-full sm:w-auto">
-                                    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 w-full">
-                                       <input 
-                                          readOnly 
-                                          value={`${window.location.origin}/?clientPortal=true&projectId=${project.id}`}
-                                          className="bg-transparent text-[10px] font-mono text-slate-500 px-2 w-full min-w-[150px] outline-none select-all"
-                                          dir="ltr"
-                                       />
-                                       <Button 
-                                          variant="ghost"
-                                          onClick={() => {
-                                             navigator.clipboard.writeText(`${window.location.origin}/?clientPortal=true&projectId=${project.id}`);
-                                             toast.success("تم نسخ رابط البوابة");
-                                          }}
-                                          className="h-8 rounded-xl bg-white hover:bg-slate-100 text-slate-600 font-black text-[10px] px-3 shadow-sm border border-slate-200 shrink-0"
-                                       >
-                                          نسخ الرابط
-                                       </Button>
-                                    </div>
-                                    <div className="flex items-center justify-between bg-amber-50 p-1.5 rounded-2xl border border-amber-100">
-                                       <div className="flex items-center gap-2 px-2">
-                                          <span className="text-[10px] font-bold text-amber-700/70">رمز الدخول:</span>
-                                          <span className="text-sm font-mono font-black text-amber-700 tracking-widest">{project.clientPin}</span>
-                                       </div>
-                                       <Button 
-                                          onClick={() => {
-                                             navigator.clipboard.writeText(`مرحباً،\nيسعدنا إبلاغك أنه يمكنك متابعة تقدم مشروعك لحظة بلحظة عبر بوابة العميل:\n\n🌐 الرابط: ${window.location.origin}/?clientPortal=true&projectId=${project.id}\n🔑 رمز الدخول الموحد: ${project.clientPin}\n\nشكراً لثقتكم بنا!`);
-                                             toast.success("تم نسخ رسالة الدعوة الشاملة");
-                                          }}
-                                          className="h-8 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] px-4 shrink-0 transition-all shadow-sm"
-                                       >
-                                          نسخ الرسالة كاملة
-                                       </Button>
-                                    </div>
-                                 </div>
-                              </div>
-                           )}
-                        </div>
-                     </div>
-
-                     {/* Action Cards & Timeline Side */}
-                     <div className="flex flex-col gap-6">
-                        {/* Map Preview Logic / Quick Actions */}
-                        <div className="bg-slate-900 rounded-[2.5rem] p-6 shadow-xl relative overflow-hidden flex flex-col justify-between h-[200px] sm:h-auto">
-                           <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-400 via-transparent to-transparent blur-xl"></div>
-                           <div className="relative z-10 flex flex-col gap-2">
-                              <h4 className="text-white font-black text-lg">تحكم سريع</h4>
-                              <p className="text-slate-400 text-xs font-bold leading-relaxed">بوابة الاتصال وتحديد الموقع لفرق التركيبات الخارجية.</p>
-                           </div>
-                           
-                           <div className="relative z-10 flex gap-2 mt-6">
-                              <Button 
-                                 onClick={() => {
-                                    if (project.locationLink) window.open(project.locationLink, '_blank');
-                                    else toast.error("لا يوجد رابط موقع جغرافي مضاف لهذا المشروع");
-                                 }}
-                                 className="flex-1 h-12 bg-white text-slate-900 rounded-2xl font-black text-xs hover:bg-slate-100 hover:scale-105 transition-all shadow-lg"
-                              >
-                                 <MapPin className="w-4 h-4 ml-1.5 text-blue-600" />
-                                 تحديد الموقع
-                              </Button>
-                              <Button 
-                                 onClick={() => {
-                                    if (project.clientPhone) window.open(`tel:${project.clientPhone}`, '_self');
-                                    else toast.error("لا يوجد رقم هاتف للعميل");
-                                 }}
-                                 className="w-12 h-12 shrink-0 bg-white/10 text-white border border-white/20 rounded-2xl flex items-center justify-center hover:bg-white/20 transition-all"
-                              >
-                                 <Phone className="w-5 h-5" />
-                              </Button>
-                           </div>
-                        </div>
-
-                        {/* Interactive Mini Timeline */}
-                        <div className="bg-white border border-slate-100 shadow-sm rounded-[2.5rem] p-6 flex-1 flex flex-col">
-                           <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-                              <h4 className="text-sm font-black text-slate-800">التطور الزمني المصغر</h4>
-                              <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-md">{project.milestones?.length || 0} مراحل</span>
-                           </div>
-
-                           <div className="space-y-0 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent pr-4">
-                              {project.milestones?.length ? project.milestones.slice(0, 4).map((m, i) => {
-                                 const isDone = m.status === 'completed';
-                                 return (
-                                    <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group py-3">
-                                       <div className={`flex items-center justify-center w-6 h-6 rounded-full border-4 border-white ${isDone ? 'bg-emerald-500' : 'bg-slate-200'} shadow shrink-0 absolute right-1 mx-[-11px]`}>
-                                          {isDone && <Check className="w-3 h-3 text-white" />}
-                                       </div>
-                                       <div className="w-full mr-8 pr-2">
-                                          <div className={`p-4 rounded-2xl shadow-sm border ${isDone ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'} transition-all`}>
-                                             <div className="flex items-center justify-between">
-                                                <h5 className={`font-black text-[11px] ${isDone ? 'text-emerald-900' : 'text-slate-600'}`}>{m.title}</h5>
-                                                {m.date && <span className="text-[9px] font-bold text-slate-400">{new Date(m.date).toLocaleDateString('ar-SA')}</span>}
-                                             </div>
-                                          </div>
-                                       </div>
-                                    </div>
-                                 )
-                              }) : (
-                                 <div className="py-10 text-center">
-                                    <p className="text-xs font-bold text-slate-400">لا توجد مراحل مسجلة.</p>
-                                 </div>
-                              )}
-                           </div>
-                           
-                           {(project.milestones?.length || 0) > 4 && (
-                              <Button 
-                                 variant="ghost" 
-                                 className="w-full mt-4 h-10 rounded-xl text-xs font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100"
-                                 onClick={() => setActiveTab('milestones')}
-                              >
-                                 عرض باقي المراحل
-                              </Button>
-                           )}
-                        </div>
-                     </div>
-
-                     {/* Danger Zone */}
-                     <div className="xl:col-span-3 mt-2">
-                        <div className="bg-rose-50/50 border border-rose-100 rounded-[2rem] p-6 shadow-sm">
-                           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                              <div>
-                                 <h4 className="text-rose-700 font-black text-lg flex items-center gap-2">
-                                    <AlertCircle className="w-5 h-5" />
-                                    منطقة الخطر (إدارة المشروع)
-                                 </h4>
-                                 <p className="text-rose-600/70 text-xs font-bold mt-1">
-                                    هذه المنطقة مخصصة للإجراءات الحساسة مثل إيقاف المشروع أو حذفه بالكامل من النظام.
-                                 </p>
-                              </div>
-                              <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => {
-                                if (open && profile?.role !== 'manager' && profile?.role !== 'owner') {
-                                  toast.error("صلاحيات الحذف محصورة على المالك والمدير فقط.");
-                                  return;
-                                }
-                                setIsDeleteDialogOpen(open);
-                              }}>
-                                <DialogTrigger asChild>
-                                   <Button variant="destructive" className="rounded-xl px-6 h-12 font-black shadow-lg shadow-rose-500/20 w-full md:w-auto">
-                                      <Trash2 className="w-4 h-4 ml-2" />
-                                      إلغاء أو حذف المشروع
-                                   </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none" dir="rtl">
-                                   <DialogHeader>
-                                      <div className="mx-auto w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-4">
-                                         <AlertCircle className="w-8 h-8" />
-                                      </div>
-                                      <DialogTitle className="text-center font-black text-xl">حذف أو إلغاء المشروع</DialogTitle>
-                                      <DialogDescription className="text-center text-slate-500 font-bold mt-2">
-                                         يرجى اختيار طريقة الحذف المناسبة بناءً على حالة المشروع المالية والتشغيلية
-                                      </DialogDescription>
-                                   </DialogHeader>
-                                   
-                                   <div className="space-y-6 mt-6">
-                                      <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200">
-                                         <h4 className="font-black text-amber-800 text-sm mb-1">إلغاء وحذف آمن (موصى به)</h4>
-                                         <p className="text-[10px] text-amber-700 font-bold leading-relaxed mb-3">
-                                            يتم تغيير حالة المشروع إلى "ملغى"، وتسريح العمالة فوراً للحفاظ على استمرارية العمل، مع الحفاظ على الفواتير والمصروفات السابقة لضمان عدم توازن الحسابات.
-                                         </p>
-                                         <Button 
-                                            onClick={() => handleDeleteProject('soft')}
-                                            disabled={isDeleting}
-                                            className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl h-10"
-                                         >
-                                            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "إلغاء وأرشفة المشروع بأمان"}
-                                         </Button>
-                                      </div>
-
-                                      <div className="p-4 bg-rose-50 rounded-2xl border border-rose-200">
-                                         <h4 className="font-black text-rose-800 text-sm mb-1">حذف نهائي تدميري</h4>
-                                         <p className="text-[10px] text-rose-700 font-bold leading-relaxed mb-3">
-                                            استخدم هذا الخيار فقط للمشاريع "التجريبية" أو "الجديدة كلياً" التي لا تملك أي عمليات مالية أو عمال. لا يمكن التراجع عن هذا الإجراء أبداً.
-                                         </p>
-                                         <div className="space-y-3">
-                                            <Input 
-                                               placeholder="اكتب اسم المشروع لتأكيد الحذف"
-                                               value={deleteConfirmationName}
-                                               onChange={e => setDeleteConfirmationName(e.target.value)}
-                                               className="bg-white border-rose-200 focus:ring-rose-500 rounded-xl font-bold text-xs"
-                                            />
-                                            <Button 
-                                               onClick={() => handleDeleteProject('hard')}
-                                               disabled={isDeleting || deleteConfirmationName !== project.title}
-                                               variant="destructive"
-                                               className="w-full font-black rounded-xl h-10 shadow-lg shadow-rose-500/20"
-                                            >
-                                               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "المشروع فارغ - حذف نهائي"}
-                                            </Button>
-                                         </div>
-                                      </div>
-                                   </div>
-                                </DialogContent>
-                              </Dialog>
-                           </div>
-                        </div>
-                     </div>
-                  </motion.div>
+                  <ProjectOverviewTab
+                     project={project}
+                     profile={profile}
+                     achievementStats={achievementStats}
+                     projectAttendance={projectAttendance}
+                     gpsStats={gpsStats}
+                     projectTypeLabels={projectTypeLabels}
+                     isDeleteDialogOpen={isDeleteDialogOpen}
+                     setIsDeleteDialogOpen={setIsDeleteDialogOpen}
+                     isDeleting={isDeleting}
+                     deleteConfirmationName={deleteConfirmationName}
+                     setDeleteConfirmationName={setDeleteConfirmationName}
+                     handleDeleteProject={handleDeleteProject}
+                     setActiveTab={setActiveTab}
+                  />
                )}
 
                {activeTab === 'milestones' && (
-                  <motion.div 
-                     key="milestones"
-                     initial={{ opacity: 0, y: 10 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     exit={{ opacity: 0, y: -10 }}
-                     className="flex flex-col gap-8"
-                  >
-                     <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-64 h-64 bg-primary/20 blur-3xl rounded-full" />
-                        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-                           <div className="space-y-4">
-                              <h3 className="text-2xl font-black">هيكلة مراحل التنفيذ</h3>
-                              <p className="text-slate-400 font-bold max-w-md">قم بتعريف المراحل المخصصة لهذا المشروع وتحديد أوزانها لضبط دقة الإنجاز.</p>
-                              <div className="pt-4 flex items-center gap-6">
-                                 <div>
-                                    <p className="text-xs font-black text-slate-500 uppercase mb-1">نسبة الإنجاز</p>
-                                    <p className="text-4xl font-black text-emerald-400">{achievementStats}%</p>
-                                 </div>
-                                 <div className="h-10 w-[1px] bg-slate-800" />
-                                 <div>
-                                    <p className="text-xs font-black text-slate-500 uppercase mb-1">المراحل المعتمدة</p>
-                                    <p className="text-4xl font-black text-white">{project.milestones?.length || 0}</p>
-                                 </div>
-                              </div>
-                           </div>
-                           
-                           <Dialog open={isAddingStage} onOpenChange={setIsAddingStage}>
-                              <DialogTrigger render={
-                                 <button className="group/button inline-flex shrink-0 items-center justify-center h-14 px-8 rounded-2xl bg-white text-slate-900 font-black hover:bg-slate-100 gap-3 shadow-xl transition-all outline-none cursor-pointer">
-                                    <Plus className="w-5 h-5" />
-                                    إضافة مرحلة عمل
-                                 </button>
-                              } />
-                              <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none" dir="rtl">
-                                 <DialogHeader>
-                                    <DialogTitle className="text-right font-black">إضافة مرحلة جديدة للمشروع</DialogTitle>
-                                 </DialogHeader>
-                                 <div className="space-y-5 mt-4">
-                                    <div className="space-y-2">
-                                       <Label className="text-xs font-black text-slate-400">اسم المرحلة</Label>
-                                       <Input 
-                                          value={newStage.title} 
-                                          onChange={e => setNewStage({...newStage, title: e.target.value})} 
-                                          placeholder="مثال: تصنيع الهيكل الحديدي وتجهيز الاكريليك"
-                                          className="rounded-xl h-12 bg-slate-50 border-none font-bold" 
-                                       />
-                                    </div>
-                                    <div className="space-y-2">
-                                       <Label className="text-xs font-black text-slate-400">وصف المرحلة</Label>
-                                       <textarea 
-                                          value={newStage.description || ''} 
-                                          onChange={e => setNewStage({...newStage, description: e.target.value})} 
-                                          placeholder="تفاصيل الإنتاج الفني أو التركيب لهذه المرحلة..."
-                                          className="w-full rounded-xl bg-slate-50 border-none font-bold p-4 text-sm focus:ring-0 min-h-[90px]"
-                                       />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">الوزن النسبي (%)</Label>
-                                          <Input 
-                                             type="number" 
-                                             value={newStage.weight} 
-                                             onChange={e => setNewStage({...newStage, weight: Number(e.target.value)})} 
-                                             className="rounded-xl h-12 bg-slate-50 border-none font-bold" 
-                                          />
-                                       </div>
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">تاريخ التسليم المتوقع</Label>
-                                          <Input 
-                                             type="date" 
-                                             value={newStage.dueDate || ''} 
-                                             onChange={e => setNewStage({...newStage, dueDate: e.target.value})} 
-                                             className="rounded-xl h-12 bg-slate-50 border-none font-bold" 
-                                          />
-                                       </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                       <Label className="text-xs font-black text-slate-400">تعيين لموظف (اختياري)</Label>
-                                       <select
-                                           value={newStage.assignedWorkerId || ''}
-                                           onChange={e => setNewStage({...newStage, assignedWorkerId: e.target.value})}
-                                           className="w-full h-12 rounded-xl bg-slate-50 border-none font-bold text-xs pr-4 focus:ring-0 focus:border-primary outline-none"
-                                       >
-                                           <option value="">-- بدون تعيين --</option>
-                                           {projectWorkers.map(w => (
-                                               <option key={w.id || (w as any).uid} value={w.id || (w as any).uid}>{(w as any).name}</option>
-                                           ))}
-                                       </select>
-                                    </div>
-                                    <Button onClick={handleAddStage} className="w-full h-12 rounded-2xl bg-slate-900 font-black mt-4 shadow-lg shadow-slate-100">إضافة المرحلة</Button>
-                                 </div>
-                              </DialogContent>
-                           </Dialog>
-                        </div>
-                     </div>
-
-                     <div className="flex flex-col gap-4">
-                        <div className="flex items-center justify-between mb-2">
-                           <h3 className="text-xl font-black text-slate-900 border-r-4 border-primary pr-3">المراحل التشغيلية الحالية</h3>
-                           <Badge className="bg-slate-100 text-slate-500 border-none font-bold">إجمالي الأوزان: {project.milestones?.reduce((a,c) => a + (c.weight || 0), 0)}%</Badge>
-                        </div>
-                        
-                        <div className="relative flex flex-col gap-8 pt-4">
-                           {(!project?.milestones || project.milestones.length === 0) && (
-                              <div className="py-20 text-center border-2 border-dashed border-slate-200 rounded-[3rem] bg-slate-50/50">
-                                 <Layers className="w-12 h-12 mx-auto text-slate-300 mb-4" />
-                                 <p className="font-black text-slate-400">لم يتم تعريف أي مراحل لهذا المشروع بعد</p>
-                                 <p className="text-xs font-bold text-slate-300 mt-1">ابدأ بإضافة المراحل لبناء هيكل الإنتاج والتركيب</p>
-                              </div>
-                           )}
-                           
-                           {project.milestones && project.milestones.length > 0 && (
-                               <div className="absolute top-0 bottom-0 right-[25px] w-[2px] bg-slate-100 hidden sm:block z-0" />
-                           )}
-
-                           {project.milestones?.map((milestone, i) => {
-                              const isCompleted = milestone.status === 'completed';
-                              const associatedTransactions = transactions.filter(t => t.description?.includes(milestone.title) || t.category?.includes(milestone.title));
-                              
-                              return (
-                                 <div key={i} className="relative z-10 flex flex-col sm:flex-row gap-6 items-start">
-                                    <div className={`hidden sm:flex shrink-0 w-[52px] h-[52px] rounded-full border-4 border-white items-center justify-center font-black text-lg shadow-sm ${isCompleted ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                       {i + 1}
-                                    </div>
-                                    <Card className={`flex-1 p-5 rounded-3xl transition-all duration-300 w-full ${isCompleted ? 'bg-emerald-50/30 border-emerald-100 shadow-none' : 'bg-white hover:border-slate-300 hover:shadow-md border-slate-100 shadow-sm'}`}>
-                                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                          <div className="flex items-start gap-4">
-                                             <div className={`flex sm:hidden shrink-0 w-10 h-10 rounded-xl items-center justify-center font-black text-sm ${isCompleted ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                                {i + 1}
-                                             </div>
-                                             <div>
-                                                <h4 className="font-black text-slate-900 text-base">{milestone.title}</h4>
-                                                <div className="flex flex-wrap items-center gap-2 mt-2">
-                                                   <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-2 py-1 rounded-lg uppercase tracking-widest shrink-0">الوزن: {milestone.weight}%</span>
-                                                   {associatedTransactions.length > 0 && (
-                                                      <Badge variant="outline" className="text-[9px] font-black border-amber-200 text-amber-600 px-2 py-0 bg-amber-50">مصاريف مرتبطة</Badge>
-                                                   )}
-                                                   {milestone.dueDate && (
-                                                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                                                         <Clock className="w-3 h-3" />
-                                                         مخطط: {milestone.dueDate ? new Date(milestone.dueDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                                                      </span>
-                                                   )}
-                                                </div>
-                                                {milestone.description && (
-                                                   <p className="text-xs font-bold text-slate-500 mt-3 leading-relaxed border-r-2 border-slate-200 pr-3 line-clamp-2 hover:line-clamp-none transition-all">
-                                                      {milestone.description}
-                                                   </p>
-                                                )}
-                                             </div>
-                                          </div>
-                                          <div className="flex items-center gap-2 md:grid md:grid-cols-2 md:gap-2 shrink-0 self-end md:self-auto w-full md:w-auto mt-2 md:mt-0 pt-3 md:pt-0 border-t md:border-0 border-slate-100">
-                                             <Button 
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleDeleteStage(milestone)}
-                                                className="h-10 rounded-xl text-rose-500 border-rose-100 hover:text-rose-600 hover:bg-rose-50 font-black text-xs flex-1 md:flex-none"
-                                             >
-                                                حذف المرحلة
-                                             </Button>
-                                             <Button 
-                                                onClick={() => handleToggleMilestone(milestone.title)}
-                                                size="sm"
-                                                className={`h-10 rounded-xl px-4 font-black text-xs transition-all flex-1 md:flex-none ${isCompleted ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-none' : 'bg-slate-900 text-white hover:bg-black shadow-md'}`}
-                                             >
-                                                {isCompleted ? <CheckCircle2 className="w-4 h-4 ml-1.5" /> : null}
-                                                {isCompleted ? 'مكتملة معتمدة' : 'اعتماد المرحلة'}
-                                             </Button>
-                                          </div>
-                                       </div>
-                                       
-                                       {isCompleted && milestone.date && (
-                                          <div className="mt-4 pt-3 border-t border-emerald-100/50 flex items-center justify-between bg-emerald-50/50 -mx-5 -mb-5 px-5 py-3 rounded-b-3xl">
-                                             <div className="flex items-center gap-4">
-                                                <p className="text-[10px] font-bold text-emerald-700 flex items-center gap-1.5">
-                                                   <CheckSquare className="w-3.5 h-3.5" />
-                                                   تم التنفيذ في: {milestone.date ? new Date(milestone.date).toLocaleDateString('ar-SA') : 'غير محدد'}
-                                                </p>
-                                                <div className="w-1 h-1 rounded-full bg-emerald-200" />
-                                                <p className="text-[10px] font-bold text-emerald-600">تم تحديث الإنجاز المالي</p>
-                                             </div>
-                                             <Button variant="ghost" size="sm" className="text-[10px] font-black gap-1.5 h-7 px-3 bg-white hover:bg-emerald-100 text-emerald-700 rounded-lg shadow-sm border border-emerald-100" onClick={() => setActiveTab('monitoring')}>
-                                                <Camera className="w-3.5 h-3.5" />
-                                                مرفقات
-                                             </Button>
-                                          </div>
-                                       )}
-                                    </Card>
-                                 </div>
-                              );
-                           })}
-                        </div>
-                     </div>
-
-                     <div className="bg-amber-50 rounded-[2.5rem] p-8 border border-amber-100 flex gap-6">
-                        <div className="h-12 w-12 bg-amber-100 rounded-2xl flex items-center justify-center shrink-0">
-                           <AlertCircle className="w-6 h-6 text-amber-600" />
-                        </div>
-                        <div className="space-y-1">
-                           <p className="text-sm font-black text-amber-900">تعليمات الربط الميداني</p>
-                           <p className="text-xs font-bold text-amber-700 leading-relaxed">
-                              يجب أن يتطابق تسمية المرحلة مع وصف المشتريات أو المصاريف ليتم ربطها تلقائياً. 
-                              يمكنك إضافة صور التوثيق لكل مرحلة من تبويب "التوثيق" لضمان صرف الدفعات من العميل.
-                           </p>
-                        </div>
-                     </div>
-                  </motion.div>
+                  <ProjectTeamTab
+                     project={project}
+                     projectId={projectId}
+                     projectWorkers={projectWorkers}
+                     teamCandidates={teamCandidates}
+                     transactions={transactions}
+                     isAddingStage={isAddingStage}
+                     setIsAddingStage={setIsAddingStage}
+                     newStage={newStage}
+                     setNewStage={setNewStage}
+                     handleAddStage={handleAddStage}
+                     handleDeleteStage={handleDeleteStage}
+                     handleToggleMilestone={handleToggleMilestone}
+                     isManageTeamOpen={isManageTeamOpen}
+                     setIsManageTeamOpen={setIsManageTeamOpen}
+                     handleToggleWorker={handleToggleWorker}
+                     setActiveTab={setActiveTab}
+                     activeSubTab={activeSubTab}
+                     setActiveSubTab={setActiveSubTab}
+                  />
                )}
                {activeTab === 'team' && (
-                  <motion.div 
-                     key="team"
-                     initial={{ opacity: 0, y: 10 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     exit={{ opacity: 0, y: -10 }}
-                     className="flex flex-col gap-6"
-                  >
-                     <div className="flex items-center justify-between mb-4">
-                        <div className="border-r-4 border-primary pr-3 text-right">
-                           <h3 className="text-xl font-black text-slate-900 leading-none">الفريق الفني للإنتاج والتركيب</h3>
-                           <p className="text-slate-500 font-bold text-[10px] mt-1">إدارة الفنيين والمصنعين والمسؤولين عن التركيب للمشروع</p>
-                        </div>
-                        <Dialog open={isManageTeamOpen} onOpenChange={setIsManageTeamOpen}>
-                           <DialogTrigger render={
-                              <button className="group/button inline-flex shrink-0 items-center justify-center rounded-xl bg-primary text-white h-9 px-4 font-black text-[10px] gap-2 shadow-md hover:bg-slate-900 transition-all outline-none cursor-pointer">
-                                 <Plus className="w-3.5 h-3.5" />
-                                 إدارة أعضاء الفريق
-                              </button>
-                           } />
-                           <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none" dir="rtl">
-                              <DialogHeader>
-                                 <DialogTitle className="text-right font-black">إدارة أعضاء الفريق الفني</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4 mt-4 max-h-[400px] overflow-y-auto pr-1">
-                                 {teamCandidates.map(worker => {
-                                       const isAssigned = project.workerIds?.includes(worker.id);
-                                       return (
-                                          <div key={worker.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
-                                             <div>
-                                                <p className="font-bold text-sm text-slate-900">{worker.name}</p>
-                                                <p className="text-[10px] text-slate-400 font-semibold">
-                                                   {worker.isDailyWage ? `عامل يومية (${worker.role})` : 
-                                                    worker.role === 'worker' ? 'فني مختص' : 
-                                                    worker.role === 'supervisor' ? 'مشرف فني' : 
-                                                    worker.role === 'manager' ? 'مدير المشروع' : worker.role || 'عضو الفريق'}
-                                                </p>
-                                             </div>
-                                             <Button 
-                                                onClick={() => handleToggleWorker(worker.id, !!isAssigned)}
-                                                variant={isAssigned ? "destructive" : "default"}
-                                                size="sm"
-                                                className="rounded-xl font-black text-[10px] h-8"
-                                             >
-                                                {isAssigned ? "إزالة" : "إضافة"}
-                                             </Button>
-                                          </div>
-                                       );
-                                    })
-                                 }
-                                 {teamCandidates.length === 0 && (
-                                    <p className="text-center text-xs font-bold text-slate-400 py-4">لا يوجد موظفين أو عمال مسجلين</p>
-                                 )}
-                              </div>
-                           </DialogContent>
-                        </Dialog>
-                     </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {projectWorkers.length === 0 && (
-                           <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-200 rounded-[3rem] bg-slate-50/50">
-                              <Users className="w-12 h-12 mx-auto text-slate-300 mb-4" />
-                              <p className="font-black text-slate-400">لا يوجد أعضاء في الفريق الفني حالياً</p>
-                              <p className="text-xs font-bold text-slate-300 mt-1">اضغط على زر "إدارة أعضاء الفريق" لإسناد فنيين للمشروع</p>
-                           </div>
-                        )}
-                        {projectWorkers.map(worker => (
-                           <Card key={worker.id} className="p-6 rounded-[2rem] border-slate-100 flex flex-row items-center justify-between shadow-sm hover:shadow-md transition-all">
-                              <div className="flex items-center gap-4">
-                                 <div className="h-14 w-14 bg-gradient-to-br from-primary to-accent text-white rounded-2xl flex items-center justify-center font-black text-xl shadow-md shadow-primary/10">
-                                    {worker.name.charAt(0)}
-                                 </div>
-                                 <div className="text-right">
-                                    <p className="font-black text-slate-900">{worker.name}</p>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                       {worker.isDailyWage ? `عامل يومية (${worker.role})` : 
-                                        worker.role === 'worker' ? 'فني مختص' : 
-                                        worker.role === 'supervisor' ? 'مشرف فني' : 
-                                        worker.role === 'manager' ? 'مدير المشروع' : 'عضو الفريق'}
-                                    </p>
-                                 </div>
-                              </div>
-                              {worker.phone ? (
-                                 <a 
-                                    href={`tel:${worker.phone}`} 
-                                    className="rounded-xl h-12 w-12 text-emerald-500 bg-emerald-50 flex items-center justify-center transition-colors hover:bg-emerald-100 hover:text-emerald-600 outline-none"
-                                    title="اتصال هاتفى"
-                                 >
-                                    <Phone className="w-5 h-5" />
-                                 </a>
-                              ) : (
-                                 <Button variant="ghost" size="icon" className="rounded-xl h-12 w-12 text-slate-300 bg-slate-50 cursor-not-allowed">
-                                    <Phone className="w-5 h-5" />
-                                 </Button>
-                              )}
-                           </Card>
-                        ))}
-                     </div>
-                  </motion.div>
+                  <ProjectTeamTab
+                     project={project}
+                     projectId={projectId}
+                     projectWorkers={projectWorkers}
+                     teamCandidates={teamCandidates}
+                     transactions={transactions}
+                     isAddingStage={isAddingStage}
+                     setIsAddingStage={setIsAddingStage}
+                     newStage={newStage}
+                     setNewStage={setNewStage}
+                     handleAddStage={handleAddStage}
+                     handleDeleteStage={handleDeleteStage}
+                     handleToggleMilestone={handleToggleMilestone}
+                     isManageTeamOpen={isManageTeamOpen}
+                     setIsManageTeamOpen={setIsManageTeamOpen}
+                     handleToggleWorker={handleToggleWorker}
+                     setActiveTab={setActiveTab}
+                     activeSubTab={activeSubTab}
+                     setActiveSubTab={setActiveSubTab}
+                  />
                )}
 
                {activeTab === 'financials' && (
-                  <motion.div 
-                     key="financials"
-                     initial={{ opacity: 0, y: 10 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     exit={{ opacity: 0, y: -10 }}
-                     className="flex flex-col gap-8"
-                  >
-                     <Card className="rounded-[3rem] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-10 overflow-hidden relative shadow-2xl border border-slate-800">
-                        <div className="absolute -top-12 -right-12 w-64 h-64 bg-primary/30 blur-[100px] rounded-full" />
-                        <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-accent/20 blur-[100px] rounded-full" />
-                        <div className="relative z-10 space-y-8">
-                           <div className="flex flex-wrap items-center justify-between gap-8">
-                              <div>
-                                 <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">قيمة عقد المشروع (للعميل)</p>
-                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-5xl font-black tracking-tighter">{(project.projectValue ?? project.budget ?? 0).toLocaleString()}</span>
-                                    <span className="text-sm font-bold text-slate-500">SAR</span>
-                                 </div>
-                              </div>
-                              <div className="text-left border-r border-slate-800 pr-8">
-                                 <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">الميزانية الداخلية (للتنفيذ)</p>
-                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-3xl font-black tracking-tighter text-amber-400">{(project.budget ?? 0).toLocaleString()}</span>
-                                    <span className="text-xs font-bold text-slate-500">SAR</span>
-                                 </div>
-                              </div>
-                           </div>
-                           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                              <div>
-                                 <p className="text-slate-500 font-black text-[10px] uppercase mb-1">المحـصل (ر.س)</p>
-                                 <p className="text-3xl font-black text-emerald-400">{financialStats.paid.toLocaleString()}</p>
-                              </div>
-                              <div>
-                                 <p className="text-slate-500 font-black text-[10px] uppercase mb-1">تكاليف المواد والإنتاج</p>
-                                 <p className="text-3xl font-black text-amber-400">
-                                    {financialStats.expenses.toLocaleString()}
-                                 </p>
-                              </div>
-                              <div>
-                                 <p className="text-slate-500 font-black text-[10px] uppercase mb-1">صافي الربح المتوقع</p>
-                                 <p className="text-3xl font-black text-accent">
-                                    {financialStats.netProfit.toLocaleString()}
-                                 </p>
-                              </div>
-                           </div>
-                        </div>
-                     </Card>
-
-                     <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                           <h3 className="text-xl font-black text-slate-900 border-r-4 border-primary pr-3">سجل العمليات المالية</h3>
-                           <div className="flex items-center gap-2">
-                              <Dialog open={isAddPaymentOpen} onOpenChange={setIsAddPaymentOpen}>
-                                 <DialogTrigger render={
-                                    <button className="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white h-9 px-4 font-black text-[10px] gap-2 hover:bg-slate-50 transition-all outline-none cursor-pointer">
-                                       <Plus className="w-3.5 h-3.5" />
-                                       إضافة دفعة
-                                    </button>
-                                 } />
-                                 <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none" dir="rtl">
-                                    <DialogHeader>
-                                       <DialogTitle className="text-right font-black">تسجيل دفعة عميل مستلمة</DialogTitle>
-                                    </DialogHeader>
-                                    <div className="space-y-4 mt-4">
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">قيمة الدفعة (ر.س) *</Label>
-                                          <Input 
-                                             type="number" 
-                                             value={paymentForm.amount} 
-                                             onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} 
-                                             className="rounded-xl h-12 bg-slate-50 border-none font-bold" 
-                                             placeholder="0.00"
-                                          />
-                                       </div>
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">تاريخ الاستلام *</Label>
-                                          <Input 
-                                             type="date" 
-                                             value={paymentForm.date} 
-                                             onChange={e => setPaymentForm({...paymentForm, date: e.target.value})} 
-                                             className="rounded-xl h-12 bg-slate-50 border-none font-bold" 
-                                          />
-                                       </div>
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">طريقة الدفع *</Label>
-                                          <select
-                                             value={paymentForm.paymentMethod}
-                                             onChange={e => setPaymentForm({...paymentForm, paymentMethod: e.target.value as any})}
-                                             className="w-full h-12 rounded-xl bg-slate-50 border-none font-bold text-xs pr-4 focus:ring-0 outline-none"
-                                          >
-                                             <option value="cash">نقدي</option>
-                                             <option value="transfer">تحويل بنكي</option>
-                                          </select>
-                                       </div>
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">التفاصيل / الوصف</Label>
-                                          <Input 
-                                             value={paymentForm.description} 
-                                             onChange={e => setPaymentForm({...paymentForm, description: e.target.value})} 
-                                             className="rounded-xl h-12 bg-slate-50 border-none font-bold" 
-                                             placeholder="مثال: الدفعة الثانية بعد تجهيز الهيكل"
-                                          />
-                                       </div>
-                                       <Button onClick={handleAddPayment} className="w-full h-12 rounded-2xl bg-slate-900 font-black mt-4 shadow-lg shadow-slate-100">تسجيل الدفعة</Button>
-                                    </div>
-                                 </DialogContent>
-                              </Dialog>
-
-                              <Dialog open={isAddExpenseOpen} onOpenChange={setIsAddExpenseOpen}>
-                                 <DialogTrigger render={
-                                    <button className="group/button inline-flex shrink-0 items-center justify-center rounded-xl bg-primary text-white h-9 px-4 font-black text-[10px] gap-2 shadow-md hover:bg-slate-900 transition-all outline-none cursor-pointer">
-                                       <Plus className="w-3.5 h-3.5" />
-                                       إضافة مصروف
-                                    </button>
-                                 } />
-                                 <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none" dir="rtl">
-                                    <DialogHeader>
-                                       <DialogTitle className="text-right font-black">تسجيل مصروف جديد (تكاليف مواد وإنتاج)</DialogTitle>
-                                    </DialogHeader>
-                                    <div className="space-y-4 mt-4">
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">قيمة المصروف (ر.س) *</Label>
-                                          <Input 
-                                             type="number" 
-                                             value={expenseForm.amount} 
-                                             onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} 
-                                             className="rounded-xl h-12 bg-slate-50 border-none font-bold" 
-                                             placeholder="0.00"
-                                          />
-                                       </div>
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">التصنيف *</Label>
-                                          <select
-                                             value={expenseForm.category}
-                                             onChange={e => setExpenseForm({...expenseForm, category: e.target.value})}
-                                             className="w-full h-12 rounded-xl bg-slate-50 border-none font-bold text-xs pr-4 focus:ring-0 outline-none"
-                                          >
-                                             <option value="شراء خامات ومواد">شراء خامات ومواد (حديد، أكريليك، فليكس)</option>
-                                             <option value="أجور فنيين وتركيب">أجور فنيين وتركيب</option>
-                                             <option value="تكاليف طباعة وقص">تكاليف طباعة وقص</option>
-                                             <option value="نقل ولوجستيات">نقل ولوجستيات</option>
-                                             <option value="صيانة ومعدات">صيانة ومعدات رافعة</option>
-                                             <option value="مصاريف تشغيلية أخرى">مصاريف تشغيلية أخرى</option>
-                                          </select>
-                                       </div>
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">تاريخ الصرف *</Label>
-                                          <Input 
-                                             type="date" 
-                                             value={expenseForm.date} 
-                                             onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} 
-                                             className="rounded-xl h-12 bg-slate-50 border-none font-bold" 
-                                          />
-                                       </div>
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">طريقة الدفع *</Label>
-                                          <select
-                                             value={expenseForm.paymentMethod}
-                                             onChange={e => setExpenseForm({...expenseForm, paymentMethod: e.target.value as any})}
-                                             className="w-full h-12 rounded-xl bg-slate-50 border-none font-bold text-xs pr-4 focus:ring-0 outline-none"
-                                          >
-                                             <option value="cash">نقدي</option>
-                                             <option value="transfer">تحويل بنكي</option>
-                                          </select>
-                                       </div>
-                                       <div className="space-y-2">
-                                          <Label className="text-xs font-black text-slate-400">التفاصيل / الوصف</Label>
-                                          <Input 
-                                             value={expenseForm.description} 
-                                             onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} 
-                                             className="rounded-xl h-12 bg-slate-50 border-none font-bold" 
-                                             placeholder="مثال: شراء ألواح أكريليك للواجهة"
-                                          />
-                                       </div>
-                                       <Button onClick={handleAddExpense} className="w-full h-12 rounded-2xl bg-slate-900 font-black mt-4 shadow-lg shadow-slate-100">تسجيل المصروف</Button>
-                                    </div>
-                                 </DialogContent>
-                              </Dialog>
-                           </div>
-                        </div>
-                        
-                        <div className="flex flex-col gap-4">
-                           {transactions.length === 0 && (
-                              <div className="py-20 text-center bg-slate-50 rounded-[2rem] border-dashed border-2 border-slate-200 opacity-50">
-                                 <DollarSign className="w-12 h-12 mx-auto mb-4" />
-                                 <p className="font-black">لا توجد حركات مالية مسجلة لهذا المشروع</p>
-                              </div>
-                           )}
-                           {transactions.map((tx) => (
-                              <div key={tx.id} className="p-6 bg-white border border-slate-100 rounded-3xl flex items-center justify-between hover:border-primary/20 transition-all shadow-sm">
-                                 <div className="flex items-center gap-5">
-                                    <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-black ${
-                                       tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 
-                                       tx.type === 'purchase' ? 'bg-amber-50 text-amber-600' : 
-                                       'bg-rose-50 text-rose-600'
-                                    }`}>
-                                       {tx.type === 'income' ? '+' : '-'}
-                                    </div>
-                                    <div>
-                                       <p className="font-black text-slate-900">{tx.description || tx.category}</p>
-                                       <p className="text-xs font-bold text-slate-400">{new Date(tx.date).toLocaleDateString('ar-SA')}</p>
-                                    </div>
-                                 </div>
-                                 <div className="text-left">
-                                    <p className={`font-black text-lg ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                                       {tx.amount.toLocaleString()} ر.س
-                                    </p>
-                                    <span className="text-[10px] font-black text-slate-400 uppercase">{tx.paymentMethod === 'cash' ? 'نقدي' : 'تحويل'}</span>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     </div>
-
-                     <h3 className="text-xl font-black text-slate-900 border-r-4 border-primary pr-3">جدولة الدفعات المستحقة</h3>
-                     <div className="flex flex-col gap-4">
-                        {project.payments?.map((payment, i) => (
-                           <div key={payment.id} className="p-6 bg-white border border-slate-100 rounded-3xl flex items-center justify-between hover:bg-slate-50 transition-all">
-                              <div className="flex items-center gap-5">
-                                 <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-black ${payment.status === 'paid' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                    {i + 1}
-                                 </div>
-                                 <div>
-                                    <p className="font-black text-slate-900">{payment.description || `المرحلة ${i+1}`}</p>
-                                    <p className="text-xs font-bold text-slate-400">{payment.amount.toLocaleString()} ر.س</p>
-                                 </div>
-                              </div>
-                              {payment.status === 'paid' ? (
-                                 <Badge className="rounded-lg px-4 py-2 font-black text-[10px] border-none bg-emerald-50 text-emerald-600">
-                                    تم التحصيل
-                                 </Badge>
-                              ) : (
-                                 <Button 
-                                    size="sm"
-                                    onClick={() => handleApproveInstallment(payment)}
-                                    className="rounded-xl px-3 py-1.5 font-black text-[9px] bg-emerald-500 hover:bg-emerald-600 text-white h-8 transition-all"
-                                 >
-                                    تسجيل تحصيل الدفعة
-                                 </Button>
-                              )}
-                           </div>
-                        ))}
-                     </div>
-
-                     {/* Uploaded Receipts Section */}
-                     <div className="mt-8">
-                       <h3 className="text-xl font-black text-slate-900 border-r-4 border-emerald-500 pr-3 mb-6">إيصالات التحويل المرفوعة (من العميل)</h3>
-                       {receipts.length === 0 ? (
-                         <div className="p-8 text-center bg-slate-50 rounded-[2rem] border border-slate-100 text-slate-400">
-                           <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                           <p className="font-bold text-sm">لا توجد إيصالات مرفوعة من العميل حتى الآن.</p>
-                         </div>
-                       ) : (
-                         <div className="space-y-4">
-                           {receipts.map(rec => (
-                             <div key={rec.id} className="p-5 bg-white border border-slate-100 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:shadow-sm transition-all">
-                               <div className="flex items-center gap-4">
-                                 <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                                   <FileCheck className="w-6 h-6" />
-                                 </div>
-                                 <div>
-                                   <p className="font-black text-slate-800 text-sm">{rec.fileName}</p>
-                                   <p className="text-xs font-bold text-slate-400 mt-1">{new Date(rec.uploadedAt).toLocaleDateString('ar-SA')} - {new Date(rec.uploadedAt).toLocaleTimeString('ar-SA')}</p>
-                                 </div>
-                               </div>
-                               <div className="flex items-center gap-3">
-                                 <Badge className={`rounded-lg px-3 py-1 font-black text-[10px] border-none ${
-                                   rec.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 
-                                   rec.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
-                                 }`}>
-                                   {rec.status === 'approved' ? 'معتمد' : rec.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
-                                 </Badge>
-                                 {rec.fileData && (
-                                   <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="rounded-xl h-9"
-                                      onClick={() => {
-                                        const link = document.createElement('a');
-                                        link.href = rec.fileData;
-                                        link.download = rec.fileName || 'receipt';
-                                        link.click();
-                                      }}
-                                   >
-                                     <Download className="w-4 h-4 ml-2" />
-                                     تحميل
-                                   </Button>
-                                 )}
-                                 {rec.status === 'pending' && (
-                                   <Button 
-                                     size="sm" 
-                                     onClick={async () => {
-                                       try {
-                                         await updateDoc(doc(db, 'projects', projectId, 'receipts', rec.id), { status: 'approved' });
-                                         toast.success('تم اعتماد الإيصال بنجاح');
-                                       } catch(e) {
-                                         toast.error('حدث خطأ');
-                                       }
-                                     }}
-                                     className="rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white h-9"
-                                   >
-                                     اعتماد
-                                   </Button>
-                                 )}
-                               </div>
-                             </div>
-                           ))}
-                         </div>
-                       )}
-                     </div>
-
-                     {/* ── Quotations & Invoices ── */}
-                     <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm mt-8">
-                       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
-                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100">
-                               <FileText className="w-6 h-6 text-slate-700" />
-                            </div>
-                            <div>
-                               <h3 className="text-lg font-black text-slate-800">عروض الأسعار والفواتير</h3>
-                               <p className="text-xs font-bold text-slate-400 mt-1">المستندات المالية المرتبطة بالمشروع</p>
-                            </div>
-                         </div>
-                         <div className="flex gap-2">
-                            <Button onClick={() => setShowDocBuilder('quotation')} variant="outline" className="rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold h-10 px-4">
-                               + عرض سعر
-                            </Button>
-                            <Button onClick={() => setShowDocBuilder('invoice')} variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold h-10 px-4">
-                               + فاتورة
-                            </Button>
-                         </div>
-                       </div>
-
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         {[...quotations, ...invoices].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(doc => (
-                           <div key={doc.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 flex flex-col gap-3">
-                             <div className="flex items-start justify-between">
-                               <div className="flex items-center gap-2">
-                                 {doc.docType === 'invoice' ? <Receipt className="w-4 h-4 text-emerald-600" /> : <FileText className="w-4 h-4 text-indigo-600" />}
-                                 <span className="font-bold text-sm text-slate-800">{doc.docType === 'invoice' ? 'فاتورة' : 'عرض سعر'}</span>
-                               </div>
-                               <span className="text-xs font-bold text-slate-400">{new Date(doc.createdAt).toLocaleDateString('ar-SA')}</span>
-                             </div>
-                             <div className="flex items-center justify-between mt-2">
-                               <span className="text-lg font-black text-slate-800">{doc.totalAmount?.toLocaleString('ar-SA')} ر.س</span>
-                               <Button variant="ghost" size="sm" onClick={() => window.open(doc.pdfUrl || '#', '_blank')} className="h-8 text-xs font-bold gap-1 bg-white border border-slate-200 shadow-sm rounded-lg hover:bg-slate-100">
-                                 <ExternalLink className="w-3 h-3" /> عرض PDF
-                               </Button>
-                             </div>
-                           </div>
-                         ))}
-                         {quotations.length === 0 && invoices.length === 0 && (
-                           <div className="col-span-full py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                             <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                             <p className="text-sm font-bold text-slate-500">لا توجد مستندات مرتبطة بهذا المشروع</p>
-                           </div>
-                         )}
-                       </div>
-                     </div>
-                  </motion.div>
+                  <ProjectFinancialsTab
+                     project={project}
+                     projectId={projectId}
+                     db={db}
+                     financialStats={financialStats}
+                     transactions={transactions}
+                     isAddPaymentOpen={isAddPaymentOpen}
+                     setIsAddPaymentOpen={setIsAddPaymentOpen}
+                     paymentForm={paymentForm}
+                     setPaymentForm={setPaymentForm}
+                     handleAddPayment={handleAddPayment}
+                     isAddExpenseOpen={isAddExpenseOpen}
+                     setIsAddExpenseOpen={setIsAddExpenseOpen}
+                     expenseForm={expenseForm}
+                     setExpenseForm={setExpenseForm}
+                     handleAddExpense={handleAddExpense}
+                     handleApproveInstallment={handleApproveInstallment}
+                     receipts={receipts}
+                     quotations={quotations}
+                     invoices={invoices}
+                     setShowDocBuilder={setShowDocBuilder}
+                  />
                )}
 
                {activeTab === 'monitoring' && (
-                   <motion.div 
-                      key="monitoring"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="flex flex-col gap-8"
-                   >
-                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                           <div className="w-14 h-14 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl flex items-center justify-center border border-blue-100 shadow-inner">
-                              <Layers className="w-6 h-6 text-blue-600" />
-                           </div>
-                           <div>
-                              <h3 className="text-xl font-black text-slate-900 leading-none">التوثيق والمرفقات الذكية</h3>
-                              <p className="text-slate-500 font-bold text-xs mt-1.5 flex items-center gap-2">
-                                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                                 ملفات فنية منظمة مدعومة بالذكاء الاصطناعي لفحص المرفقات.
-                              </p>
-                           </div>
-                        </div>
-                        <Dialog open={isUploadDocOpen} onOpenChange={setIsUploadDocOpen}>
-                            <DialogTrigger autoFocus={false}>
-                               <button className="group inline-flex shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white h-11 px-6 font-black text-xs gap-2 shadow-lg hover:bg-primary transition-all outline-none cursor-pointer">
-                                  <Plus className="w-4 h-4" />
-                                  إضافة توثيق أو ملف جديد
-                               </button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none" dir="rtl">
-                               <DialogHeader>
-                                  <DialogTitle className="text-right font-black">رفع وتحليل المرفقات</DialogTitle>
-                               </DialogHeader>
-                               <div className="space-y-5 mt-4">
-                                  <div className="border-2 border-dashed border-slate-200 hover:border-primary/50 transition-colors rounded-[2rem] p-8 text-center flex flex-col items-center justify-center gap-4 bg-slate-50 relative overflow-hidden group">
-                                     <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                     <Camera className="w-12 h-12 text-slate-300 group-hover:text-primary transition-colors" />
-                                     <p className="text-xs font-bold text-slate-500 max-w-[250px] leading-relaxed">
-                                        اختر الصور الفنية أو الرسومات والملفات (عقود، جداول، مخططات) لرفعها وفهرستها تلقائياً بـ AI
-                                     </p>
-                                     <input 
-                                        type="file" 
-                                        multiple 
-                                        onChange={handleUploadDocs} 
-                                        disabled={isUploading}
-                                        className="hidden" 
-                                        id="file-upload-input"
-                                     />
-                                     <Button 
-                                        asChild
-                                        disabled={isUploading}
-                                        className="h-10 rounded-xl bg-slate-900 hover:bg-black font-black text-xs px-8 mt-2 relative z-10 shadow-lg shadow-slate-900/20"
-                                     >
-                                        <label htmlFor="file-upload-input" className="cursor-pointer flex items-center gap-2">
-                                           {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                                           {isUploading ? "جاري المعالجة والرفع..." : "تصفح الملفات"}
-                                        </label>
-                                     </Button>
-                                  </div>
-                               </div>
-                            </DialogContent>
-                         </Dialog>
-                     </div>
-                     
-                     <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-                        <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
-                           <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                              <Camera className="w-4 h-4 text-emerald-500" />
-                              الأرشيف المرئي הגغرافي (صور ميدانية)
-                           </h4>
-                           <span className="bg-emerald-50 text-emerald-700 text-[10px] font-black px-3 py-1 rounded-full">
-                              {project.photoUrls?.length || 0} لقطات
-                           </span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                            {project.photoUrls?.map((url, i) => (
-                               <div key={i} className="group overflow-hidden rounded-[2rem] border-4 border-slate-50 shadow-sm relative aspect-square cursor-zoom-in hover:shadow-xl transition-all">
-                                  <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="توثيق" referrerPolicy="no-referrer" />
-                                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                                      <p className="text-white text-xs font-black">توثيق ميداني تلقائي</p>
-                                      <p className="text-white/70 text-[10px] font-bold mt-1">{new Date().toLocaleDateString('ar-SA')}</p>
-                                  </div>
-                                  <div className="absolute top-4 left-4">
-                                     <Badge className="bg-slate-900/50 backdrop-blur-md text-white border-none px-3 py-1.5 rounded-xl font-black text-[10px] shadow-sm tracking-widest">#{i+1}</Badge>
-                                  </div>
-                               </div>
-                            ))}
-                            {(!project.photoUrls || project.photoUrls.length === 0) && (
-                               <div className="lg:col-span-3 py-16 flex flex-col items-center justify-center text-center opacity-40 gap-4 border-2 border-dashed border-slate-200 rounded-[2rem] bg-slate-50/50">
-                                  <Camera className="w-12 h-12" />
-                                  <p className="font-bold text-sm">لا توجد وسائط مرئية لهذا المشروع حالياً</p>
-                               </div>
-                            )}
-                         </div>
-                      </div>
-
-                      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-                         <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
-                            <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                               <FileText className="w-4 h-4 text-blue-500" />
-                               الملفات والمخططات (تحليل AI)
-                            </h4>
-                            <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-3 py-1 rounded-full">
-                               {project.fileAttachments?.length || 0} مستند
-                            </span>
-                         </div>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             {project.fileAttachments?.map((file, i) => {
-                                const isPdf = file.name.toLowerCase().endsWith('.pdf');
-                                const isImage = file.name.match(/\.(jpeg|jpg|gif|png)$/) != null;
-                                return (
-                                 <Card key={i} className="p-4 rounded-3xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-blue-100 transition-all flex flex-col gap-4 shadow-sm group">
-                                    <div className="flex items-start justify-between">
-                                       <div className="flex items-center gap-3 min-w-0">
-                                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-sm ${isPdf ? 'bg-rose-50 text-rose-500 border-rose-100' : isImage ? 'bg-amber-50 text-amber-500 border-amber-100' : 'bg-blue-50 text-blue-500 border-blue-100'}`}>
-                                             <FileText className="w-6 h-6" />
-                                          </div>
-                                          <div className="min-w-0 flex-1">
-                                             <p className="text-xs font-black text-slate-800 truncate" title={file.name}>{file.name}</p>
-                                             {file.uploadedAt && <p className="text-[9px] text-slate-500 font-bold mt-1 flex items-center gap-2"><span>{(file.size ? (file.size / 1024 / 1024).toFixed(2) + ' MB' : '')}</span><span className="w-1 h-1 rounded-full bg-slate-300" /><span>{file.uploadedAt}</span></p>}
-                                          </div>
-                                       </div>
-                                       <Button asChild size="icon" variant="ghost" className="h-8 w-8 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:bg-blue-50">
-                                          <a href={file.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a>
-                                       </Button>
-                                    </div>
-                                    <div className="bg-white p-3 rounded-2xl border border-slate-100 flex items-start gap-2">
-                                       <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                                       <p className="text-[10px] font-bold text-slate-600 leading-relaxed">
-                                          تم مراجعة المستند. لا توجد تعارضات مع جداول الكميات.
-                                       </p>
-                                    </div>
-                                 </Card>
-                                )
-                             })}
-                             {(!project.fileAttachments || project.fileAttachments.length === 0) && (
-                                <div className="md:col-span-2 py-12 flex flex-col items-center justify-center text-center opacity-40 gap-4 border-2 border-dashed border-slate-200 rounded-[2.5rem] bg-slate-50/50">
-                                   <FileText className="w-10 h-10" />
-                                   <p className="font-bold text-sm">لا توجد مرفقات أو عقود فنية مرفوعة</p>
-                                </div>
-                             )}
-                          </div>
-                      </div>
-                   </motion.div>
-                )}
+                  <ProjectFilesTab
+                     project={project}
+                     isUploadDocOpen={isUploadDocOpen}
+                     setIsUploadDocOpen={setIsUploadDocOpen}
+                     isUploading={isUploading}
+                     handleUploadDocs={handleUploadDocs}
+                  />
+               )}
 
                {activeTab === 'handover' && (
                   <motion.div 

@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { analyzeInvoice, quickAnalyzeInvoice, InvoiceData, type QuickScanResult } from '../lib/gemini';
 import { db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { useAuth } from '../lib/AuthContext';
 import { getCompanyQuery, addCompanyDoc } from '../lib/firestoreUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

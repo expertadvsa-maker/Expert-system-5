@@ -225,34 +225,42 @@ export default function Purchases() {
     };
   }, []);
 
+  const myPurchases = useMemo(() => {
+    if (!profile) return [];
+    if (profile.role === 'sales_rep') {
+      return purchases.filter(p => p.createdBy === profile.uid);
+    }
+    return purchases;
+  }, [purchases, profile]);
+
   const stats = useMemo(() => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     
-    const monthlyTotal = purchases
+    const monthlyTotal = myPurchases
       .filter(p => (p.dateOriginal instanceof Date ? p.dateOriginal : new Date(p.dateOriginal)) >= startOfMonth)
       .reduce((acc, p) => acc + (p.amount || 0), 0);
       
-    const average = purchases.length > 0 ? (purchases.reduce((acc, p) => acc + (p.amount || 0), 0) / purchases.length) : 0;
-    const max = purchases.length > 0 ? Math.max(...purchases.map(p => p.amount || 0)) : 0;
+    const average = myPurchases.length > 0 ? (myPurchases.reduce((acc, p) => acc + (p.amount || 0), 0) / myPurchases.length) : 0;
+    const max = myPurchases.length > 0 ? Math.max(...myPurchases.map(p => p.amount || 0)) : 0;
 
     return {
-      total: purchases.reduce((acc, p) => acc + (p.amount || 0), 0),
-      count: purchases.length,
-      pending: purchases.filter(p => p.status === 'pending').length,
+      total: myPurchases.reduce((acc, p) => acc + (p.amount || 0), 0),
+      count: myPurchases.length,
+      pending: myPurchases.filter(p => p.status === 'pending').length,
       monthlyTotal,
       average,
       max
     };
-  }, [purchases]);
+  }, [myPurchases]);
 
   const filteredPurchases = useMemo(() => {
-    return purchases.filter(p => {
+    return myPurchases.filter(p => {
       const matchesSearch = p.description?.includes(searchTerm) || p.id?.includes(searchTerm);
       const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [searchTerm, statusFilter, purchases]);
+  }, [searchTerm, statusFilter, myPurchases]);
 
   const handleReturnPurchase = async (p: any) => {
     setIsSubmitting(true);
@@ -675,7 +683,7 @@ export default function Purchases() {
   const reportPurchases = useMemo(() => {
     if (!dateRange.start || !dateRange.end) return [];
     
-    return purchases.filter(p => {
+    return myPurchases.filter(p => {
       const pDate = p.dateOriginal instanceof Date ? p.dateOriginal : new Date(p.dateOriginal);
       const start = new Date(dateRange.start);
       const end = new Date(dateRange.end);
@@ -686,7 +694,7 @@ export default function Purchases() {
       const dateB = b.dateOriginal instanceof Date ? b.dateOriginal.getTime() : new Date(b.dateOriginal).getTime();
       return dateB - dateA;
     });
-  }, [purchases, dateRange]);
+  }, [myPurchases, dateRange]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">

@@ -5,7 +5,7 @@ import {
   TrendingUp, TrendingDown, Wallet, Clock,
   HardHat, CheckCircle, AlertTriangle, Building2,
   RefreshCw, ChevronLeft, Sparkles, ShieldCheck,
-  Coins, Activity, FileText, Pause, Copy, Check, Soundpad, VolumeX, Share2, Download
+  Coins, Activity, FileText, Pause, Copy, Check, Disc3, VolumeX, Share2, Download
 } from 'lucide-react';
 import {
   collection, query, onSnapshot, where, orderBy, limit

@@ -72,7 +72,9 @@ import {
   Plus,
   Download,
   UserPlus,
-  PackagePlus
+  PackagePlus,
+  CheckSquare,
+  Camera
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -88,6 +90,8 @@ import { WelcomeOverlay } from "./components/WelcomeOverlay";
 // Views
 import Dashboard from "./components/Dashboard";
 import DashboardBuilder from "./components/DashboardBuilder";
+import EmployeeDashboard from "./components/portals/EmployeeDashboard";
+import SupervisorDashboard from "./components/portals/SupervisorDashboard";
 import Financials from "./components/Financials";
 import Employees from "./components/Employees";
 import Payrolls from "./components/Payrolls";
@@ -145,15 +149,21 @@ import ClientPortal from './components/ClientPortal';
 
 // Error Boundary Component
 
-class ErrorBoundary extends React.Component<any, any> {
-  state = { hasError: false, error: null as Error | null, errorInfo: null as ErrorInfo | null };
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: React.ErrorInfo | null;
+}
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null, errorInfo: null };
 
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    this.setState({ errorInfo });
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    (this as any).setState({ errorInfo });
     console.error("Layout Error:", error, errorInfo);
   }
 
@@ -571,7 +581,7 @@ function AppContent() {
       }
       if (e.altKey && (e.key === "h" || e.key === "H" || e.key === "ا")) {
         e.preventDefault();
-        setActiveTab(profile?.role === "sales_rep" ? "rep_dashboard" : "dashboard");
+        setActiveTab(getDefaultTabForRole(profile?.role || "employee"));
         toast.info("تم الانتقال إلى لوحة التحكم الرئيسية");
       }
       if (e.altKey && (e.key === "s" || e.key === "S" || e.key === "س")) {
@@ -626,149 +636,209 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, []);
 
-  const menuGroups: any[] = profile?.role === "sales_rep" ? [
-    {
-      id: "repWorkspace",
-      title: "بوابة المندوب مبيعات",
-      items: [
-        { id: "rep_dashboard", label: "الرئيسية", icon: LayoutDashboard, roles: ["sales_rep"] },
-        { id: "rep_smart_bot", label: "المساعد الذكي (ألف ياء)", icon: Sparkles, roles: ["sales_rep"] },
-        { id: "rep_documents", label: "وثائقي الصادرة", icon: FileSpreadsheet, roles: ["sales_rep"] },
-        { id: "rep_statement", label: "كشف حسابي الرسمي", icon: Wallet, roles: ["sales_rep"] },
-        { id: "private_jobs_page", label: "المقاولات الخاصة", icon: Briefcase, roles: ["sales_rep"] },
-      ]
-    }
-  ] : [
-    {
-      id: "dashboardGroup",
-      title: "الرئيسية",
-      items: [
-        { id: "dashboard", label: "الرئيسية", icon: LayoutDashboard, roles: ["manager", "supervisor", "employee"] },
-        { id: "command_center", label: "الرادار الميداني", icon: Radar, roles: ["manager"] },
-        { id: "briefing", label: "موجز AI", icon: Zap, roles: ["manager"] },
-      ],
-    },
-    {
-      id: "operationsGroup",
-      title: "المشاريع والعمليات",
-      items: [
-        {
-          id: "ops_group",
-          label: "المشاريع",
-          icon: Briefcase,
-          roles: ["manager", "supervisor"],
-          subItems: [
-            { id: "projects", label: "سجل المشاريع", roles: ["manager", "supervisor"] },
-            { id: "tasks", label: "المهام", roles: ["manager", "supervisor"] },
-            { id: "subcontractors", label: "المقاولين", roles: ["manager", "supervisor"] },
-          ]
-        },
-        {
-          id: "inventory_group",
-          label: "المخازن",
-          icon: Package,
-          roles: ["manager", "supervisor"],
-          subItems: [
-            { id: "inventory", label: "المخزون والمواد", roles: ["manager", "supervisor"] },
-            { id: "production", label: "خطوط الإنتاج", roles: ["manager", "supervisor"] },
-            { id: "assets", label: "الأصول والمعدات", roles: ["manager", "supervisor"] },
-          ]
-        }
-      ]
-    },
-    {
-      id: "commercialGroup",
-      title: "النشاط التجاري",
-      items: [
-        {
-          id: "sales_group",
-          label: "المبيعات",
-          icon: TrendingUp,
-          roles: ["manager"],
-          subItems: [
-            { id: "sales", label: "سجل المبيعات", roles: ["manager"] },
-            { id: "clients", label: "العملاء", roles: ["manager"] },
-            { id: "invoices", label: "الفواتير", roles: ["manager"] },
-            { id: "quotations", label: "عروض الأسعار", roles: ["manager"] },
-            { id: "private_jobs_page", label: "المقاولات الخاصة", roles: ["manager"] }
-          ]
-        },
-        {
-          id: "sales_reps",
-          label: "إدارة المناديب",
-          icon: Users,
-          roles: ["manager"]
-        },
-        {
-          id: "purchases_group",
-          label: "المشتريات",
-          icon: ShoppingCart,
-          roles: ["manager", "supervisor"],
-          subItems: [
-            { id: "purchases", label: "سجل المشتريات", roles: ["manager", "supervisor"] },
-            { id: "suppliers", label: "الموردين", roles: ["manager"] },
-            { id: "camera", label: "الماسح الذكي", roles: ["manager", "supervisor"] },
-          ]
-        },
-      ]
-    },
-    {
-      id: "financialGroup",
-      title: "المالية والمحاسبة",
-      items: [
-        {
-          id: "finance_group",
-          label: "المالية",
-          icon: Wallet,
-          roles: ["manager"],
-          subItems: [
-            { id: "financials", label: "الحالة المالية", roles: ["manager"] },
-            { id: "expenses", label: "المصروفات", roles: ["manager"] },
-            { id: "banking", label: "البنوك والخزينة", roles: ["manager"] },
-            { id: "approvals", label: "الاعتمادات", roles: ["manager"] },
-          ]
-        }
-      ]
-    },
-    {
-      id: "hrGroup",
-      title: "الموارد البشرية",
-      items: [
-        {
-          id: "hr_group",
-          label: "الموارد",
-          icon: UsersRound,
-          roles: ["manager", "supervisor"],
-          subItems: [
-            { id: "employees", label: "الموظفين", roles: ["manager", "supervisor"] },
-            { id: "attendance_manager", label: "الحضور والغياب", roles: ["manager", "supervisor"] },
-            { id: "payrolls", label: "الرواتب", roles: ["manager"] },
-            { id: "workers_management", label: "العمالة اليومية", roles: ["manager", "supervisor"] },
-            { id: "evaluation", label: "تقييم الأداء", roles: ["manager", "supervisor"] },
-          ]
-        }
-      ]
-    },
-    {
-      id: "mediaGroup",
-      title: "التقارير والأرشيف",
-      items: [
-        {
-          id: "reports_group",
-          label: "التقارير",
-          icon: PieChart,
-          roles: ["manager", "supervisor", "employee"],
-          subItems: [
-            { id: "analytics", label: "التحليلات", roles: ["manager"] },
-            { id: "archive", label: "الأرشيف", roles: ["manager"] },
-            { id: "gallery", label: "الوسائط", roles: ["manager", "supervisor", "employee"] },
-            { id: "reports_gallery", label: "التقارير المحفوظة", roles: ["manager"] },
-            { id: "smart_reports", label: "التقارير الذكية", roles: ["manager"] },
-          ]
-        }
-      ]
-    }
-  ];
+  let menuGroups: any[] = [];
+
+  if (profile?.role === "employee") {
+    menuGroups = [
+      {
+        id: "empWorkspace",
+        title: "بوابة الموظف",
+        items: [
+          { id: "employee_dashboard", label: "لوحة الموظف", icon: Clock, roles: ["employee"] },
+          {
+            id: "emp_ops",
+            label: "المهام والمتابعة",
+            icon: CheckSquare,
+            roles: ["employee"],
+            subItems: [
+              { id: "tasks", label: "المهام المطلوبة", roles: ["employee"] },
+              { id: "gallery", label: "الوسائط والصور", roles: ["employee"] },
+            ]
+          }
+        ]
+      }
+    ];
+  } else if (profile?.role === "supervisor") {
+    menuGroups = [
+      {
+        id: "supWorkspace",
+        title: "بوابة المشرف",
+        items: [
+          { id: "supervisor_dashboard", label: "غرفة العمليات", icon: LayoutDashboard, roles: ["supervisor"] },
+          {
+            id: "sup_field",
+            label: "الإدارة الميدانية",
+            icon: Briefcase,
+            roles: ["supervisor"],
+            subItems: [
+              { id: "projects", label: "المشاريع الميدانية", roles: ["supervisor"] },
+              { id: "inventory", label: "المستودع والمواد", roles: ["supervisor"] },
+              { id: "employees", label: "فريق العمل", roles: ["supervisor"] },
+            ]
+          },
+          {
+            id: "sup_reports",
+            label: "التقارير الميدانية",
+            icon: Camera,
+            roles: ["supervisor"],
+            subItems: [
+              { id: "camera", label: "الماسح الذكي", roles: ["supervisor"] },
+              { id: "gallery", label: "التقارير المصورة", roles: ["supervisor"] },
+            ]
+          }
+        ]
+      }
+    ];
+  } else if (profile?.role === "sales_rep") {
+    menuGroups = [
+      {
+        id: "repWorkspace",
+        title: "بوابة مندوب المبيعات",
+        items: [
+          { id: "rep_dashboard", label: "لوحة التحكم", icon: LayoutDashboard, roles: ["sales_rep"] },
+          { id: "rep_smart_bot", label: "مساعد ألف ياء", icon: Sparkles, roles: ["sales_rep"] },
+          { id: "rep_documents", label: "الوثائق الصادرة", icon: FileText, roles: ["sales_rep"] },
+          { id: "rep_statement", label: "كشف الحساب", icon: FileSpreadsheet, roles: ["sales_rep"] },
+          { id: "private_jobs_page", label: "إدارة المشاريع", icon: Briefcase, roles: ["sales_rep"] },
+          { id: "clients", label: "دليل العملاء", icon: Users, roles: ["sales_rep"] },
+          { id: "purchases", label: "المشتريات", icon: ShoppingCart, roles: ["sales_rep"] },
+        ]
+      }
+    ];
+  } else {
+    // Manager or Owner
+    menuGroups = [
+      {
+        id: "dashboardGroup",
+        title: "الرئيسية",
+        items: [
+          { id: "dashboard", label: "الرئيسية", icon: LayoutDashboard, roles: ["manager", "supervisor", "employee", "owner"] },
+          { id: "command_center", label: "الرادار الميداني", icon: Radar, roles: ["manager", "owner"] },
+          { id: "briefing", label: "موجز AI", icon: Zap, roles: ["manager", "owner"] },
+        ],
+      },
+      {
+        id: "operationsGroup",
+        title: "المشاريع والعمليات",
+        items: [
+          {
+            id: "ops_group",
+            label: "المشاريع",
+            icon: Briefcase,
+            roles: ["manager", "supervisor", "owner"],
+            subItems: [
+              { id: "projects", label: "سجل المشاريع", roles: ["manager", "supervisor", "owner"] },
+              { id: "tasks", label: "المهام", roles: ["manager", "supervisor", "owner"] },
+              { id: "subcontractors", label: "المقاولين", roles: ["manager", "supervisor", "owner"] },
+            ]
+          },
+          {
+            id: "inventory_group",
+            label: "المخازن",
+            icon: Package,
+            roles: ["manager", "supervisor", "owner"],
+            subItems: [
+              { id: "inventory", label: "المخزون والمواد", roles: ["manager", "supervisor", "owner"] },
+              { id: "production", label: "خطوط الإنتاج", roles: ["manager", "supervisor", "owner"] },
+              { id: "assets", label: "الأصول والمعدات", roles: ["manager", "supervisor", "owner"] },
+            ]
+          }
+        ]
+      },
+      {
+        id: "commercialGroup",
+        title: "النشاط التجاري",
+        items: [
+          {
+            id: "sales_group",
+            label: "المبيعات",
+            icon: TrendingUp,
+            roles: ["manager", "owner"],
+            subItems: [
+              { id: "sales", label: "سجل المبيعات", roles: ["manager", "owner"] },
+              { id: "clients", label: "العملاء", roles: ["manager", "owner"] },
+              { id: "invoices", label: "الفواتير", roles: ["manager", "owner"] },
+              { id: "quotations", label: "عروض الأسعار", roles: ["manager", "owner"] },
+              { id: "private_jobs_page", label: "المشاريع", roles: ["manager", "owner"] }
+            ]
+          },
+          {
+            id: "sales_reps",
+            label: "إدارة المناديب",
+            icon: Users,
+            roles: ["manager", "owner"]
+          },
+          {
+            id: "purchases_group",
+            label: "المشتريات",
+            icon: ShoppingCart,
+            roles: ["manager", "supervisor", "owner"],
+            subItems: [
+              { id: "purchases", label: "سجل المشتريات", roles: ["manager", "supervisor", "owner"] },
+              { id: "suppliers", label: "الموردين", roles: ["manager", "owner"] },
+              { id: "camera", label: "الماسح الذكي", roles: ["manager", "supervisor", "owner"] },
+            ]
+          },
+        ]
+      },
+      {
+        id: "financialGroup",
+        title: "المالية والمحاسبة",
+        items: [
+          {
+            id: "finance_group",
+            label: "المالية",
+            icon: Wallet,
+            roles: ["manager", "owner"],
+            subItems: [
+              { id: "financials", label: "الحالة المالية", roles: ["manager", "owner"] },
+              { id: "expenses", label: "المصروفات", roles: ["manager", "owner"] },
+              { id: "banking", label: "البنوك والخزينة", roles: ["manager", "owner"] },
+              { id: "approvals", label: "الاعتمادات", roles: ["manager", "owner"] },
+            ]
+          }
+        ]
+      },
+      {
+        id: "hrGroup",
+        title: "الموارد البشرية",
+        items: [
+          {
+            id: "hr_group",
+            label: "الموارد",
+            icon: UsersRound,
+            roles: ["manager", "supervisor", "owner"],
+            subItems: [
+              { id: "employees", label: "الموظفين", roles: ["manager", "supervisor", "owner"] },
+              { id: "attendance_manager", label: "الحضور والغياب", roles: ["manager", "supervisor", "owner"] },
+              { id: "payrolls", label: "الرواتب", roles: ["manager", "owner"] },
+              { id: "workers_management", label: "العمالة اليومية", roles: ["manager", "supervisor", "owner"] },
+              { id: "evaluation", label: "تقييم الأداء", roles: ["manager", "supervisor", "owner"] },
+            ]
+          }
+        ]
+      },
+      {
+        id: "mediaGroup",
+        title: "التقارير والأرشيف",
+        items: [
+          {
+            id: "reports_group",
+            label: "التقارير",
+            icon: PieChart,
+            roles: ["manager", "supervisor", "employee", "owner"],
+            subItems: [
+              { id: "analytics", label: "التحليلات", roles: ["manager", "owner"] },
+              { id: "archive", label: "الأرشيف", roles: ["manager", "owner"] },
+              { id: "gallery", label: "الوسائط", roles: ["manager", "supervisor", "employee", "owner"] },
+              { id: "reports_gallery", label: "التقارير المحفوظة", roles: ["manager", "owner"] },
+              { id: "smart_reports", label: "التقارير الذكية", roles: ["manager", "owner"] },
+            ]
+          }
+        ]
+      }
+    ];
+  }
 
   const isTabAllowed = (tabId: string) => {
     if (tabId === "settings") {
@@ -815,14 +885,24 @@ function AppContent() {
     });
   }, [activeTab]);
 
+  const getDefaultTabForRole = (role: string) => {
+    if (role === "employee") return "employee_dashboard";
+    if (role === "supervisor") return "supervisor_dashboard";
+    if (role === "sales_rep") return "rep_dashboard";
+    return "dashboard";
+  };
+
   useEffect(() => {
     if (profile) {
-      if ((activeTab === "dashboard" || activeTab === "sales_rep_dashboard") && profile.role === "sales_rep") {
-        setActiveTab("rep_dashboard");
+      const defaultTab = getDefaultTabForRole(profile.role || "employee");
+      
+      if ((activeTab === "dashboard" || activeTab === "sales_rep_dashboard") && defaultTab !== "dashboard") {
+        setActiveTab(defaultTab);
         return;
       }
+
       if (!isTabAllowed(activeTab)) {
-        setActiveTab(profile.role === "sales_rep" ? "rep_dashboard" : "dashboard");
+        setActiveTab(defaultTab);
         toast.error("ليس لديك صلاحية الوصول لهذه الصفحة");
       }
     }
@@ -1454,6 +1534,8 @@ function AppContent() {
   const getActiveTabTitle = (tab: string) => {
     switch (tab) {
       case 'dashboard': return { title: 'الرئيسية', subtitle: 'نظرة عامة على النظام' };
+      case 'employee_dashboard': return { title: 'بوابة الموظف', subtitle: 'المهام والحضور والانصراف' };
+      case 'supervisor_dashboard': return { title: 'غرفة عمليات المشرف', subtitle: 'متابعة المواقع الميدانية' };
       case 'projects': case 'projects_v2': return { title: 'المشاريع الميدانية', subtitle: 'متابعة وإدارة سير العمليات' };
       case 'company_profile': return { title: 'ملف الشركة', subtitle: 'بيانات الشركة الأساسية' };
       case 'analytics': return { title: 'التحليلات', subtitle: 'إحصائيات وأرقام' };
@@ -1565,7 +1647,7 @@ function AppContent() {
               <Menu className="w-6 h-6" />
             </Button>
             <div
-              onClick={() => setActiveTab(profile?.role === "sales_rep" ? "rep_dashboard" : "dashboard")}
+              onClick={() => setActiveTab(getDefaultTabForRole(profile?.role || "employee"))}
               className="flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
             >
               <img
@@ -1644,7 +1726,7 @@ function AppContent() {
           <motion.aside
             initial={{ width: 0, opacity: 0 }}
             animate={{
-              width: isSidebarCollapsed && window.innerWidth >= 1024 ? 80 : 180,
+              width: isSidebarCollapsed && window.innerWidth >= 1024 ? 80 : 240,
               opacity: 1,
               x: 0,
             }}
@@ -1653,7 +1735,7 @@ function AppContent() {
           >
             <div className={`p-4 mb-2 transition-all duration-300 ${isSidebarCollapsed ? "px-2" : "px-4"}`}>
               <div 
-                onClick={() => setActiveTab(profile?.role === "sales_rep" ? "rep_dashboard" : "dashboard")}
+                onClick={() => setActiveTab(getDefaultTabForRole(profile?.role || "employee"))}
                 className="flex items-center gap-3 cursor-pointer active:scale-95 transition-all text-white relative"
                 title="الذهاب للوحة الرئيسية"
               >
@@ -1689,13 +1771,13 @@ function AppContent() {
                         )}
                       </div>
                       
-                      {companies.length > 0 && (
+                      {companies.length > 0 && profile?.role !== "sales_rep" && (
                         <ChevronDown className="w-4 h-4 text-white/60 group-hover:text-white shrink-0 transition-colors" />
                       )}
                     </div>
 
                     {/* Hidden interactive select */}
-                    {companies.length > 0 && (
+                    {companies.length > 0 && profile?.role !== "sales_rep" && (
                       <select
                         value={activeCompanyId || ''}
                         onChange={(e) => {
@@ -1850,7 +1932,7 @@ function AppContent() {
                             onMouseEnter={() => {
                               setHoveredSubMenuId(null);
                             }}
-                            className={`flex items-center gap-3 transition-all group relative rounded-xl ${
+                            className={`flex items-center gap-3 transition-all group relative rounded-xl overflow-hidden ${
                               !showFull
                                 ? "w-12 h-12 mx-auto justify-center"
                                 : "mx-2.5 px-3 py-2"
@@ -2110,6 +2192,8 @@ function AppContent() {
                 transition={{ duration: 0.2 }}
               >
                 {activeTab === "dashboard" && <DashboardBuilder goToTab={setActiveTab} />}
+                {activeTab === "employee_dashboard" && <EmployeeDashboard />}
+                {activeTab === "supervisor_dashboard" && <SupervisorDashboard onNavigate={setActiveTab} />}
                 {activeTab === "company_profile" && <CompanyProfile />}
                 {activeTab === "analytics" && (
                   <Analytics 
@@ -2495,7 +2579,7 @@ function AppContent() {
                 <button
                   onClick={() => {
                     setContextMenu(prev => ({ ...prev, visible: false }));
-                    setActiveTab(profile?.role === "sales_rep" ? "rep_dashboard" : "dashboard");
+                    setActiveTab(getDefaultTabForRole(profile?.role || "employee"));
                   }}
                   className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 rounded-lg cursor-pointer transition-colors text-right group text-[11px] font-bold"
                 >

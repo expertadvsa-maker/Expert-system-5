@@ -34,7 +34,27 @@ import {
   Filter,
   Sparkles,
   FileSpreadsheet,
-  ArrowRight
+  ArrowRight,
+  Upload,
+  UploadCloud,
+  ShieldCheck,
+  ShoppingCart,
+  Users,
+  Receipt,
+  Percent,
+  FileText,
+  Check,
+  HelpCircle,
+  X,
+  LinkIcon,
+  UserCheck,
+  Phone,
+  MapPin,
+  Star,
+  Send,
+  FileCheck,
+  BrainCircuit,
+  ArrowLeft
 } from 'lucide-react';
 import { Quotation } from '../types';
 
@@ -88,6 +108,18 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
     description: '',
     recipientOrSource: '',
   });
+
+  // Local states for new sub-systems
+  const [addJobStep, setAddJobStep] = useState(1);
+  const [clientVip, setClientVip] = useState(false);
+  const [sendClientReports, setSendClientReports] = useState(true);
+  const [auditIncomingReceipts, setAuditIncomingReceipts] = useState(false);
+  const [isAnalyzingInvoice, setIsAnalyzingInvoice] = useState(false);
+  const [uploadedInvoiceFile, setUploadedInvoiceFile] = useState<string | null>(null);
+  const [uploadedInvoiceName, setUploadedInvoiceName] = useState<string | null>(null);
+  const [taxGrossAmount, setTaxGrossAmount] = useState('');
+  const [supplierName, setSupplierName] = useState('');
+  const [invoiceDescription, setInvoiceDescription] = useState('');
 
   useEffect(() => {
     if (!profile) return;
@@ -160,7 +192,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
   const handleLinkDocChange = (docId: string) => {
     const docObj = quotations.find(q => q.id === docId);
     if (docObj) {
-      setNewJobData(prev => ({
+       setNewJobData(prev => ({
         ...prev,
         linkedDocId: docId,
         clientName: docObj.clientName || '',
@@ -173,6 +205,44 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
         linkedDocId: '',
       }));
     }
+  };
+
+  const handleInvoiceUploadSim = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadedInvoiceName(file.name);
+    setIsAnalyzingInvoice(true);
+    setTimeout(() => {
+      setIsAnalyzingInvoice(false);
+      setSupplierName("مؤسسة توريدات الجزيرة والمقاولات");
+      setTaxGrossAmount("12450");
+      setInvoiceDescription("فاتورة شراء حديد تسليح ومواد بناء للمشروع الخاص");
+      toast.success("تم مسح الفاتورة واستخراج البيانات بنجاح عبر الذكاء الاصطناعي!");
+    }, 1500);
+  };
+
+  const handleNextStepValidation = () => {
+    if (addJobStep === 1) {
+      if (!newJobData.projectTitle) {
+        toast.error("يرجى إدخال اسم المشروع أولاً");
+        return;
+      }
+    } else if (addJobStep === 2) {
+      if (newJobData.projectType === 'company' && !newJobData.linkedDocId) {
+        toast.error("يرجى اختيار العرض السعري أو الفاتورة للربط");
+        return;
+      }
+      if (!newJobData.contractAmount) {
+        toast.error("يرجى تحديد قيمة العقد الكلية");
+        return;
+      }
+    } else if (addJobStep === 3) {
+      if (!newJobData.clientName) {
+        toast.error("يرجى إدخال اسم العميل");
+        return;
+      }
+    }
+    setAddJobStep(prev => prev + 1);
   };
 
   const handleAddPrivateJob = async (e: React.FormEvent) => {
@@ -199,6 +269,20 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
         { id: 'm6', title: 'التسليم النهائي والمفتاح', completed: false }
       ];
 
+      // Prepare initial transactions
+      const initialTransactions = [];
+      if (taxGrossAmount && supplierName) {
+        const txId = Math.random().toString(36).substring(2, 9);
+        initialTransactions.push({
+          id: txId,
+          type: 'expense' as const,
+          amount: Number(taxGrossAmount),
+          description: invoiceDescription || `توريد مسبق من ${supplierName}`,
+          recipientOrSource: supplierName,
+          date: new Date().toISOString().split('T')[0],
+        });
+      }
+
       await addDoc(collection(db, 'rep_private_jobs'), {
         salesRepId: profile.uid,
         salesRepName: profile.name || 'مجهول',
@@ -215,12 +299,24 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
         startDate: newJobData.startDate || '',
         endDate: newJobData.endDate || '',
         milestones: defaultMilestones,
-        transactions: [],
+        transactions: initialTransactions,
+        clientVip,
+        sendClientReports,
+        auditIncomingReceipts,
         createdAt: serverTimestamp(),
       });
 
-      toast.success('تمت إضافة مشروع المقاولات الخاص بنجاح ✅');
+      toast.success('تمت إضافة مشروع المقاولات الخاص بنجاح مع تهيئة العلاقات والقرارات الضريبية ✅');
       setIsAddJobOpen(false);
+      setAddJobStep(1);
+      setClientVip(false);
+      setSendClientReports(true);
+      setAuditIncomingReceipts(false);
+      setUploadedInvoiceFile(null);
+      setUploadedInvoiceName(null);
+      setTaxGrossAmount('');
+      setSupplierName('');
+      setInvoiceDescription('');
       setNewJobData({
         clientName: '',
         clientPhone: '',
@@ -382,147 +478,185 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
   };
 
   return (
-    <div className="p-4 md:p-6 w-full space-y-6" dir="rtl" style={{ fontFamily: "'Cairo', sans-serif" }}>
+    <div className="p-4 md:p-6 w-full space-y-6 relative overflow-hidden min-h-screen" dir="rtl" style={{ fontFamily: "'Cairo', sans-serif" }}>
       
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-l from-slate-900 via-slate-800 to-amber-950 p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(245,158,11,0.15),rgba(255,255,255,0))] pointer-events-none" />
-        <div className="relative z-10">
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-amber-500/20 text-amber-400 rounded-xl"><Briefcase className="w-6 h-6" /></span>
-            <h1 className="text-xl md:text-2xl font-black">{isManager ? 'بوابة الرقابة وتدقيق أعمال المناديب المستقلة' : 'بوابتي للمقاولات وإدارة أعمالي الخاصة'}</h1>
+      {/* Background decor */}
+      <div className="absolute inset-0 pointer-events-none opacity-40">
+        <div className="absolute top-10 right-10 w-80 h-80 rounded-full blur-[100px] bg-amber-500/10" />
+        <div className="absolute bottom-10 left-10 w-96 h-96 rounded-full blur-[130px] bg-primary/10" />
+      </div>
+
+      {/* Page Header (ProjectsV2 High-End Style) */}
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 md:p-8 text-white shadow-2xl border border-white/5">
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_-20%,rgba(255,255,255,0.08),rgba(255,255,255,0))]" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs font-bold text-amber-300">
+              <Sparkles className="w-3.5 h-3.5 animate-spin-slow" />
+              إدارة العقود والمشاريع المستقلة
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight leading-tight flex items-center gap-3">
+              <Briefcase className="w-8 h-8 text-amber-500" />
+              {isManager ? 'بوابة الرقابة وتدقيق أعمال المناديب المستقلة' : 'بوابتي للمقاولات وإدارة أعمالي الخاصة'}
+            </h1>
+            <p className="text-slate-300 text-xs md:text-sm font-medium max-w-2xl leading-relaxed">
+              {isManager 
+                ? 'مساحة إدارية لمراقبة مشروعات المقاولات الخارجية التي يديرها المناديب ومتابعة العمولات وتجنب تضارب المصالح.' 
+                : 'نظام إدارة وCRM محاسبي مصغر لمتابعة عقودك المستقلة، مقبوضاتك، مصاريفك، ومقاولين الباطن بعيداً عن حسابات الشركة.'
+              }
+            </p>
           </div>
-          <p className="text-slate-300 text-xs mt-1.5 max-w-xl">
-            {isManager 
-              ? 'مساحة إدارية لمراقبة مشروعات المقاولات الخارجية التي يديرها المناديب ومتابعة العمولات وتجنب تضارب المصالح.' 
-              : 'نظام إدارة وCRM محاسبي مصغر لمتابعة عقودك المستقلة، مقبوضاتك، مصاريفك، ومقاولين الباطن بعيداً عن حسابات الشركة.'
-            }
-          </p>
+
+          {isSalesRep && (
+            <Button 
+              onClick={() => setIsAddJobOpen(true)}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-2xl font-black gap-2 h-12 px-6 text-xs shadow-lg shadow-amber-500/20 shrink-0 self-start sm:self-center transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Plus className="w-4.5 h-4.5" /> إضافة مشروع مقاولات جديد
+            </Button>
+          )}
         </div>
-        {isSalesRep && (
-          <Button 
-            onClick={() => setIsAddJobOpen(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-2xl font-black gap-2 h-11 px-5 text-xs shadow-lg shadow-amber-500/10 shrink-0 self-start sm:self-center"
-          >
-            <Plus className="w-4 h-4" /> إضافة مشروع مقاولات
-          </Button>
-        )}
       </div>
 
       {/* Top Navigation / Breadcrumb for Rep */}
       {isSalesRep && (
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60 mb-2 relative z-10">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onNavigate?.('rep_dashboard')}
-            className="gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-bold hover:bg-slate-100 rounded-xl px-3 h-9"
+            className="gap-2 text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-black hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl px-4 h-9 transition-all"
           >
-            <ArrowRight className="w-4 h-4" /> العودة للوحة التحكم
+            <ArrowRight className="w-4 h-4 text-primary" /> العودة للوحة التحكم الرئيسية
           </Button>
           <span className="text-xs text-slate-400 font-bold">بوابة المندوب / المقاولات الخاصة</span>
         </div>
       )}
 
-      {/* Stats Cards Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Stats Cards Dashboard (ProjectsV2 High-End Style) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 relative z-10">
+        
         {/* Total Contracts Card */}
         <Card 
           onClick={() => setActiveDetailModal('contracts')}
-          className="border-none shadow-md rounded-[1.5rem] bg-slate-900 text-white relative overflow-hidden cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 group"
+          className="border border-slate-100 dark:border-slate-800/60 shadow-sm rounded-[1.8rem] bg-white dark:bg-slate-950 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 group"
         >
-          <CardContent className="p-5 flex justify-between items-center">
+          <CardContent className="p-5 flex justify-between items-center h-full">
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-slate-400">إجمالي قيمة العقود</p>
-              <h3 className="text-lg font-black">{totalContracts.toLocaleString('ar-SA')} <span className="text-[10px] font-normal">ر.س</span></h3>
-              <p className="text-[9px] text-slate-400">{filteredJobs.length} مشروع (اضغط للتفاصيل)</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">إجمالي قيمة العقود</p>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white font-mono">
+                {totalContracts.toLocaleString('ar-SA')} <span className="text-xs font-normal text-slate-500">ر.س</span>
+              </h3>
+              <p className="text-[9px] text-slate-400 font-bold">{filteredJobs.length} مشروع نشط 🏗️</p>
             </div>
-            <div className="bg-white/10 p-2.5 rounded-2xl group-hover:scale-110 transition-transform"><TrendingUp className="w-5 h-5 text-slate-300" /></div>
+            <div className="bg-slate-100 dark:bg-slate-850 p-3 rounded-2xl group-hover:scale-110 transition-transform">
+              <TrendingUp className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+            </div>
           </CardContent>
         </Card>
 
         {/* Total Income Card */}
         <Card 
           onClick={() => setActiveDetailModal('incomes')}
-          className="border-none shadow-md rounded-[1.5rem] bg-emerald-600 text-white relative overflow-hidden cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 group"
+          className="border border-slate-100 dark:border-slate-800/60 shadow-sm rounded-[1.8rem] bg-white dark:bg-slate-950 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 group"
         >
-          <CardContent className="p-5 flex justify-between items-center">
+          <CardContent className="p-5 flex justify-between items-center h-full">
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-emerald-100">إجمالي المقبوضات</p>
-              <h3 className="text-lg font-black">{totalIncomes.toLocaleString('ar-SA')} <span className="text-[10px] font-normal">ر.س</span></h3>
-              <p className="text-[9px] text-emerald-200">التحصيلات النقدية (اضغط للتفاصيل)</p>
+              <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">إجمالي المقبوضات</p>
+              <h3 className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                {totalIncomes.toLocaleString('ar-SA')} <span className="text-xs font-normal text-emerald-500">ر.س</span>
+              </h3>
+              <p className="text-[9px] text-slate-400 font-bold">التحصيلات النقدية المودعة</p>
             </div>
-            <div className="bg-white/15 p-2.5 rounded-2xl group-hover:scale-110 transition-transform"><ArrowUpRight className="w-5 h-5 text-white" /></div>
+            <div className="bg-emerald-500/10 p-3 rounded-2xl group-hover:scale-110 transition-transform">
+              <ArrowUpRight className="w-5 h-5 text-emerald-600" />
+            </div>
           </CardContent>
         </Card>
 
         {/* Total Expenses Card */}
         <Card 
           onClick={() => setActiveDetailModal('expenses')}
-          className="border-none shadow-md rounded-[1.5rem] bg-rose-600 text-white relative overflow-hidden cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 group"
+          className="border border-slate-100 dark:border-slate-800/60 shadow-sm rounded-[1.8rem] bg-white dark:bg-slate-950 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 group"
         >
-          <CardContent className="p-5 flex justify-between items-center">
+          <CardContent className="p-5 flex justify-between items-center h-full">
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-rose-100">إجمالي المصروفات</p>
-              <h3 className="text-lg font-black">{totalExpenses.toLocaleString('ar-SA')} <span className="text-[10px] font-normal">ر.س</span></h3>
-              <p className="text-[9px] text-rose-200">التكاليف والمواد (اضغط للتفاصيل)</p>
+              <p className="text-[10px] font-black text-rose-500 dark:text-rose-400 uppercase tracking-wider">إجمالي المصروفات</p>
+              <h3 className="text-xl font-black text-rose-600 dark:text-rose-400 font-mono">
+                {totalExpenses.toLocaleString('ar-SA')} <span className="text-xs font-normal text-rose-500">ر.س</span>
+              </h3>
+              <p className="text-[9px] text-slate-400 font-bold">المواد ومقاولي الباطن</p>
             </div>
-            <div className="bg-white/15 p-2.5 rounded-2xl group-hover:scale-110 transition-transform"><ArrowDownLeft className="w-5 h-5 text-white" /></div>
+            <div className="bg-rose-500/10 p-3 rounded-2xl group-hover:scale-110 transition-transform">
+              <ArrowDownLeft className="w-5 h-5 text-rose-600" />
+            </div>
           </CardContent>
         </Card>
 
         {/* Company Commission Card */}
         <Card 
           onClick={() => setActiveDetailModal('commission')}
-          className="border-none shadow-md rounded-[1.5rem] bg-amber-500 text-white relative overflow-hidden cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 group"
+          className="border border-slate-100 dark:border-slate-800/60 shadow-sm rounded-[1.8rem] bg-white dark:bg-slate-950 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 group"
         >
-          <CardContent className="p-5 flex justify-between items-center">
+          <CardContent className="p-5 flex justify-between items-center h-full">
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-amber-100">عمولة المؤسسة (15%)</p>
-              <h3 className="text-lg font-black">{totalCommission.toLocaleString('ar-SA')} <span className="text-[10px] font-normal">ر.س</span></h3>
-              <p className="text-[9px] text-amber-100">مستحقة للمؤسسة (اضغط للتفاصيل)</p>
+              <p className="text-[10px] font-black text-amber-500 uppercase tracking-wider">عمولة المؤسسة (15%)</p>
+              <h3 className="text-xl font-black text-amber-600 font-mono">
+                {totalCommission.toLocaleString('ar-SA')} <span className="text-xs font-normal text-amber-500">ر.س</span>
+              </h3>
+              <p className="text-[9px] text-slate-400 font-bold">الحصة التشغيلية للشركة</p>
             </div>
-            <div className="bg-white/15 p-2.5 rounded-2xl group-hover:scale-110 transition-transform"><Wallet className="w-5 h-5 text-white" /></div>
+            <div className="bg-amber-500/10 p-3 rounded-2xl group-hover:scale-110 transition-transform">
+              <Wallet className="w-5 h-5 text-amber-600" />
+            </div>
           </CardContent>
         </Card>
 
         {/* Net Profit Card */}
         <Card 
           onClick={() => setActiveDetailModal('profit')}
-          className="border-none shadow-md rounded-[1.5rem] bg-gradient-to-br from-blue-600 to-indigo-700 text-white relative overflow-hidden cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 group sm:col-span-2 lg:col-span-1"
+          className="border border-slate-100 dark:border-slate-800/60 shadow-xl rounded-[1.8rem] bg-gradient-to-br from-primary via-blue-600 to-indigo-700 text-white relative overflow-hidden cursor-pointer hover:scale-[1.01] transition-all duration-300 group sm:col-span-2 lg:col-span-1"
         >
-          <CardContent className="p-5 flex justify-between items-center">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/15" />
+          <CardContent className="p-5 flex justify-between items-center h-full relative z-10">
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-blue-100">صافي الربح الفعلي</p>
-              <h3 className="text-lg font-black">{netProfit.toLocaleString('ar-SA')} <span className="text-[10px] font-normal">ر.س</span></h3>
-              <p className="text-[9px] text-blue-100">بعد التكاليف والعمولة (اضغط للتفاصيل)</p>
+              <p className="text-[10px] font-black text-blue-100 uppercase tracking-wider">صافي الربح الفعلي</p>
+              <h3 className="text-xl font-black font-mono">
+                {netProfit.toLocaleString('ar-SA')} <span className="text-xs font-normal text-blue-200">ر.س</span>
+              </h3>
+              <p className="text-[9px] text-blue-100 font-bold">بعد خصم التكاليف والعمولات</p>
             </div>
-            <div className="bg-white/15 p-2.5 rounded-2xl group-hover:scale-110 transition-transform"><Briefcase className="w-5 h-5 text-white" /></div>
+            <div className="bg-white/15 p-3 rounded-2xl group-hover:scale-110 transition-transform">
+              <Briefcase className="w-5 h-5 text-white" />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters Section */}
-      <Card className="border-none shadow-sm rounded-3xl bg-white p-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Filters Section (ProjectsV2 High-End Style) */}
+      <Card className="border border-slate-100 dark:border-slate-800/60 shadow-sm rounded-3xl bg-white dark:bg-slate-900 p-4 relative z-10">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Search bar */}
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3.5" />
+            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
             <Input 
               placeholder={isManager ? "البحث باسم المشروع، العميل، أو المندوب..." : "البحث باسم المشروع أو العميل..."}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="rounded-xl h-11 pr-9 pl-4 bg-slate-50 border-slate-100 focus-visible:ring-amber-500"
+              className="rounded-2xl h-11 pr-10 pl-4 bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800/60 focus-visible:ring-amber-500 font-bold text-xs"
             />
           </div>
 
           {/* Selector filters */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
             {isManager && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-400 font-bold">المندوب:</span>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-black">المندوب:</span>
                 <select
-                  className="border border-slate-100 bg-slate-50 px-3 h-10 rounded-xl text-xs font-bold focus:outline-none"
+                  className="border border-slate-100 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950 px-3.5 h-11 rounded-xl text-xs font-black focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-700 dark:text-slate-300"
                   value={selectedRepFilter}
                   onChange={e => setSelectedRepFilter(e.target.value)}
                 >
@@ -534,10 +668,10 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
               </div>
             )}
 
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-400 font-bold">التخصص:</span>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-black">التخصص:</span>
               <select
-                className="border border-slate-100 bg-slate-50 px-3 h-10 rounded-xl text-xs font-bold focus:outline-none"
+                className="border border-slate-100 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950 px-3.5 h-11 rounded-xl text-xs font-black focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-700 dark:text-slate-300"
                 value={selectedCategoryFilter}
                 onChange={e => setSelectedCategoryFilter(e.target.value)}
               >
@@ -549,10 +683,10 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
               </select>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-400 font-bold">النوع:</span>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-black">النوع:</span>
               <select
-                className="border border-slate-100 bg-slate-50 px-3 h-10 rounded-xl text-xs font-bold focus:outline-none"
+                className="border border-slate-100 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950 px-3.5 h-11 rounded-xl text-xs font-black focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-700 dark:text-slate-300"
                 value={selectedTypeFilter}
                 onChange={e => setSelectedTypeFilter(e.target.value)}
               >
@@ -567,13 +701,13 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
 
       {/* Main content grid */}
       {filteredJobs.length === 0 ? (
-        <Card className="border-none shadow-sm rounded-[2rem] bg-white p-16 text-center">
+        <Card className="border border-slate-100 dark:border-slate-800/60 shadow-sm rounded-[2.5rem] bg-white dark:bg-slate-900 p-16 text-center relative overflow-hidden z-10">
           <Briefcase className="w-16 h-16 mx-auto mb-4 opacity-25 text-slate-400" />
-          <h3 className="font-black text-slate-800 text-base">لا توجد مشاريع مقاولات مطابقة حالياً</h3>
-          <p className="text-slate-400 text-xs mt-1 max-w-sm mx-auto">جرب تعديل فلاتر البحث والفرز، أو اضغط على إضافة مشروع جديد لبناء أول بطاقة مشروع مقاولات.</p>
+          <h3 className="font-black text-slate-800 dark:text-white text-base">لا توجد مشاريع مقاولات مطابقة حالياً</h3>
+          <p className="text-slate-400 dark:text-slate-500 text-xs mt-1 max-w-sm mx-auto font-medium">جرب تعديل فلاتر البحث والفرز، أو اضغط على إضافة مشروع جديد لبناء أول بطاقة مشروع مقاولات.</p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
           {filteredJobs.map((job) => {
             const txs = job.transactions || [];
             const jobIncome = txs.filter((t: any) => t.type === 'income').reduce((s: number, t: any) => s + (t.amount || 0), 0);
@@ -588,40 +722,53 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
             const workPercent = milestonesList.length > 0 ? Math.round((completedMilestonesCount / milestonesList.length) * 100) : 0;
 
             return (
-              <Card key={job.id} className="border border-slate-100 shadow-sm rounded-3xl bg-white hover:shadow-md transition-all p-5 flex flex-col justify-between relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <Card key={job.id} className="border border-slate-100/80 dark:border-slate-800/60 shadow-md rounded-[2.2rem] bg-white dark:bg-slate-900 hover:shadow-lg transition-all p-6 flex flex-col justify-between relative overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-all duration-500 pointer-events-none" />
                 
                 <div>
                   {/* Card Header */}
-                  <div className="flex items-start justify-between gap-2 mb-3 relative z-10">
-                    <div>
+                  <div className="flex items-start justify-between gap-3 mb-4 relative z-10">
+                    <div className="space-y-1.5 flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${getCategoryBadgeColor(job.category)}`}>
+                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${getCategoryBadgeColor(job.category)}`}>
                           {job.category || 'عظم'}
                         </span>
                         {job.projectType === 'company' ? (
-                          <Badge className="bg-blue-50 text-blue-700 border border-blue-100 font-bold text-[9px] shadow-none">عبر المؤسسة 15%</Badge>
+                          <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-900/10 dark:text-blue-400 border border-blue-100 dark:border-blue-900/20 font-black text-[9px] shadow-none py-0.5 rounded-md">عبر المؤسسة 15%</Badge>
                         ) : (
-                          <Badge className="bg-slate-100 text-slate-600 font-bold text-[9px] shadow-none">خارجي 0%</Badge>
+                          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 font-black text-[9px] shadow-none py-0.5 rounded-md">مستقل بالكامل</Badge>
                         )}
                       </div>
-                      <h4 className="font-black text-slate-800 text-sm mt-1.5">{job.projectTitle}</h4>
+                      
+                      <h4 className="font-black text-slate-800 dark:text-white text-base truncate mt-2 leading-snug group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" title={job.projectTitle}>
+                        {job.projectTitle}
+                      </h4>
+                      
                       {isManager && (
-                        <p className="text-[10px] text-amber-700 font-black mt-1">المندوب المسؤول: {job.salesRepName || getRepName(job.salesRepId)}</p>
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 font-black flex items-center gap-1">
+                          <User className="w-3.5 h-3.5" /> المسؤول: {job.salesRepName || getRepName(job.salesRepId)}
+                        </p>
                       )}
-                      <p className="text-[11px] text-slate-500 mt-1">العميل: <span className="font-bold text-slate-700">{job.clientName}</span> {job.clientPhone && `(${job.clientPhone})`}</p>
+                      
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-bold truncate">
+                        العميل: <span className="font-black text-slate-800 dark:text-slate-200">{job.clientName}</span> {job.clientPhone && `(${job.clientPhone})`}
+                      </p>
+                      
                       {job.linkedDocNumber && (
-                        <p className="text-[9px] text-slate-400 font-bold mt-0.5">مربوط بمستند: #{job.linkedDocNumber}</p>
+                        <span className="inline-block text-[9px] text-slate-400 dark:text-slate-500 font-bold bg-slate-50 dark:bg-slate-950 px-2 py-0.5 rounded-md border border-slate-100 dark:border-slate-800/40">
+                          مستند رسمي: #{job.linkedDocNumber}
+                        </span>
                       )}
                     </div>
+
                     <button
                       onClick={() => isSalesRep && handleToggleJobStatus(job.id, job.status)}
                       disabled={isManager}
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all border shrink-0 ${
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-all border shrink-0 ${
                         job.status === 'completed'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100'
-                          : 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100'
-                      } ${isManager ? 'cursor-default' : 'cursor-pointer'}`}
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30'
+                          : 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30'
+                      } ${isManager ? 'cursor-default' : 'cursor-pointer hover:scale-105 active:scale-95'}`}
                     >
                       {job.status === 'completed' ? 'مكتمل ✅' : 'نشط 🏗️'}
                     </button>
@@ -629,89 +776,89 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
 
                   {/* Start and End Dates */}
                   {(job.startDate || job.endDate) && (
-                    <div className="flex items-center gap-3 text-[9px] text-slate-400 font-bold mb-3 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-slate-400" /> البدء: {job.startDate || '—'}</span>
-                      <span className="w-px h-3 bg-slate-200" />
+                    <div className="flex items-center gap-3 text-[10px] text-slate-400 dark:text-slate-500 font-black mb-4 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-2xl border border-slate-100 dark:border-slate-850">
+                      <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-slate-400" /> البدء: {job.startDate || '—'}</span>
+                      <span className="w-px h-3.5 bg-slate-200 dark:bg-slate-800" />
                       <span>الانتهاء المتوقع: {job.endDate || '—'}</span>
                     </div>
                   )}
 
                   {/* Notes if exist */}
                   {job.notes && (
-                    <p className="text-[10px] text-slate-400 font-normal bg-slate-50/50 p-2.5 rounded-xl border border-slate-100/50 mb-3 line-clamp-2">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium bg-slate-50/50 dark:bg-slate-950/50 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-800/20 mb-4 line-clamp-2">
                       {job.notes}
                     </p>
                   )}
 
-                  {/* Financial Details Table */}
-                  <div className="grid grid-cols-4 gap-1 bg-white p-3 rounded-2xl border border-slate-100 mb-4 text-center">
+                  {/* Financial Details Grid */}
+                  <div className="grid grid-cols-4 gap-1.5 bg-slate-50/50 dark:bg-slate-950/50 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800/40 mb-4 text-center">
                     <div>
-                      <span className="text-[8px] text-slate-400 block font-bold">قيمة العقد</span>
-                      <span className="text-[10px] font-black text-slate-700">{job.contractAmount?.toLocaleString('ar-SA')}</span>
+                      <span className="text-[8px] text-slate-400 dark:text-slate-500 block font-black mb-0.5">العقد</span>
+                      <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 font-mono">{job.contractAmount?.toLocaleString('ar-SA')}</span>
                     </div>
                     <div>
-                      <span className="text-[8px] text-slate-400 block font-bold">عمولة المؤسسة</span>
-                      <span className="text-[10px] font-black text-amber-600">{comm?.toLocaleString('ar-SA')}</span>
+                      <span className="text-[8px] text-slate-400 dark:text-slate-500 block font-black mb-0.5">العمولة</span>
+                      <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 font-mono">{comm?.toLocaleString('ar-SA')}</span>
                     </div>
                     <div>
-                      <span className="text-[8px] text-slate-400 block font-bold">المحصل</span>
-                      <span className="text-[10px] font-black text-emerald-600">{jobIncome?.toLocaleString('ar-SA')}</span>
+                      <span className="text-[8px] text-slate-400 dark:text-slate-500 block font-black mb-0.5">المحصل</span>
+                      <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 font-mono">{jobIncome?.toLocaleString('ar-SA')}</span>
                     </div>
                     <div>
-                      <span className="text-[8px] text-slate-400 block font-bold">الربح الفعلي</span>
-                      <span className={`text-[10px] font-black ${jobProfit >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>{jobProfit?.toLocaleString('ar-SA')}</span>
+                      <span className="text-[8px] text-slate-400 dark:text-slate-500 block font-black mb-0.5">الربح</span>
+                      <span className={`text-[11px] font-black font-mono ${jobProfit >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600 dark:text-rose-400'}`}>{jobProfit?.toLocaleString('ar-SA')}</span>
                     </div>
                   </div>
 
-                  {/* Two progress bars */}
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[8px] text-slate-400 font-bold">
+                  {/* Dual progress bars (ProjectsV2 High-End Style) */}
+                  <div className="grid grid-cols-2 gap-4 mb-4 bg-slate-50/30 dark:bg-slate-950/30 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-800/20">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 font-black">
                         <span>نسبة التحصيل</span>
-                        <span className="text-emerald-600">{collectPercent}%</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-mono">{collectPercent}%</span>
                       </div>
-                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${collectPercent}%` }}></div>
+                      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 transition-all duration-500 rounded-full" style={{ width: `${collectPercent}%` }}></div>
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[8px] text-slate-400 font-bold">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[9px] text-slate-400 dark:text-slate-500 font-black">
                         <span>نسبة الإنجاز</span>
-                        <span className="text-blue-600">{workPercent}%</span>
+                        <span className="text-blue-600 dark:text-blue-400 font-mono">{workPercent}%</span>
                       </div>
-                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${workPercent}%` }}></div>
+                      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 transition-all duration-500 rounded-full" style={{ width: `${workPercent}%` }}></div>
                       </div>
                     </div>
                   </div>
 
                   {/* Collapsible Milestones Checklist */}
-                  <div className="border border-slate-100 rounded-2xl bg-slate-50/30 overflow-hidden mb-4">
+                  <div className="border border-slate-100 dark:border-slate-800/60 rounded-2xl bg-slate-50/50 dark:bg-slate-950/50 overflow-hidden mb-4">
                     <button
                       type="button"
                       onClick={() => setExpandedMilestonesId(expandedMilestonesId === job.id ? null : job.id)}
-                      className="w-full px-3 py-2 text-right text-[10px] font-bold text-slate-600 flex justify-between items-center bg-slate-100/30 hover:bg-slate-100/60 transition-colors"
+                      className="w-full px-3.5 py-2.5 text-right text-[10px] font-black text-slate-600 dark:text-slate-400 flex justify-between items-center bg-slate-100/30 dark:bg-slate-950/30 hover:bg-slate-100/60 dark:hover:bg-slate-900/60 transition-all"
                     >
-                      <span>مراحل وتدفق تنفيذ المشروع ({completedMilestonesCount} / {milestonesList.length})</span>
-                      <span className="text-[9px] bg-slate-200/80 px-2 py-0.5 rounded-full text-slate-600">
+                      <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-slate-400" /> مراحل الإنجاز ({completedMilestonesCount} / {milestonesList.length})</span>
+                      <span className="text-[9px] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm px-2.5 py-0.5 rounded-lg text-slate-600 dark:text-slate-400 font-bold transition-all">
                         {expandedMilestonesId === job.id ? 'إغلاق 🔼' : 'عرض وتحديث 🔽'}
                       </span>
                     </button>
                     {expandedMilestonesId === job.id && (
-                      <div className="p-3 space-y-2 border-t border-slate-100 bg-white max-h-[160px] overflow-y-auto">
+                      <div className="p-3.5 space-y-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 max-h-[160px] overflow-y-auto custom-scrollbar">
                         {milestonesList.length === 0 ? (
-                          <span className="text-[10px] text-slate-400 block text-center">لا توجد مراحل مسجلة</span>
+                          <span className="text-[10px] text-slate-400 block text-center font-bold">لا توجد مراحل مسجلة</span>
                         ) : (
                           milestonesList.map((m: any) => (
-                            <label key={m.id} className="flex items-center gap-2 text-[10px] font-bold text-slate-600 cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors">
+                            <label key={m.id} className="flex items-center gap-2.5 text-[11px] font-black text-slate-600 dark:text-slate-400 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 p-1.5 rounded-xl transition-colors">
                               <input
                                 type="checkbox"
                                 checked={m.completed}
                                 disabled={isManager}
                                 onChange={() => handleToggleMilestone(job, m.id)}
-                                className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
                               />
-                              <span className={m.completed ? 'line-through text-slate-400 font-normal' : 'text-slate-700'}>
+                              <span className={m.completed ? 'line-through text-slate-400 dark:text-slate-500 font-bold' : 'text-slate-700 dark:text-slate-300 font-black'}>
                                 {m.title}
                               </span>
                             </label>
@@ -723,20 +870,20 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 pt-3 border-t border-slate-100/70">
+                <div className="flex items-center gap-2 pt-4 border-t border-slate-100/70 dark:border-slate-800/60 mt-auto">
                   <Button
                     onClick={() => setSelectedJobForTx(job)}
                     variant="outline"
-                    className="flex-1 h-9.5 rounded-xl text-xs font-bold border-amber-200 text-amber-800 hover:bg-amber-50 gap-1.5"
+                    className="flex-1 h-10 rounded-xl text-xs font-black border-amber-200 dark:border-amber-900/30 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 gap-2 transition-all hover:scale-[1.01]"
                   >
-                    <Wallet className="w-3.5 h-3.5" /> {isManager ? 'مراجعة الدفتر والتدقيق' : 'دفتر الحسابات'} ({txs.length})
+                    <Wallet className="w-3.5 h-3.5 text-amber-500" /> {isManager ? 'مراجعة الدفتر والتدقيق' : 'دفتر الحسابات'} ({txs.length})
                   </Button>
                   {isSalesRep && (
                     <Button
                       onClick={() => handleDeletePrivateJob(job.id)}
                       variant="outline"
                       size="icon"
-                      className="h-9.5 w-9.5 rounded-xl border-slate-200 text-rose-500 hover:bg-rose-50 hover:border-rose-200"
+                      className="h-10 w-10 rounded-xl border-slate-200 dark:border-slate-800 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/25 hover:border-rose-200 dark:hover:border-rose-900/40 transition-all hover:scale-105"
                       title="حذف المشروع"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -749,179 +896,458 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
         </div>
       )}
 
-      {/* Add Private Job Dialog */}
       <Dialog open={isAddJobOpen} onOpenChange={setIsAddJobOpen}>
-        <DialogContent className="max-w-2xl rounded-[2rem] p-6 text-right" dir="rtl">
-          <DialogHeader className="border-b pb-3 mb-4">
-            <DialogTitle className="text-base font-black text-slate-800 flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-amber-600" />
+        <DialogContent className="w-[95vw] md:w-full max-w-3xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl bg-white/95 backdrop-blur-xl max-h-[92vh] overflow-y-auto" dir="rtl">
+          {/* Header Graphic Background */}
+          <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-orange-600 p-6 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/15 via-transparent to-transparent pointer-events-none" />
+            <button 
+              onClick={() => setIsAddJobOpen(false)}
+              className="absolute top-4 left-4 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all duration-300"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <DialogTitle className="text-xl font-black flex items-center gap-3" style={{ fontFamily: "'Cairo', sans-serif" }}>
+              <div className="bg-white/20 p-2.5 rounded-2xl backdrop-blur-md">
+                <Briefcase className="w-6 h-6 text-white" />
+              </div>
               إضافة مشروع مقاولات خاص جديد
             </DialogTitle>
-          </DialogHeader>
+            <p className="text-white/80 text-xs mt-2 font-bold max-w-lg leading-relaxed">
+              قم بتهيئة مشروعك الخاص بخطوات ذكية ومميزة مع تفعيل القرارات الضريبية، وحلول الذكاء الاصطناعي لاستخراج فواتير الموردين تلقائياً.
+            </p>
+          </div>
 
-          <form onSubmit={handleAddPrivateJob} className="space-y-4" style={{ fontFamily: "'Cairo', sans-serif" }}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* Right column / Group 1 */}
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600 block">تصنيف المشروع *</label>
-                  <select
-                    className="w-full border border-input bg-background px-3 h-11 rounded-xl text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={newJobData.projectType}
-                    onChange={e => setNewJobData({ 
-                      clientName: '',
-                      clientPhone: '',
-                      projectTitle: '',
-                      contractAmount: '',
-                      notes: '',
-                      projectType: e.target.value as any, 
-                      linkedDocId: '',
-                      category: 'عظم',
-                      startDate: new Date().toISOString().split('T')[0],
-                      endDate: '',
-                    })}
-                    required
-                  >
-                    <option value="company">مشروع عبر المؤسسة (يخضع لعمولة 15%)</option>
-                    <option value="external">مشروع خارجي بالكامل (عمولة 0%)</option>
-                  </select>
+          {/* Steps Progress Indicator */}
+          <div className="bg-slate-50 border-b border-slate-100 p-4" style={{ fontFamily: "'Cairo', sans-serif" }}>
+            <div className="flex justify-between items-center max-w-xl mx-auto">
+              {[
+                { step: 1, label: 'الأساسيات', icon: Briefcase },
+                { step: 2, label: 'الربط والتصنيف', icon: LinkIcon },
+                { step: 3, label: 'خدمة العملاء CRM', icon: UserCheck },
+                { step: 4, label: 'الضرائب والفواتير', icon: Sparkles }
+              ].map((s, idx) => {
+                const ActiveIcon = s.icon;
+                const isCompleted = addJobStep > s.step;
+                const isActive = addJobStep === s.step;
+                return (
+                  <div key={s.step} className="flex items-center flex-1 last:flex-initial">
+                    <div className="flex flex-col items-center relative z-10">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${
+                        isCompleted ? 'bg-green-600 text-white shadow-lg shadow-green-200' :
+                        isActive ? 'bg-amber-600 text-white ring-4 ring-amber-100 shadow-lg shadow-amber-200' :
+                        'bg-slate-200 text-slate-400'
+                      }`}>
+                        {isCompleted ? <Check className="w-4.5 h-4.5 font-bold" /> : <ActiveIcon className="w-4 h-4" />}
+                      </div>
+                      <span className={`text-[10px] font-bold mt-1.5 whitespace-nowrap transition-colors duration-300 ${
+                        isActive ? 'text-amber-700 font-extrabold' : isCompleted ? 'text-green-700' : 'text-slate-400'
+                      }`}>
+                        {s.label}
+                      </span>
+                    </div>
+                    {idx < 3 && (
+                      <div className="flex-1 h-0.5 mx-2 bg-slate-200 relative">
+                        <div 
+                          className="absolute right-0 top-0 h-full bg-gradient-to-l from-amber-600 to-green-600 transition-all duration-500"
+                          style={{ width: addJobStep > s.step ? '100%' : '0%' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <form onSubmit={handleAddPrivateJob} className="p-6 space-y-6" style={{ fontFamily: "'Cairo', sans-serif" }}>
+            
+            {/* STEP 1: Basic Details */}
+            {addJobStep === 1 && (
+              <div className="space-y-4 animate-in fade-in-50 duration-300">
+                <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl flex items-start gap-3">
+                  <div className="p-2 bg-amber-100 rounded-xl text-amber-700">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-amber-900">البيانات الأساسية للمشروع</h4>
+                    <p className="text-[10px] text-amber-700 font-medium mt-0.5">يرجى إدخال اسم العميل وعنوان المشروع وقيمة العقد للبدء في تفعيل الحسابات.</p>
+                  </div>
                 </div>
 
-                {newJobData.projectType === 'company' && (
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-600 block">ربط بمستند رسمي صادر باسمك</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 flex items-center gap-1">
+                      اسم العميل الخاص <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Input 
+                        placeholder="مثال: أبو فهد"
+                        value={newJobData.clientName}
+                        onChange={e => setNewJobData({ ...newJobData, clientName: e.target.value })}
+                        className="rounded-xl h-11 pr-10 focus:border-amber-500 focus:ring-amber-500 text-xs font-bold"
+                        required
+                        disabled={newJobData.projectType === 'company' && !!newJobData.linkedDocId}
+                      />
+                      <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700">رقم هاتف العميل (اختياري)</label>
+                    <div className="relative">
+                      <Input 
+                        placeholder="مثال: 05xxxxxxx"
+                        value={newJobData.clientPhone}
+                        onChange={e => setNewJobData({ ...newJobData, clientPhone: e.target.value })}
+                        className="rounded-xl h-11 pr-10 text-xs font-bold"
+                      />
+                      <Phone className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-black text-slate-700">عنوان المشروع وطبيعة العمل *</label>
+                    <div className="relative">
+                      <Input 
+                        placeholder="مثال: مقاولة فيلا الياسمين - أعمال عظم"
+                        value={newJobData.projectTitle}
+                        onChange={e => setNewJobData({ ...newJobData, projectTitle: e.target.value })}
+                        className="rounded-xl h-11 pr-10 text-xs font-bold"
+                        required
+                      />
+                      <MapPin className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-black text-slate-700">قيمة العقد الكلية الصافية (ر.س) *</label>
+                    <div className="relative">
+                      <Input 
+                        type="number"
+                        placeholder="مثال: 150000"
+                        value={newJobData.contractAmount}
+                        onChange={e => setNewJobData({ ...newJobData, contractAmount: e.target.value })}
+                        className="rounded-xl h-11 pr-10 text-xs font-bold text-slate-800"
+                        required
+                        disabled={newJobData.projectType === 'company' && !!newJobData.linkedDocId}
+                      />
+                      <Wallet className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: Classification & Linking */}
+            {addJobStep === 2 && (
+              <div className="space-y-4 animate-in fade-in-50 duration-300">
+                <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl flex items-start gap-3">
+                  <div className="p-2 bg-amber-100 rounded-xl text-amber-700">
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-amber-900">ربط وتصنيف المشروع</h4>
+                    <p className="text-[10px] text-amber-700 font-medium mt-0.5">اختر ما إذا كان هذا المشروع مسجلاً ضمن مبيعات المؤسسة لربطه بمستند مالي وتطبيق عمولات المندوب.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 block">تصنيف ونوع المشروع *</label>
                     <select
-                      className="w-full border border-input bg-background px-3 h-11 rounded-xl text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={newJobData.linkedDocId}
-                      onChange={e => handleLinkDocChange(e.target.value)}
+                      className="w-full border border-input bg-background px-3 h-11 rounded-xl text-xs font-bold focus:visible:outline-none focus:visible:ring-2 focus-visible:ring-ring"
+                      value={newJobData.projectType}
+                      onChange={e => setNewJobData({ 
+                        ...newJobData,
+                        projectType: e.target.value as any, 
+                        linkedDocId: '',
+                      })}
+                      required
                     >
-                      <option value="">-- اختر مستنداً للربط التلقائي --</option>
-                      {quotations.map(q => (
-                        <option key={q.id} value={q.id}>
-                          {q.docType === 'invoice' ? 'فاتورة' : 'عرض سعر'} # {q.docNumber || 'بدون رقم'} - {q.clientName} ({(q.totalAmount || 0).toLocaleString('ar-SA')} ر.س)
-                        </option>
-                      ))}
+                      <option value="company">مشروع عبر المؤسسة (عمولة المندوب 85% والشركة 15%)</option>
+                      <option value="external">مشروع خارجي بالكامل (أرباح مستقلة للمندوب 100%)</option>
                     </select>
                   </div>
-                )}
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600 block">اسم المشروع / طبيعة العمل *</label>
-                  <Input 
-                    placeholder="مثال: مقاولة فيلا الياسمين - أعمال عظم"
-                    value={newJobData.projectTitle}
-                    onChange={e => setNewJobData({ ...newJobData, projectTitle: e.target.value })}
-                    className="rounded-xl h-11"
-                    required
-                  />
-                </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 block">تخصص وطبيعة البناء *</label>
+                    <select
+                      className="w-full border border-input bg-background px-3 h-11 rounded-xl text-xs font-bold focus:visible:outline-none"
+                      value={newJobData.category}
+                      onChange={e => setNewJobData({ ...newJobData, category: e.target.value })}
+                      required
+                    >
+                      <option value="عظم">أعمال عظم وهيكل خرساني متكامل</option>
+                      <option value="تشطيب">أعمال تشطيبات داخلية وخارجية</option>
+                      <option value="تأسيس">أعمال تأسيس وتمديد سباكة وكهرباء</option>
+                      <option value="أخرى">أعمال أخرى / تخصصات متنوعة</option>
+                    </select>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-600 block">تاريخ البدء *</label>
+                  {newJobData.projectType === 'company' && (
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-xs font-black text-slate-700 block">ربط بمستند مالي صادر باسمك</label>
+                      <select
+                        className="w-full border border-input bg-background px-3 h-11 rounded-xl text-xs font-bold focus:visible:outline-none"
+                        value={newJobData.linkedDocId}
+                        onChange={e => handleLinkDocChange(e.target.value)}
+                      >
+                        <option value="">-- لا يوجد ربط مستندي (إدخال يدوي حر) --</option>
+                        {quotations.map(q => (
+                          <option key={q.id} value={q.id}>
+                            {q.docType === 'invoice' ? 'فاتورة' : 'عرض سعر'} # {q.docNumber || 'بدون رقم'} - {q.clientName} ({(q.totalAmount || 0).toLocaleString('ar-SA')} ر.س)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 block">تاريخ البدء والمباشرة *</label>
                     <Input 
                       type="date"
                       value={newJobData.startDate}
                       onChange={e => setNewJobData({ ...newJobData, startDate: e.target.value })}
-                      className="rounded-xl h-11 text-xs"
+                      className="rounded-xl h-11 text-xs font-bold"
                       required
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-600 block">الانتهاء المتوقع *</label>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 block">الانتهاء المتوقع والتسليم *</label>
                     <Input 
                       type="date"
                       value={newJobData.endDate}
                       onChange={e => setNewJobData({ ...newJobData, endDate: e.target.value })}
-                      className="rounded-xl h-11 text-xs"
+                      className="rounded-xl h-11 text-xs font-bold"
                       required
                     />
                   </div>
                 </div>
               </div>
+            )}
 
-              {/* Left column / Group 2 */}
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600 block">اسم العميل الخاص *</label>
-                  <Input 
-                    placeholder="مثال: أبو فهد"
-                    value={newJobData.clientName}
-                    onChange={e => setNewJobData({ ...newJobData, clientName: e.target.value })}
-                    className="rounded-xl h-11"
-                    required
-                    disabled={newJobData.projectType === 'company' && !!newJobData.linkedDocId}
-                  />
+            {/* STEP 3: CRM Settings */}
+            {addJobStep === 3 && (
+              <div className="space-y-4 animate-in fade-in-50 duration-300">
+                <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl flex items-start gap-3">
+                  <div className="p-2 bg-amber-100 rounded-xl text-amber-700">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-amber-900">خيارات إدارة العملاء الفائقة (CRM Settings)</h4>
+                    <p className="text-[10px] text-amber-700 font-medium mt-0.5">اضبط إعدادات التفاعل والعلاقات لتقديم تقارير دورية تضفي لمسة احترافية على تعاملك مع العملاء.</p>
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600 block">رقم هاتف العميل (اختياري)</label>
-                  <Input 
-                    placeholder="مثال: 05xxxxxxx"
-                    value={newJobData.clientPhone}
-                    onChange={e => setNewJobData({ ...newJobData, clientPhone: e.target.value })}
-                    className="rounded-xl h-11"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600 block">تخصص المشروع *</label>
-                  <select
-                    className="w-full border border-input bg-background px-3 h-11 rounded-xl text-xs font-bold focus-visible:outline-none"
-                    value={newJobData.category}
-                    onChange={e => setNewJobData({ ...newJobData, category: e.target.value })}
-                    required
+                <div className="space-y-3">
+                  {/* VIP Client Toggle */}
+                  <div 
+                    onClick={() => setClientVip(!clientVip)}
+                    className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${
+                      clientVip ? 'bg-amber-50/70 border-amber-200' : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'
+                    }`}
                   >
-                    <option value="عظم">أعمال عظم وهيكل خرساني</option>
-                    <option value="تشطيب">أعمال تشطيب وديكور</option>
-                    <option value="تأسيس">أعمال تأسيس كهرباء وسباكة</option>
-                    <option value="أخرى">أخرى / تخصص متنوع</option>
-                  </select>
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${clientVip ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        <Star className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-black text-slate-800">تصنيف العميل كبار الشخصيات (VIP)</h5>
+                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">تميز هذا المشروع بأيقونة نجمة ذهبية ورأس هيدر مخصص لجذب انتباه الإدارة المالية.</p>
+                      </div>
+                    </div>
+                    <div className={`w-11 h-6 rounded-full transition-colors relative ${clientVip ? 'bg-amber-600' : 'bg-slate-300'}`}>
+                      <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all duration-300 ${clientVip ? 'left-0.5' : 'left-5.5'}`} />
+                    </div>
+                  </div>
+
+                  {/* Automatic Reports Toggle */}
+                  <div 
+                    onClick={() => setSendClientReports(!sendClientReports)}
+                    className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${
+                      sendClientReports ? 'bg-green-50/70 border-green-200' : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${sendClientReports ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        <Send className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-black text-slate-800">إرسال تقارير دورية للعميل تلقائياً</h5>
+                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">توليد ملفات PDF بالدفعات المنجزة والمصروفة وإرسالها بالبريد أو الواتساب فور التحديث.</p>
+                      </div>
+                    </div>
+                    <div className={`w-11 h-6 rounded-full transition-colors relative ${sendClientReports ? 'bg-green-600' : 'bg-slate-300'}`}>
+                      <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all duration-300 ${sendClientReports ? 'left-0.5' : 'left-5.5'}`} />
+                    </div>
+                  </div>
+
+                  {/* Accounting Audit Approval */}
+                  <div 
+                    onClick={() => setAuditIncomingReceipts(!auditIncomingReceipts)}
+                    className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${
+                      auditIncomingReceipts ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${auditIncomingReceipts ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        <FileCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-black text-slate-800">تخفيض الضرائب والتدقيق المسبق للإيصالات</h5>
+                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">إرسال جميع سندات الصرف للمدقق المالي للمؤسسة قبل إضافتها ماليّاً لتجنب الأخطاء الضريبية.</p>
+                      </div>
+                    </div>
+                    <div className={`w-11 h-6 rounded-full transition-colors relative ${auditIncomingReceipts ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                      <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all duration-300 ${auditIncomingReceipts ? 'left-0.5' : 'left-5.5'}`} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 4: Invoice & Tax OCR System */}
+            {addJobStep === 4 && (
+              <div className="space-y-4 animate-in fade-in-50 duration-300">
+                <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-2xl flex items-start gap-3">
+                  <div className="p-2 bg-emerald-100 rounded-xl text-emerald-700">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-emerald-900">ماسح الضرائب ومحاكي الفواتير (OCR System)</h4>
+                    <p className="text-[10px] text-emerald-700 font-medium mt-0.5">ارفع فاتورة التوريد المسبقة أو سند المصروف الأولي، وسيقوم نظام الفحص الضريبي بتسجيل القيمة واسم المورد تلقائياً.</p>
+                  </div>
+                </div>
+
+                {/* Upload Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-700">تحميل فاتورة المورد أو سند التأسيس</label>
+                    <div className="border-2 border-dashed border-slate-200 hover:border-emerald-500 hover:bg-slate-50/50 transition-all duration-300 rounded-2xl p-5 text-center relative cursor-pointer group">
+                      <input 
+                        type="file" 
+                        accept="image/*,.pdf" 
+                        onChange={handleInvoiceUploadSim}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      />
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                        <span className="text-xs font-bold text-slate-700 mt-1">
+                          {uploadedInvoiceName ? uploadedInvoiceName : 'اضغط لرفع الفاتورة'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">يدعم الصور والمستندات بحد أقصى 5 ميجابايت</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* OCR Realtime Result Display */}
+                  <div className="space-y-3 bg-slate-50/70 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                      <span className="text-[11px] font-black text-slate-800 flex items-center gap-1">
+                        <BrainCircuit className="w-4 h-4 text-emerald-600 animate-pulse" />
+                        مستخرجات مسح العين الإلكترونية (OCR)
+                      </span>
+                      {uploadedInvoiceName && (
+                        <span className="bg-emerald-100 text-emerald-800 text-[9px] px-2 py-0.5 rounded-full font-black animate-bounce">
+                          تم التعرف بنجاح
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+                        <div>
+                          <span className="text-slate-400 block font-bold">اسم المورد المستخرج</span>
+                          <Input 
+                            value={supplierName}
+                            onChange={e => setSupplierName(e.target.value)}
+                            placeholder="بانتظار المستند..."
+                            className="bg-white rounded-lg h-8 text-[11px] font-bold mt-1"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block font-bold">إجمالي الفاتورة شامل الضريبة</span>
+                          <Input 
+                            value={taxGrossAmount}
+                            onChange={e => setTaxGrossAmount(e.target.value)}
+                            placeholder="ر.س"
+                            className="bg-white rounded-lg h-8 text-[11px] font-black text-emerald-700 mt-1"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="text-[10px]">
+                        <span className="text-slate-400 block font-bold">بيان وتفاصيل المصروف</span>
+                        <Input 
+                          value={invoiceDescription}
+                          onChange={e => setInvoiceDescription(e.target.value)}
+                          placeholder="البيان الضريبي المستخرج من الفاتورة"
+                          className="bg-white rounded-lg h-8 text-[11px] font-bold mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-600 block">قيمة العقد الكلية (ر.س) *</label>
-                  <Input 
-                    type="number"
-                    placeholder="مثال: 150000"
-                    value={newJobData.contractAmount}
-                    onChange={e => setNewJobData({ ...newJobData, contractAmount: e.target.value })}
-                    className="rounded-xl h-11"
-                    required
-                    disabled={newJobData.projectType === 'company' && !!newJobData.linkedDocId}
+                  <label className="text-xs font-black text-slate-700 block">ملاحظات أو شروط الدفع والتعاقد</label>
+                  <textarea 
+                    placeholder="تفاصيل إضافية حول آلية الدفعات، غرامات التأخير والملاحظات الخاصة..."
+                    value={newJobData.notes}
+                    onChange={e => setNewJobData({ ...newJobData, notes: e.target.value })}
+                    className="w-full min-h-[70px] border border-input bg-background p-3 rounded-xl text-xs font-bold focus-visible:outline-none"
                   />
                 </div>
               </div>
+            )}
 
-              {/* Full width bottom */}
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-xs font-bold text-slate-600 block">ملاحظات أو شروط الدفع</label>
-                <textarea 
-                  placeholder="تفاصيل إضافية حول المشروع، الدفعات، والمواعيد..."
-                  value={newJobData.notes}
-                  onChange={e => setNewJobData({ ...newJobData, notes: e.target.value })}
-                  className="w-full min-h-[80px] border border-input bg-background p-3 rounded-xl text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </div>
+            {/* Form Footer Action Buttons */}
+            <div className="flex gap-2 pt-4 border-t border-slate-100 mt-4">
+              {/* Back Button */}
+              {addJobStep > 1 && (
+                <Button 
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setAddJobStep(addJobStep - 1)}
+                  className="rounded-xl h-11 px-5 border border-slate-200 hover:bg-slate-50 text-slate-600 font-black text-xs flex items-center gap-1.5"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  السابق
+                </Button>
+              )}
 
-            </div>
+              {/* Next/Save Button */}
+              {addJobStep < 4 ? (
+                <Button 
+                  type="button"
+                  onClick={handleNextStepValidation}
+                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 font-black text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-amber-100"
+                >
+                  التالي
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+              ) : (
+                <Button 
+                  type="submit"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 font-black text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-100"
+                >
+                  حفظ وإضافة المشروع الخاص
+                  <Check className="w-4 h-4" />
+                </Button>
+              )}
 
-            <div className="flex gap-2 pt-2 border-t border-slate-100 mt-4">
-              <Button 
-                type="submit"
-                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 font-black text-xs"
-              >
-                إضافة المشروع
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost"
-                className="rounded-xl h-11 px-4 text-slate-500 font-bold"
-                onClick={() => setIsAddJobOpen(false)}
-              >
-                إلغاء
-              </Button>
+              {addJobStep === 1 && (
+                <Button 
+                  type="button" 
+                  variant="ghost"
+                  className="rounded-xl h-11 px-5 text-slate-500 font-bold border border-transparent hover:bg-slate-100 text-xs"
+                  onClick={() => setIsAddJobOpen(false)}
+                >
+                  إلغاء
+                </Button>
+              )}
             </div>
           </form>
         </DialogContent>
@@ -929,7 +1355,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
 
       {/* Manage Private Job Ledger Dialog */}
       <Dialog open={!!selectedJobForTx} onOpenChange={(open) => !open && setSelectedJobForTx(null)}>
-        <DialogContent className="max-w-xl rounded-[2rem] p-6 text-right" dir="rtl">
+        <DialogContent className="w-[95vw] md:w-full max-w-xl rounded-[2rem] p-6 text-right max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader className="border-b pb-3 mb-4">
             <DialogTitle className="text-base font-black text-slate-800 flex items-center gap-2">
               <Wallet className="w-5 h-5 text-amber-600" />
@@ -1069,7 +1495,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
 
       {/* Details Modals */}
       <Dialog open={activeDetailModal !== null} onOpenChange={(open) => !open && setActiveDetailModal(null)}>
-        <DialogContent className="max-w-4xl rounded-[2rem] p-6 text-right overflow-y-auto max-h-[85vh] bg-white border border-slate-200 shadow-2xl" dir="rtl">
+        <DialogContent className="w-[95vw] md:w-full max-w-4xl rounded-[2rem] p-6 text-right overflow-y-auto max-h-[85vh] bg-white border border-slate-200 shadow-2xl" dir="rtl">
           <DialogHeader className="border-b pb-3 mb-4">
             <DialogTitle className="text-base font-black text-slate-800 flex items-center gap-2">
               {activeDetailModal === 'contracts' && (

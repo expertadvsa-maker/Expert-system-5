@@ -183,6 +183,7 @@ export default function CommandCenter() {
     }
   }, [selectedUserId, points]);
   const [isLiveSimulating, setIsLiveSimulating] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const dbPointsRef = useRef<TrackerPoint[]>([]);
   useEffect(() => { dbPointsRef.current = dbPoints; }, [dbPoints]);

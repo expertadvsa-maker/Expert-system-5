@@ -11,7 +11,7 @@ import {
   Bell, ListTodo, Receipt, AreaChart, UserCheck, Layers,
   BarChart2, Loader2, Pause, CheckCircle, Briefcase,
   ShoppingCart, Package, Search, ArrowRight, Star, Wand2,
-  Archive, Camera, Calendar, Lock, Unlock, Undo, Redo, UserPlus, StickyNote, Trash2, FileText, Pin, BellRing
+  Archive, Camera, Calendar, Lock, Unlock, Undo, Redo, UserPlus, StickyNote, Trash2, FileText, Pin, BellRing, Activity
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import {
@@ -775,6 +775,10 @@ interface WidgetData {
   isElevated: boolean;
   isManager: boolean;
   onUpdateWidget?: (id: string, updates: Partial<WidgetInstance>) => void;
+  inventory?: any[];
+  assets?: any[];
+  leaveRequests?: any[];
+  onAddClient?: () => void;
 }
 
 function renderWidget(widget: WidgetInstance, data: WidgetData, fmtNum: (n: number) => string): React.ReactNode {
@@ -1747,7 +1751,7 @@ export default function DashboardBuilder({ goToTab }: { goToTab?: (tabId: string
         setIsAddClientOpen(false);
         setNewClientData({ name: '', phone: '', email: '' });
       } else {
-        toast.error(result.error || 'فشل إضافة العميل في ألف ياء');
+        toast.error((result as any).error || 'فشل إضافة العميل في ألف ياء');
       }
     } catch (error) {
       console.error(error);

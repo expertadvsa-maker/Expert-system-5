@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { doc, getDoc, collection, query, orderBy, onSnapshot, addDoc, updateDoc, where } from 'firebase/firestore';
 import { Project, MaintenanceRequest, ProjectMilestone, Quotation } from '../types';
-import { ShieldCheck, Lock, CheckCircle2, FileCheck, Layers, CalendarDays, Loader2, Receipt, FileText, Download, Wallet, CreditCard, Clock, Activity, MessageSquare, Image as ImageIcon, Wrench, ChevronRight, Send, UploadCloud } from 'lucide-react';
+import { ShieldCheck, Lock, CheckCircle2, FileCheck, Layers, CalendarDays, Loader2, Receipt, FileText, Download, Wallet, CreditCard, Clock, Activity, MessageSquare, Image as ImageIcon, Wrench, ChevronRight, Send, UploadCloud, Star } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { toast, Toaster } from 'sonner';

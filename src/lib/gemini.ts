@@ -289,6 +289,7 @@ export interface ExtractedProjectData {
   title?: string;
   description?: string;
   budget?: number;
+  projectValue?: number;
   clientName?: string;
   clientPhone?: string;
   clientEmail?: string;

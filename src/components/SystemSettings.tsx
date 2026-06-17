@@ -36,7 +36,9 @@ import {
   EyeOff,
   MessageCircle,
   Smartphone,
-  Phone
+  Phone,
+  Info,
+  AlertTriangle
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { 
@@ -286,18 +288,18 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
 
   // Define All Navigation Tabs
   const tabs = [
-    { id: 'companies', label: 'إدارة الشركات (المالك)', icon: Building2, roles: ['owner'] },
-    { id: 'company_profile', label: 'هوية النظام الأساسية', icon: Building2, roles: ['manager', 'owner'] },
-    { id: 'general', label: 'الإعدادات العامة', icon: SettingsIcon, roles: ['manager', 'owner'] },
-    { id: 'whatsapp', label: 'مكتبة واتساب المجانية والرسائل', icon: MessageCircle, roles: ['manager', 'owner'] },
-    { id: 'notifications', label: 'البريد والإشعارات', icon: Mail, roles: ['manager', 'owner'] },
-    { id: 'attendance', label: 'نظام الدوام والـ GPS', icon: Clock, roles: ['manager', 'owner'] },
-    { id: 'ai', label: 'الذكاء الاصطناعي', icon: Sparkles, roles: ['manager', 'owner'] },
-    { id: 'locations', label: 'المقرات والسكن', icon: MapPin, roles: ['manager', 'owner'] },
-    { id: 'banks', label: 'الحسابات البنكية', icon: CreditCard, roles: ['manager', 'owner'] },
-    { id: 'aliphia', label: 'الربط المحاسبي (ألف ياء)', icon: Globe, roles: ['manager', 'owner'] },
-    { id: 'theme', label: 'المظهر والثيم البصري', icon: Paintbrush, roles: ['manager', 'supervisor', 'employee', 'owner'] },
-    { id: 'data', label: 'إدارة البيانات والأمان', icon: Database, roles: ['manager', 'owner'] }
+    { id: 'companies', label: 'إدارة الشركات (المالك)', icon: Building2, roles: ['owner'], description: 'إنشاء وإدارة الشركات المتعددة في النظام' },
+    { id: 'company_profile', label: 'هوية النظام الأساسية', icon: Building2, roles: ['manager', 'owner'], description: 'إدارة معلومات المنشأة والتفضيلات المالية وتخصيص الفواتير' },
+    { id: 'general', label: 'الإعدادات العامة', icon: SettingsIcon, roles: ['manager', 'owner'], description: 'التحكم بالخيارات العامة للنظام' },
+    { id: 'whatsapp', label: 'مكتبة واتساب المجانية والرسائل', icon: MessageCircle, roles: ['manager', 'owner'], description: 'إعداد رسائل واتساب الآلية والقوالب' },
+    { id: 'notifications', label: 'البريد والإشعارات', icon: Mail, roles: ['manager', 'owner'], description: 'إدارة إشعارات البريد الإلكتروني والتنبيهات' },
+    { id: 'attendance', label: 'نظام الدوام والـ GPS', icon: Clock, roles: ['manager', 'owner'], description: 'إعدادات تسجيل الحضور والانصراف والمواقع' },
+    { id: 'ai', label: 'الذكاء الاصطناعي', icon: Sparkles, roles: ['manager', 'owner'], description: 'إعداد مفاتيح API وتفضيلات الذكاء الاصطناعي' },
+    { id: 'locations', label: 'المقرات والسكن', icon: MapPin, roles: ['manager', 'owner'], description: 'إدارة مواقع العمل ومقرات سكن العمال' },
+    { id: 'banks', label: 'الحسابات البنكية', icon: CreditCard, roles: ['manager', 'owner'], description: 'إدارة الحسابات البنكية وطرق الدفع' },
+    { id: 'aliphia', label: 'الربط المحاسبي (ألف ياء)', icon: Globe, roles: ['manager', 'owner'], description: 'ربط النظام مع منصة ألف ياء المحاسبية' },
+    { id: 'theme', label: 'المظهر والثيم البصري', icon: Paintbrush, roles: ['manager', 'supervisor', 'employee', 'owner'], description: 'تخصيص الألوان والمظهر البصري للنظام' },
+    { id: 'data', label: 'إدارة البيانات والأمان', icon: Database, roles: ['manager', 'owner'], description: 'النسخ الاحتياطي وأمان البيانات' }
   ];
 
   // Include owner in roles check
@@ -329,7 +331,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
     const loadSettings = async () => {
       const docRef = doc(db, 'system', 'settings');
       const docSnap = await getDoc(docRef);
-      let globalData = {};
+      let globalData: any = {};
       if (docSnap.exists()) {
         globalData = docSnap.data();
         if (globalData.housingLocations) setHousing(globalData.housingLocations);
