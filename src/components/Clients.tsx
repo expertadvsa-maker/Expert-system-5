@@ -22,6 +22,18 @@ import AIQuotationBuilder from "./AIQuotationBuilder";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../lib/AuthContext";
 import { sendNotification } from "../lib/notifications";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../lib/firebase";
+
+function fmtNum(n: number): string {
+  if (!isFinite(n)) return '0';
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+const normalizeArabicText = (text: string): string => {
+  if (!text) return '';
+  return text.toLowerCase().replace(/[أإآا]/g, 'ا').replace(/[ةه]/g, 'ه').replace(/[ىي]/g, 'ي').trim();
+};
 
 export default function Clients() {
   const { profile } = useAuth();
@@ -46,9 +58,57 @@ export default function Clients() {
         fetchAliphiaInvoices(),
         fetchAliphiaQuotations()
       ]);
-      setClients(fetchedClients || []);
-      setInvoices(fetchedInvoices || []);
-      setQuotes(fetchedQuotes || []);
+
+      let finalClients = fetchedClients || [];
+      let finalInvoices = fetchedInvoices || [];
+      let finalQuotes = fetchedQuotes || [];
+
+      if (profile?.role === 'sales_rep') {
+        const [quotesSnap, invoicesSnap, jobsSnap] = await Promise.all([
+          getDocs(query(collection(db, 'quotations'), where('salesRepId', '==', profile.uid))),
+          getDocs(query(collection(db, 'invoices'), where('salesRepId', '==', profile.uid))),
+          getDocs(query(collection(db, 'rep_private_jobs'), where('salesRepId', '==', profile.uid)))
+        ]);
+
+        const allowedClientIds = new Set<string>();
+        const allowedClientNames = new Set<string>();
+
+        quotesSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.clientId) allowedClientIds.add(String(d.clientId));
+          if (d.clientName) allowedClientNames.add(normalizeArabicText(d.clientName));
+        });
+
+        invoicesSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.clientId) allowedClientIds.add(String(d.clientId));
+          if (d.clientName) allowedClientNames.add(normalizeArabicText(d.clientName));
+        });
+
+        jobsSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.clientName) allowedClientNames.add(normalizeArabicText(d.clientName));
+        });
+
+        finalClients = finalClients.filter((c: any) => 
+          allowedClientIds.has(String(c.id)) || 
+          allowedClientNames.has(normalizeArabicText(c.name))
+        );
+
+        const activeClientIds = new Set<string>(finalClients.map((c: any) => String(c.id)));
+
+        finalInvoices = finalInvoices.filter((inv: any) => 
+          activeClientIds.has(String(inv.client_id))
+        );
+
+        finalQuotes = finalQuotes.filter((q: any) => 
+          activeClientIds.has(String(q.client_id))
+        );
+      }
+
+      setClients(finalClients);
+      setInvoices(finalInvoices);
+      setQuotes(finalQuotes);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("فشل في جلب بيانات العملاء. يرجى التحقق من اتصال ألف ياء.");
@@ -58,13 +118,10 @@ export default function Clients() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  const normalizeArabicText = (text: string): string => {
-    if (!text) return '';
-    return text.toLowerCase().replace(/[أإآا]/g, 'ا').replace(/[ةه]/g, 'ه').replace(/[ىي]/g, 'ي').trim();
-  };
+    if (profile) {
+      fetchData();
+    }
+  }, [profile]);
 
   const getClientFinancials = (clientId: string) => {
     const clientInvoices = invoices.filter(inv => String(inv.client_id) === String(clientId));
@@ -221,7 +278,7 @@ export default function Clients() {
                         </div>
                         {balance > 0 && (
                           <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-200 font-bold px-2 py-0.5 text-[10px]">
-                            مستحقات: {balance.toLocaleString()}
+                            مستحقات: {fmtNum(balance)}
                           </Badge>
                         )}
                       </div>
@@ -242,11 +299,11 @@ export default function Clients() {
                       <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
                         <div className="text-center">
                           <p className="text-[10px] font-bold text-slate-400 mb-0.5">الفواتير</p>
-                          <p className="font-black text-slate-700 text-sm">{clientInvoices.length}</p>
+                          <p className="font-black text-slate-700 text-sm">{fmtNum(clientInvoices.length)}</p>
                         </div>
                         <div className="text-left">
                           <p className="text-[10px] font-bold text-slate-400 mb-0.5">إجمالي التعاملات</p>
-                          <p className="font-black text-emerald-600 text-sm">{totalInvoiced.toLocaleString()} ر.س</p>
+                          <p className="font-black text-emerald-600 text-sm">{fmtNum(totalInvoiced)} ر.س</p>
                         </div>
                       </div>
                     </CardContent>
@@ -324,7 +381,7 @@ export default function Clients() {
                             </div>
                             <div>
                               <p className="text-[10px] font-bold text-slate-400">إجمالي الفواتير</p>
-                              <p className="text-lg font-black text-slate-800">{clientInvoices.length}</p>
+                              <p className="text-lg font-black text-slate-800">{fmtNum(clientInvoices.length)}</p>
                             </div>
                           </CardContent>
                         </Card>
@@ -335,7 +392,7 @@ export default function Clients() {
                             </div>
                             <div>
                               <p className="text-[10px] font-bold text-slate-400">إجمالي المبالغ</p>
-                              <p className="text-lg font-black text-slate-800">{totalInvoiced.toLocaleString()} ر.س</p>
+                              <p className="text-lg font-black text-slate-800">{fmtNum(totalInvoiced)} ر.س</p>
                             </div>
                           </CardContent>
                         </Card>
@@ -346,7 +403,7 @@ export default function Clients() {
                             </div>
                             <div>
                               <p className="text-[10px] font-bold text-slate-400">المدفوع</p>
-                              <p className="text-lg font-black text-green-600">{totalPaid.toLocaleString()} ر.س</p>
+                              <p className="text-lg font-black text-green-600">{fmtNum(totalPaid)} ر.س</p>
                             </div>
                           </CardContent>
                         </Card>
@@ -357,7 +414,7 @@ export default function Clients() {
                             </div>
                             <div>
                               <p className={`text-[10px] font-bold ${balance > 0 ? 'text-rose-500' : 'text-slate-400'}`}>المتبقي (المديونية)</p>
-                              <p className={`text-lg font-black ${balance > 0 ? 'text-rose-600' : 'text-slate-800'}`}>{balance.toLocaleString()} ر.س</p>
+                              <p className={`text-lg font-black ${balance > 0 ? 'text-rose-600' : 'text-slate-800'}`}>{fmtNum(balance)} ر.س</p>
                             </div>
                           </CardContent>
                         </Card>
@@ -372,7 +429,7 @@ export default function Clients() {
                               فواتير العميل
                             </h3>
                             <Badge variant="outline" className="font-bold border-slate-200 bg-white">
-                              {clientInvoices.length}
+                              {fmtNum(clientInvoices.length)}
                             </Badge>
                           </div>
                           <div className="p-2 h-[300px] overflow-y-auto custom-scrollbar">
@@ -387,9 +444,9 @@ export default function Clients() {
                                       <p className="text-[10px] font-bold text-slate-500 mt-1">{inv.invoice_date_created || inv.date}</p>
                                     </div>
                                     <div className="text-left">
-                                      <p className="text-sm font-black text-slate-900">{parseFloat(inv.invoice_total || inv.total || 0).toLocaleString()} ر.س</p>
+                                      <p className="text-sm font-black text-slate-900">{fmtNum(parseFloat(inv.invoice_total || inv.total || 0))} ر.س</p>
                                       {parseFloat(inv.invoice_balance || inv.balance || 0) > 0 ? (
-                                        <p className="text-[10px] font-bold text-rose-500">متبقي: {parseFloat(inv.invoice_balance || inv.balance || 0).toLocaleString()}</p>
+                                        <p className="text-[10px] font-bold text-rose-500">متبقي: {fmtNum(parseFloat(inv.invoice_balance || inv.balance || 0))}</p>
                                       ) : (
                                         <p className="text-[10px] font-bold text-emerald-500 flex items-center justify-end gap-1"><CheckCircle2 className="w-3 h-3"/> مدفوعة</p>
                                       )}
@@ -409,7 +466,7 @@ export default function Clients() {
                               عروض الأسعار
                             </h3>
                             <Badge variant="outline" className="font-bold border-slate-200 bg-white">
-                              {clientQuotes.length}
+                              {fmtNum(clientQuotes.length)}
                             </Badge>
                           </div>
                           <div className="p-2 h-[300px] overflow-y-auto custom-scrollbar">
@@ -424,7 +481,7 @@ export default function Clients() {
                                       <p className="text-[10px] font-bold text-slate-500 mt-1">{quote.quote_date_created || quote.date}</p>
                                     </div>
                                     <div className="text-left">
-                                      <p className="text-sm font-black text-slate-900">{parseFloat(quote.quote_total || quote.total || 0).toLocaleString()} ر.س</p>
+                                      <p className="text-sm font-black text-slate-900">{fmtNum(parseFloat(quote.quote_total || quote.total || 0))} ر.س</p>
                                       <p className="text-[10px] font-bold text-slate-400">{quote.status || 'معلق'}</p>
                                     </div>
                                   </div>

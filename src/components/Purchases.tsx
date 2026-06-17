@@ -197,7 +197,7 @@ export default function Purchases() {
         id: doc.id,
         ...doc.data(),
         dateOriginal: doc.data().date?.toDate?.() || new Date(),
-        date: doc.data().date?.toDate?.()?.toLocaleString('ar-SA') || doc.data().date
+        date: doc.data().date?.toDate?.()?.toLocaleString('en-US') || doc.data().date
       }));
       setPurchases(docs);
       setLoading(false);
@@ -538,7 +538,7 @@ export default function Purchases() {
       // WhatsApp Logic
       const isSupervisor = profile.role === 'supervisor';
       const projectName = projects.find(p => p.id === formData.projectId)?.title || 'عام/غير محدد';
-      const message = `🛒 *طلب شراء جديد ${isAutoApproved ? 'وتم اعتماده' : 'بانتظار الاعتماد'}*\n\nمورد: ${finalSupplierName}\n📝 *البيان:* ${finalDescription}\n💰 *المبلغ:* ${Number(formData.amount).toLocaleString('ar-SA')} ر.س\n📁 *المشروع:* ${projectName}\n👤 *مُقدم الطلب:* ${profile.name}\n\nيرجى الدخول للنظام للمراجعة.`;
+      const message = `🛒 *طلب شراء جديد ${isAutoApproved ? 'وتم اعتماده' : 'بانتظار الاعتماد'}*\n\nمورد: ${finalSupplierName}\n📝 *البيان:* ${finalDescription}\n💰 *المبلغ:* ${Number(formData.amount).toLocaleString('en-US')} ر.س\n📁 *المشروع:* ${projectName}\n👤 *مُقدم الطلب:* ${profile.name}\n\nيرجى الدخول للنظام للمراجعة.`;
       
       // إرسال إشعار للمدير تلقائياً عبر واتساب
       await sendWhatsappToManager(message);
@@ -1427,7 +1427,7 @@ export default function Purchases() {
                 </div>
                 <div className="space-y-1">
                   <span className="text-slate-500 font-bold block">التاريخ</span>
-                  <p className="font-medium text-slate-700">{selectedPurchase.invoiceDate ? (selectedPurchase.invoiceDate.toDate ? selectedPurchase.invoiceDate.toDate().toLocaleDateString('ar-SA') : new Date(selectedPurchase.invoiceDate).toLocaleDateString('ar-SA')) : selectedPurchase.date}</p>
+                  <p className="font-medium text-slate-700">{selectedPurchase.invoiceDate ? (selectedPurchase.invoiceDate.toDate ? selectedPurchase.invoiceDate.toDate().toLocaleDateString('en-US') : new Date(selectedPurchase.invoiceDate).toLocaleDateString('en-US')) : selectedPurchase.date}</p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-slate-500 font-bold block">التحقيق والموقع</span>

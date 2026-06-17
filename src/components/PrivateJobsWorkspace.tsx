@@ -548,7 +548,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
             <div className="space-y-1">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">إجمالي قيمة العقود</p>
               <h3 className="text-xl font-black text-slate-900 dark:text-white font-mono">
-                {totalContracts.toLocaleString('ar-SA')} <span className="text-xs font-normal text-slate-500">ر.س</span>
+                {totalContracts.toLocaleString('en-US')} <span className="text-xs font-normal text-slate-500">ر.س</span>
               </h3>
               <p className="text-[9px] text-slate-400 font-bold">{filteredJobs.length} مشروع نشط 🏗️</p>
             </div>
@@ -567,7 +567,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
             <div className="space-y-1">
               <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">إجمالي المقبوضات</p>
               <h3 className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                {totalIncomes.toLocaleString('ar-SA')} <span className="text-xs font-normal text-emerald-500">ر.س</span>
+                {totalIncomes.toLocaleString('en-US')} <span className="text-xs font-normal text-emerald-500">ر.س</span>
               </h3>
               <p className="text-[9px] text-slate-400 font-bold">التحصيلات النقدية المودعة</p>
             </div>
@@ -586,7 +586,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
             <div className="space-y-1">
               <p className="text-[10px] font-black text-rose-500 dark:text-rose-400 uppercase tracking-wider">إجمالي المصروفات</p>
               <h3 className="text-xl font-black text-rose-600 dark:text-rose-400 font-mono">
-                {totalExpenses.toLocaleString('ar-SA')} <span className="text-xs font-normal text-rose-500">ر.س</span>
+                {totalExpenses.toLocaleString('en-US')} <span className="text-xs font-normal text-rose-500">ر.س</span>
               </h3>
               <p className="text-[9px] text-slate-400 font-bold">المواد ومقاولي الباطن</p>
             </div>
@@ -605,7 +605,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
             <div className="space-y-1">
               <p className="text-[10px] font-black text-amber-500 uppercase tracking-wider">عمولة المؤسسة (15%)</p>
               <h3 className="text-xl font-black text-amber-600 font-mono">
-                {totalCommission.toLocaleString('ar-SA')} <span className="text-xs font-normal text-amber-500">ر.س</span>
+                {totalCommission.toLocaleString('en-US')} <span className="text-xs font-normal text-amber-500">ر.س</span>
               </h3>
               <p className="text-[9px] text-slate-400 font-bold">الحصة التشغيلية للشركة</p>
             </div>
@@ -625,7 +625,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
             <div className="space-y-1">
               <p className="text-[10px] font-black text-blue-100 uppercase tracking-wider">صافي الربح الفعلي</p>
               <h3 className="text-xl font-black font-mono">
-                {netProfit.toLocaleString('ar-SA')} <span className="text-xs font-normal text-blue-200">ر.س</span>
+                {netProfit.toLocaleString('en-US')} <span className="text-xs font-normal text-blue-200">ر.س</span>
               </h3>
               <p className="text-[9px] text-blue-100 font-bold">بعد خصم التكاليف والعمولات</p>
             </div>
@@ -794,19 +794,19 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                   <div className="grid grid-cols-4 gap-1.5 bg-slate-50/50 dark:bg-slate-950/50 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800/40 mb-4 text-center">
                     <div>
                       <span className="text-[8px] text-slate-400 dark:text-slate-500 block font-black mb-0.5">العقد</span>
-                      <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 font-mono">{job.contractAmount?.toLocaleString('ar-SA')}</span>
+                      <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 font-mono">{job.contractAmount?.toLocaleString('en-US')}</span>
                     </div>
                     <div>
                       <span className="text-[8px] text-slate-400 dark:text-slate-500 block font-black mb-0.5">العمولة</span>
-                      <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 font-mono">{comm?.toLocaleString('ar-SA')}</span>
+                      <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 font-mono">{comm?.toLocaleString('en-US')}</span>
                     </div>
                     <div>
                       <span className="text-[8px] text-slate-400 dark:text-slate-500 block font-black mb-0.5">المحصل</span>
-                      <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 font-mono">{jobIncome?.toLocaleString('ar-SA')}</span>
+                      <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 font-mono">{jobIncome?.toLocaleString('en-US')}</span>
                     </div>
                     <div>
                       <span className="text-[8px] text-slate-400 dark:text-slate-500 block font-black mb-0.5">الربح</span>
-                      <span className={`text-[11px] font-black font-mono ${jobProfit >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600 dark:text-rose-400'}`}>{jobProfit?.toLocaleString('ar-SA')}</span>
+                      <span className={`text-[11px] font-black font-mono ${jobProfit >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600 dark:text-rose-400'}`}>{jobProfit?.toLocaleString('en-US')}</span>
                     </div>
                   </div>
 
@@ -1096,7 +1096,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                         <option value="">-- لا يوجد ربط مستندي (إدخال يدوي حر) --</option>
                         {quotations.map(q => (
                           <option key={q.id} value={q.id}>
-                            {q.docType === 'invoice' ? 'فاتورة' : 'عرض سعر'} # {q.docNumber || 'بدون رقم'} - {q.clientName} ({(q.totalAmount || 0).toLocaleString('ar-SA')} ر.س)
+                            {q.docType === 'invoice' ? 'فاتورة' : 'عرض سعر'} # {q.docNumber || 'بدون رقم'} - {q.clientName} ({(q.totalAmount || 0).toLocaleString('en-US')} ر.س)
                           </option>
                         ))}
                       </select>
@@ -1361,7 +1361,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
               <Wallet className="w-5 h-5 text-amber-600" />
               {isManager ? 'سجل التدفقات المالية والمقبوضات المفصح عنها للمندوب' : 'دفتر الحسابات والتدفقات المالية للمشروع'}
             </DialogTitle>
-            <p className="text-[11px] text-slate-500 font-bold mt-1">المشروع: {selectedJobForTx?.projectTitle} | قيمة العقد الكلية: {selectedJobForTx?.contractAmount?.toLocaleString('ar-SA')} ر.س</p>
+            <p className="text-[11px] text-slate-500 font-bold mt-1">المشروع: {selectedJobForTx?.projectTitle} | قيمة العقد الكلية: {selectedJobForTx?.contractAmount?.toLocaleString('en-US')} ر.س</p>
           </DialogHeader>
 
           {selectedJobForTx && (
@@ -1395,7 +1395,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                             </td>
                             <td className="p-2.5 text-center text-slate-500">{tx.date}</td>
                             <td className={`p-2.5 text-left font-black ${tx.type === 'income' ? 'text-green-600' : 'text-rose-600'}`}>
-                              {tx.type === 'income' ? '+' : '-'}{(tx.amount || 0).toLocaleString('ar-SA')} ر.س
+                              {tx.type === 'income' ? '+' : '-'}{(tx.amount || 0).toLocaleString('en-US')} ر.س
                             </td>
                             {isSalesRep && (
                               <td className="p-2.5 text-center">
@@ -1537,7 +1537,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
               <div className="space-y-3">
                 <div className="flex justify-between items-center bg-slate-50 p-3.5 rounded-2xl border border-slate-100 mb-2">
                   <span className="font-bold text-slate-500">إجمالي قيمة العقود الخاصة:</span>
-                  <span className="font-black text-sm text-slate-800">{totalContracts.toLocaleString('ar-SA')} ر.س</span>
+                  <span className="font-black text-sm text-slate-800">{totalContracts.toLocaleString('en-US')} ر.س</span>
                 </div>
                 <div className="border border-slate-100 rounded-2xl overflow-x-auto">
                   <table className="w-full text-right text-xs">
@@ -1576,7 +1576,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                             )}
                           </td>
                           <td className="p-3 text-left font-black text-slate-700">
-                            {(job.contractAmount || 0).toLocaleString('ar-SA')} ر.س
+                            {(job.contractAmount || 0).toLocaleString('en-US')} ر.س
                           </td>
                           <td className="p-3 text-center text-slate-500 text-[10px]">
                             {job.startDate || '—'}
@@ -1613,7 +1613,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                 <div className="space-y-3">
                   <div className="flex justify-between items-center bg-emerald-50/50 p-3.5 rounded-2xl border border-emerald-100 mb-2">
                     <span className="font-bold text-emerald-800">إجمالي المقبوضات المحصلة:</span>
-                    <span className="font-black text-sm text-emerald-700">{totalIncomes.toLocaleString('ar-SA')} ر.س</span>
+                    <span className="font-black text-sm text-emerald-700">{totalIncomes.toLocaleString('en-US')} ر.س</span>
                   </div>
                   {allIncomes.length === 0 ? (
                     <div className="text-center py-10 text-slate-400">
@@ -1641,7 +1641,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                               <td className="p-3 font-bold text-slate-700">{tx.recipientOrSource || tx.clientName}</td>
                               <td className="p-3 text-slate-500">{tx.description}</td>
                               <td className="p-3 text-center text-slate-400 text-[10px]">{tx.date}</td>
-                              <td className="p-3 text-left font-black text-emerald-600">+{tx.amount.toLocaleString('ar-SA')} ر.س</td>
+                              <td className="p-3 text-left font-black text-emerald-600">+{tx.amount.toLocaleString('en-US')} ر.س</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1669,7 +1669,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                 <div className="space-y-3">
                   <div className="flex justify-between items-center bg-rose-50/50 p-3.5 rounded-2xl border border-rose-100 mb-2">
                     <span className="font-bold text-rose-800">إجمالي المصروفات والتكاليف:</span>
-                    <span className="font-black text-sm text-rose-600">{totalExpenses.toLocaleString('ar-SA')} ر.س</span>
+                    <span className="font-black text-sm text-rose-600">{totalExpenses.toLocaleString('en-US')} ر.س</span>
                   </div>
                   {allExpenses.length === 0 ? (
                     <div className="text-center py-10 text-slate-400">
@@ -1697,7 +1697,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                               <td className="p-3 font-bold text-slate-700">{tx.recipientOrSource || 'غير محدد'}</td>
                               <td className="p-3 text-slate-500">{tx.description}</td>
                               <td className="p-3 text-center text-slate-400 text-[10px]">{tx.date}</td>
-                              <td className="p-3 text-left font-black text-rose-500">-{tx.amount.toLocaleString('ar-SA')} ر.س</td>
+                              <td className="p-3 text-left font-black text-rose-500">-{tx.amount.toLocaleString('en-US')} ر.س</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1714,7 +1714,7 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                 <div className="space-y-3">
                   <div className="flex justify-between items-center bg-amber-50 p-3.5 rounded-2xl border border-amber-200 mb-2">
                     <span className="font-bold text-amber-800">إجمالي عمولة المؤسسة المتراكمة (15%):</span>
-                    <span className="font-black text-sm text-amber-600">{totalCommission.toLocaleString('ar-SA')} ر.س</span>
+                    <span className="font-black text-sm text-amber-600">{totalCommission.toLocaleString('en-US')} ر.س</span>
                   </div>
                   <p className="text-[10px] text-slate-400 leading-relaxed">تُحتسب هذه العمولة على المبيعات والمشاريع المسهلة للمندوبين عبر رخصة وسجلات المؤسسة الرسمية بمعدل 15% من قيمة العقد الإجمالية.</p>
                   {companyJobs.length === 0 ? (
@@ -1747,8 +1747,8 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                                   {isManager && <p className="text-[9px] text-amber-700 font-bold mt-0.5">المندوب: {job.salesRepName || getRepName(job.salesRepId)}</p>}
                                 </td>
                                 <td className="p-3 font-bold text-slate-700">{job.clientName}</td>
-                                <td className="p-3 text-left font-bold text-slate-600">{(job.contractAmount || 0).toLocaleString('ar-SA')} ر.س</td>
-                                <td className="p-3 text-left font-black text-amber-600">{comm.toLocaleString('ar-SA')} ر.س</td>
+                                <td className="p-3 text-left font-bold text-slate-600">{(job.contractAmount || 0).toLocaleString('en-US')} ر.س</td>
+                                <td className="p-3 text-left font-black text-amber-600">{comm.toLocaleString('en-US')} ر.س</td>
                                 <td className="p-3 text-center font-bold text-emerald-600">{collectPercent}%</td>
                                 <td className="p-3 text-center">
                                   <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
@@ -1775,21 +1775,21 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                   <div className="grid grid-cols-3 gap-3">
                     <div className="bg-emerald-50/50 border border-emerald-100 p-3 rounded-2xl text-center">
                       <span className="text-[9px] font-bold text-emerald-800 block">إجمالي الإيرادات (المحصلة)</span>
-                      <span className="text-xs font-black text-emerald-700 mt-1 block">{totalIncomes.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="text-xs font-black text-emerald-700 mt-1 block">{totalIncomes.toLocaleString('en-US')} ر.س</span>
                     </div>
                     <div className="bg-rose-50/50 border border-rose-100 p-3 rounded-2xl text-center">
                       <span className="text-[9px] font-bold text-rose-800 block">إجمالي المصاريف المباشرة</span>
-                      <span className="text-xs font-black text-rose-600 mt-1 block">{totalExpenses.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="text-xs font-black text-rose-600 mt-1 block">{totalExpenses.toLocaleString('en-US')} ر.س</span>
                     </div>
                     <div className="bg-amber-50/50 border border-amber-100 p-3 rounded-2xl text-center">
                       <span className="text-[9px] font-bold text-amber-800 block">العمولة المستقطعة للمؤسسة</span>
-                      <span className="text-xs font-black text-amber-600 mt-1 block">{totalCommission.toLocaleString('ar-SA')} ر.س</span>
+                      <span className="text-xs font-black text-amber-600 mt-1 block">{totalCommission.toLocaleString('en-US')} ر.س</span>
                     </div>
                   </div>
 
                   <div className="flex justify-between items-center bg-blue-600 text-white p-4 rounded-2xl">
                     <span className="font-bold text-[10px]">صافي الربح الفعلي المجمع للمشروعات:</span>
-                    <span className="font-black text-sm">{netProfit.toLocaleString('ar-SA')} ر.س</span>
+                    <span className="font-black text-sm">{netProfit.toLocaleString('en-US')} ر.س</span>
                   </div>
 
                   <div className="border border-slate-100 rounded-2xl overflow-x-auto">
@@ -1819,11 +1819,11 @@ export default function PrivateJobsWorkspace({ onNavigate }: PrivateJobsWorkspac
                                 <p className="font-black text-slate-800">{job.projectTitle}</p>
                                 {isManager && <p className="text-[9px] text-amber-700 font-bold mt-0.5">المندوب: {job.salesRepName || getRepName(job.salesRepId)}</p>}
                               </td>
-                              <td className="p-3 text-left text-emerald-600 font-bold">{jobIncome.toLocaleString('ar-SA')} ر.س</td>
-                              <td className="p-3 text-left text-rose-500 font-bold">{jobExpense.toLocaleString('ar-SA')} ر.س</td>
-                              <td className="p-3 text-left text-amber-600 font-bold">{comm.toLocaleString('ar-SA')} ر.س</td>
+                              <td className="p-3 text-left text-emerald-600 font-bold">{jobIncome.toLocaleString('en-US')} ر.س</td>
+                              <td className="p-3 text-left text-rose-500 font-bold">{jobExpense.toLocaleString('en-US')} ر.س</td>
+                              <td className="p-3 text-left text-amber-600 font-bold">{comm.toLocaleString('en-US')} ر.س</td>
                               <td className={`p-3 text-left font-black ${profit >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
-                                {profit.toLocaleString('ar-SA')} ر.س
+                                {profit.toLocaleString('en-US')} ر.س
                               </td>
                               <td className="p-3 text-center font-bold">
                                 <span className={`px-2 py-0.5 rounded-full text-[9px] ${
