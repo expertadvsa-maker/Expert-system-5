@@ -51,7 +51,8 @@ import {
   where,
   getDoc,
   getDocs,
-  updateDoc
+  updateDoc,
+  increment
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
@@ -463,6 +464,46 @@ export default function Purchases() {
       }
 
       const docRef = await addDoc(collection(db, 'transactions'), transactionData);
+
+      // ---- PROCUREMENT AUTOMATION: INVENTORY SYNC (AUTO-APPROVE) ----
+      if (isAutoApproved) {
+        try {
+          const items = formData.items || [];
+          for (const item of items) {
+            const itemName = typeof item === 'string' ? item : (item.name || 'مادة غير معروفة');
+            const qty = typeof item === 'object' && item.quantity ? Number(item.quantity) : 1;
+            const itemUnit = typeof item === 'object' && item.unit ? item.unit : 'حبة';
+
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            const activeCompanyId = profile?.companyId; 
+
+            const invQuery = query(collection(db, 'inventory'), where('name', '==', itemName));
+            const invSnap = await getDocs(invQuery);
+            const matchedDoc = invSnap.docs.find(d => !d.data().companyId || d.data().companyId === activeCompanyId);
+            
+            if (matchedDoc) {
+              await updateDoc(doc(db, 'inventory', matchedDoc.id), {
+                quantity: increment(qty),
+                lastUpdated: new Date().toISOString()
+              });
+            } else {
+              await addDoc(collection(db, 'inventory'), {
+                name: itemName,
+                category: 'مواد مضافة آلياً',
+                quantity: qty,
+                unit: itemUnit,
+                reorderLevel: 5,
+                companyId: activeCompanyId || null,
+                lastUpdated: new Date().toISOString()
+              });
+            }
+          }
+        } catch (invError) {
+          console.error("Error updating inventory on auto-approve:", invError);
+        }
+      }
+      // ------------------------------------------------
 
       // Removed duplicate bank deduction: System aggregates balances dynamically from transactions
 

@@ -27,7 +27,10 @@ import {
   updateDoc, 
   doc, 
   serverTimestamp,
-  getDoc
+  getDoc,
+  getDocs,
+  addDoc,
+  increment
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
@@ -89,6 +92,55 @@ export default function ApprovalCenter() {
         approvedBy: profile?.uid,
         approvedAt: serverTimestamp()
       });
+
+      // ---- PROCUREMENT AUTOMATION: INVENTORY SYNC ----
+      if (collectionName === 'transactions') {
+        try {
+          const docSnap = await getDoc(doc(db, collectionName, id));
+          if (docSnap.exists() && docSnap.data().type === 'purchase') {
+            const purchaseData = docSnap.data();
+            const items = purchaseData.items || [];
+            
+            for (const item of items) {
+              const itemName = typeof item === 'string' ? item : (item.name || 'مادة غير معروفة');
+              const qty = typeof item === 'object' && item.quantity ? Number(item.quantity) : 1;
+              const itemUnit = typeof item === 'object' && item.unit ? item.unit : 'حبة';
+
+              const invQuery = query(
+                collection(db, 'inventory'), 
+                where('name', '==', itemName)
+              );
+              const invSnap = await getDocs(invQuery);
+              
+              // Filter locally to match company logic
+              const matchedDoc = invSnap.docs.find(d => !d.data().companyId || d.data().companyId === activeCompanyId);
+              
+              if (matchedDoc) {
+                // Item exists, increment quantity
+                await updateDoc(doc(db, 'inventory', matchedDoc.id), {
+                  quantity: increment(qty),
+                  lastUpdated: new Date().toISOString()
+                });
+              } else {
+                // Create new item automatically
+                await addDoc(collection(db, 'inventory'), {
+                  name: itemName,
+                  category: 'مواد مضافة آلياً',
+                  quantity: qty,
+                  unit: itemUnit,
+                  reorderLevel: 5,
+                  companyId: activeCompanyId || null,
+                  lastUpdated: new Date().toISOString()
+                });
+              }
+            }
+          }
+        } catch (invError) {
+          console.error("Error updating inventory:", invError);
+        }
+      }
+      // ------------------------------------------------
+
       await logActivity('اعتماد طلب', `تمت الموافقة على: ${title}`, 'success', 'system', profile?.uid || 'system');
       
       await sendNotification({
