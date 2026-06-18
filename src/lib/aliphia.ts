@@ -19,10 +19,18 @@ const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Re
     const baseDirectUrl = isGuest ? 'https://aliphia.com/v1' : 'https://aliphia.com/v1/api_public';
     const directUrl = `${baseDirectUrl}${cleanPath}`;
     
-    // Use corsproxy.io to bypass browser CORS restrictions and Google Cloud IP blockages
-    const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(directUrl)}`;
+    // Support custom Cloudflare Worker CORS proxy if set, with fallback to corsproxy.io
+    const customProxy = import.meta.env.VITE_ALIPHIA_CORS_PROXY || '';
+    let proxiedUrl = '';
     
-    console.log(`🔌 [Aliphia Fallback] Calling direct via CORS proxy: ${proxiedUrl}`);
+    if (customProxy) {
+      const cleanProxy = customProxy.endsWith('/') ? customProxy.slice(0, -1) : customProxy;
+      proxiedUrl = `${cleanProxy}?${encodeURIComponent(directUrl)}`;
+      console.log(`🔌 [Aliphia Fallback] Calling direct via Custom Worker CORS Proxy: ${proxiedUrl}`);
+    } else {
+      proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(directUrl)}`;
+      console.log(`🔌 [Aliphia Fallback] Calling direct via Public CORS proxy: ${proxiedUrl}`);
+    }
     
     // Clone options to prevent mutation issues
     const directOptions = { ...options };
