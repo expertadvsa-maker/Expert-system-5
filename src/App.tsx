@@ -1726,7 +1726,7 @@ function AppContent() {
           <motion.aside
             initial={{ width: 0, opacity: 0 }}
             animate={{
-              width: isSidebarCollapsed && window.innerWidth >= 1024 ? 80 : 240,
+              width: isSidebarCollapsed && window.innerWidth >= 1024 ? 80 : 211,
               opacity: 1,
               x: 0,
             }}
@@ -2225,7 +2225,7 @@ function AppContent() {
                 {activeTab === "reports_gallery" && <ReportsGallery />}
                 {activeTab === "smart_reports" && <SmartReports />}
                 {activeTab === "sales" && <Sales />}
-                {activeTab === "clients" && <Clients />}
+                {activeTab === "clients" && <Clients onNavigate={setActiveTab} />}
                 {activeTab === "invoices" && <Invoices />}
                 {activeTab === "quotations" && <Quotations />}
                 {activeTab === "sales_reps" && (

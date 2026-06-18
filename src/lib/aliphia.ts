@@ -2,6 +2,31 @@
 
 const ALIPHIA_API_URL = '/api_public';
 
+// Unified fetch helper with automatic direct fallback to bypass Google Cloud IP block (403) or offline backend (404)
+const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Response> => {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  try {
+    const response = await fetch(`${ALIPHIA_API_URL}${cleanPath}`, options);
+    // 403 = Server IP is blocked by Aliphia. 
+    // 404 = Express backend is not running on App Hosting.
+    if (response.status === 403 || response.status === 404) {
+      console.warn(`⚠️ Aliphia proxy returned status ${response.status}. Attempting direct browser connection to bypass...`);
+      throw new Error(`Proxy status: ${response.status}`);
+    }
+    return response;
+  } catch (error) {
+    const isGuest = cleanPath.startsWith('/guest/') || cleanPath.startsWith('guest/');
+    const baseDirectUrl = isGuest ? 'https://aliphia.com/v1' : 'https://aliphia.com/v1/api_public';
+    const directUrl = `${baseDirectUrl}${cleanPath}`;
+    
+    console.log(`🔌 [Aliphia Fallback] Calling direct: ${directUrl}`);
+    
+    // Clone options to prevent mutation issues
+    const directOptions = { ...options };
+    return await fetch(directUrl, directOptions);
+  }
+};
+
 // Local cache persistence helper for connection stability
 const saveToCache = (key: string, data: any) => {
   try {
@@ -188,7 +213,7 @@ export const fetchAliphiaClients = async () => {
   }
 
   try {
-    const response = await fetch(`${ALIPHIA_API_URL}/clients/active`, {
+    const response = await aliphiaFetch('/clients/active', {
       method: 'GET',
       headers: await getHeaders(''),
     });
@@ -283,7 +308,7 @@ export const createAliphiaDocument = async (
 
       console.log(`📤 [Aliphia] ${type} POST → ${endpoint} | Payload:`, JSON.stringify(createPayload));
 
-      const createResponse = await fetch(`${ALIPHIA_API_URL}${endpoint}`, {
+      const createResponse = await aliphiaFetch(endpoint, {
         method: 'POST',
         headers: await getHeaders('application/json'),
         body: JSON.stringify(createPayload)
@@ -368,7 +393,7 @@ export const createAliphiaDocument = async (
 
     console.log(`📤 [Aliphia] ${type} PUT → ${endpoint} | Payload:`, JSON.stringify(updatePayload));
 
-    const updateResponse = await fetch(`${ALIPHIA_API_URL}${endpoint}`, {
+    const updateResponse = await aliphiaFetch(endpoint, {
       method: 'PUT',
       headers: await getHeaders('application/json'),
       body: JSON.stringify(updatePayload)
@@ -387,7 +412,7 @@ export const createAliphiaDocument = async (
 
     // الخطوة 3: جلب تفاصيل المستند بالكامل للحصول على رقم المستند ورابط PDF
     console.log(`🔄 [Aliphia] Fetching details for ${type} ${docId}...`);
-    const detailResponse = await fetch(`${ALIPHIA_API_URL}${endpoint}/${docId}`, {
+    const detailResponse = await aliphiaFetch(`${endpoint}/${docId}`, {
       method: 'GET',
       headers: await getHeaders(''),
     });
@@ -450,7 +475,7 @@ export const createAliphiaClient = async (clientData: { name: string; phone?: st
     if (clientData.phone) formData.append('client_phone', clientData.phone);
     if (clientData.email) formData.append('client_email', clientData.email);
 
-    const response = await fetch(`${ALIPHIA_API_URL}/client`, {
+    const response = await aliphiaFetch('/client', {
       method: 'POST',
       headers: await getHeaders('application/x-www-form-urlencoded'),
       body: formData.toString()
@@ -487,7 +512,7 @@ export const checkAliphiaConnection = async () => {
 
   try {
     const headers = await getHeaders('');
-    const response = await fetch(`${ALIPHIA_API_URL}/clients/active`, {
+    const response = await aliphiaFetch('/clients/active', {
       method: 'GET',
       headers,
     });
@@ -538,7 +563,7 @@ export const fetchAliphiaInvoices = async () => {
   if (!creds) return [];
 
   try {
-    const response = await fetch(`${ALIPHIA_API_URL}/invoices`, {
+    const response = await aliphiaFetch('/invoices', {
       method: 'GET',
       headers: await getHeaders(''),
     });
@@ -589,7 +614,7 @@ export const fetchAliphiaQuotations = async () => {
   if (!creds) return [];
 
   try {
-    const response = await fetch(`${ALIPHIA_API_URL}/quotes`, {
+    const response = await aliphiaFetch('/quotes', {
       method: 'GET',
       headers: await getHeaders(''),
     });
@@ -639,7 +664,7 @@ export const fetchAliphiaInvoiceDetails = async (invoiceId: string) => {
   if (!creds) throw new Error('بيانات الربط مع ألف ياء غير متوفرة');
 
   try {
-    const response = await fetch(`${ALIPHIA_API_URL}/invoice/${invoiceId}`, {
+    const response = await aliphiaFetch(`/invoice/${invoiceId}`, {
       method: 'GET',
       headers: await getHeaders(''),
     });
@@ -676,7 +701,7 @@ export const fetchAliphiaQuotationDetails = async (quoteId: string) => {
   if (!creds) throw new Error('بيانات الربط مع ألف ياء غير متوفرة');
 
   try {
-    const response = await fetch(`${ALIPHIA_API_URL}/quote/${quoteId}`, {
+    const response = await aliphiaFetch(`/quote/${quoteId}`, {
       method: 'GET',
       headers: await getHeaders(''),
     });
