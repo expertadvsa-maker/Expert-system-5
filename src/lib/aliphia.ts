@@ -19,11 +19,14 @@ const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Re
     const baseDirectUrl = isGuest ? 'https://aliphia.com/v1' : 'https://aliphia.com/v1/api_public';
     const directUrl = `${baseDirectUrl}${cleanPath}`;
     
-    console.log(`🔌 [Aliphia Fallback] Calling direct: ${directUrl}`);
+    // Use corsproxy.io to bypass browser CORS restrictions and Google Cloud IP blockages
+    const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(directUrl)}`;
+    
+    console.log(`🔌 [Aliphia Fallback] Calling direct via CORS proxy: ${proxiedUrl}`);
     
     // Clone options to prevent mutation issues
     const directOptions = { ...options };
-    return await fetch(directUrl, directOptions);
+    return await fetch(proxiedUrl, directOptions);
   }
 };
 
