@@ -145,7 +145,19 @@ export default function SmartButler() {
     const fetchBotEmployees = async () => {
       try {
         const snap = await getDocs(collection(db, 'users'));
-        setBotEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const leavesSnap = await getDocs(query(collection(db, 'leaveRequests'), where('status', '==', 'approved')));
+        const today = new Date().toISOString().split('T')[0];
+        const activeLeavesUserIds = new Set(
+          leavesSnap.docs
+            .map(d => d.data())
+            .filter(l => l.startDate <= today && l.endDate >= today)
+            .map(l => l.userId)
+        );
+        
+        setBotEmployees(snap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(user => !activeLeavesUserIds.has(user.id) && !activeLeavesUserIds.has(user.uid))
+        );
       } catch (e) {
         console.warn("Could not fetch users list for bot search", e);
       }

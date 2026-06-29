@@ -44,8 +44,11 @@ export default function AliphiaClientSelector({ onSelect, selectedClientId }: Al
   };
 
   useEffect(() => {
+    fetchClients();
+  }, []);
+
+  useEffect(() => {
     if (isOpen) {
-      fetchClients();
       setView('list');
       setSearchQuery('');
     }

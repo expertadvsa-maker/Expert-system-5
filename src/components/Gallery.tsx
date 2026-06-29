@@ -50,7 +50,7 @@ interface GalleryItem {
 }
 
 export default function Gallery() {
-  const { activeCompanyId } = useAuth();
+  const { activeCompanyId, profile } = useAuth();
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -128,11 +128,29 @@ export default function Gallery() {
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
+      // If user is not manager/owner, only show items belonging to projects assigned to them or created/uploaded by them
+      if (profile?.role !== 'manager' && profile?.role !== 'owner' && profile?.email !== 'expertadvsa@gmail.com') {
+        const fullData = item.fullData || {};
+        const uidMatch = 
+          fullData.createdBy === profile.uid || 
+          fullData.supervisorId === profile.uid || 
+          fullData.userId === profile.uid ||
+          fullData.createdBy === profile.id ||
+          fullData.userId === profile.id;
+          
+        const isAssigned = Array.isArray(fullData.assignedEmployees) && 
+                           (fullData.assignedEmployees.includes(profile.uid) || fullData.assignedEmployees.includes(profile.id));
+          
+        if (!uidMatch && !isAssigned) {
+          return false;
+        }
+      }
+
       const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesSource = activeSource === 'all' || item.source === activeSource;
       return matchesSearch && matchesSource;
     });
-  }, [items, searchTerm, activeSource]);
+  }, [items, searchTerm, activeSource, profile]);
 
   const handleDelete = async (item: GalleryItem) => {
     // Custom non-blocking confirmation could be better, but let's fix the logic first

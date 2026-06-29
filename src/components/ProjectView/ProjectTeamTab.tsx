@@ -30,6 +30,7 @@ interface ProjectTeamTabProps {
   setActiveTab: (tab: string) => void;
   activeSubTab: 'milestones' | 'team_list';
   setActiveSubTab: (tab: 'milestones' | 'team_list') => void;
+  activeTab?: string;
 }
 
 export default function ProjectTeamTab({
@@ -51,26 +52,33 @@ export default function ProjectTeamTab({
   setActiveTab,
   activeSubTab,
   setActiveSubTab,
+  activeTab,
 }: ProjectTeamTabProps) {
+  const showMilestones = activeTab ? activeTab === 'milestones' : activeSubTab === 'milestones';
+  const showTeamList = activeTab ? activeTab === 'team' : activeSubTab === 'team_list';
+  const showSubTabsHeader = !activeTab;
+
   return (
     <div className="flex flex-col gap-6 w-full">
       {/* Sub tabs inside Team area */}
-      <div className="flex bg-slate-100 p-1.5 rounded-2xl w-fit self-start gap-1">
-        <button 
-          onClick={() => setActiveSubTab('milestones')}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${activeSubTab === 'milestones' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-        >
-          هيكلة مراحل التنفيذ
-        </button>
-        <button 
-          onClick={() => setActiveSubTab('team_list')}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${activeSubTab === 'team_list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-        >
-          الفريق الفني للإنتاج والتركيب
-        </button>
-      </div>
+      {showSubTabsHeader && (
+        <div className="flex bg-slate-100 p-1.5 rounded-2xl w-fit self-start gap-1">
+          <button 
+            onClick={() => setActiveSubTab('milestones')}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${activeSubTab === 'milestones' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            هيكلة مراحل التنفيذ
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('team_list')}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${activeSubTab === 'team_list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            الفريق الفني للإنتاج والتركيب
+          </button>
+        </div>
+      )}
 
-      {activeSubTab === 'milestones' && (
+      {showMilestones && (
         <motion.div 
            key="milestones_sub"
            initial={{ opacity: 0, y: 10 }}
@@ -274,7 +282,7 @@ export default function ProjectTeamTab({
         </motion.div>
       )}
 
-      {activeSubTab === 'team_list' && (
+      {showTeamList && (
         <motion.div 
            key="team_list_sub"
            initial={{ opacity: 0, y: 10 }}

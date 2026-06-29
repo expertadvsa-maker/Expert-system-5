@@ -671,9 +671,9 @@ function AppContent() {
             icon: Briefcase,
             roles: ["supervisor"],
             subItems: [
-              { id: "projects", label: "المشاريع الميدانية", roles: ["supervisor"] },
-              { id: "inventory", label: "المستودع والمواد", roles: ["supervisor"] },
-              { id: "employees", label: "فريق العمل", roles: ["supervisor"] },
+              { id: "projects", label: "المشاريع الميدانية", roles: ["supervisor"], icon: Briefcase },
+              { id: "inventory", label: "المستودع والمواد", roles: ["supervisor"], icon: Package },
+              { id: "employees", label: "فريق العمل", roles: ["supervisor"], icon: Users },
             ]
           },
           {
@@ -682,8 +682,8 @@ function AppContent() {
             icon: Camera,
             roles: ["supervisor"],
             subItems: [
-              { id: "camera", label: "الماسح الذكي", roles: ["supervisor"] },
-              { id: "gallery", label: "التقارير المصورة", roles: ["supervisor"] },
+              { id: "camera", label: "الماسح الذكي", roles: ["supervisor"], icon: Camera },
+              { id: "gallery", label: "التقارير المصورة", roles: ["supervisor"], icon: ImageIcon },
             ]
           }
         ]
@@ -1771,13 +1771,13 @@ function AppContent() {
                         )}
                       </div>
                       
-                      {companies.length > 0 && profile?.role !== "sales_rep" && (
+                      {companies.length > 0 && (profile?.role === "manager" || profile?.role === "owner") && (
                         <ChevronDown className="w-4 h-4 text-white/60 group-hover:text-white shrink-0 transition-colors" />
                       )}
                     </div>
 
                     {/* Hidden interactive select */}
-                    {companies.length > 0 && profile?.role !== "sales_rep" && (
+                    {companies.length > 0 && (profile?.role === "manager" || profile?.role === "owner") && (
                       <select
                         value={activeCompanyId || ''}
                         onChange={(e) => {
@@ -1802,9 +1802,30 @@ function AppContent() {
 
             <nav className="flex-1 overflow-visible py-4 no-scrollbar">
               {menuGroups.map((group) => {
-                const visibleItems = group.items.filter((item) =>
+                const rawVisibleItems = group.items.filter((item) =>
                   item.roles.includes(profile?.role || "employee") || profile?.role === "owner"
                 );
+                
+                const visibleItems: any[] = [];
+                rawVisibleItems.forEach((item) => {
+                  const isSupervisor = profile?.role === "supervisor";
+                  const rawSubItems = item.subItems && item.subItems.length > 0;
+                  const allowedSubItems = rawSubItems
+                    ? item.subItems.filter((s: any) => s.roles.includes(profile?.role || "employee") || profile?.role === "owner")
+                    : [];
+                  
+                  if (isSupervisor && rawSubItems) {
+                    allowedSubItems.forEach((subItem: any) => {
+                      visibleItems.push({
+                        ...subItem,
+                        icon: subItem.icon || item.icon, // fallback to parent's icon
+                      });
+                    });
+                  } else {
+                    visibleItems.push(item);
+                  }
+                });
+
                 if (visibleItems.length === 0) return null;
                 const showFull = !isSidebarCollapsed;
 
@@ -1881,7 +1902,7 @@ function AppContent() {
                               {/* Windows 11 / CAD Software Style Flyout Submenu */}
                               {isHovered && (
                                 <div 
-                                  className="absolute right-[calc(100%-4px)] top-0 mr-2 z-50 w-48 bg-white dark:bg-zinc-950 border border-slate-200/60 dark:border-zinc-800/85 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.18)] p-2 flex flex-col gap-1 text-right animate-in fade-in slide-in-from-right-2 duration-150"
+                                  className="absolute right-[calc(100%-4px)] top-0 mr-2 z-50 w-48 bg-white dark:bg-zinc-950 border border-slate-200/60 dark:border-zinc-800/85 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.18)] p-2 flex flex-col gap-1 text-right animate-in fade-in slide-in-from-right-2 duration-150 after:content-[''] after:absolute after:inset-y-0 after:-right-4 after:w-4 after:bg-transparent"
                                   onMouseEnter={() => setHoveredSubMenuId(currentItem.id)}
                                   onMouseLeave={() => setHoveredSubMenuId(null)}
                                 >
@@ -2166,7 +2187,7 @@ function AppContent() {
               <div className="text-right">
                 <p className="text-sm font-black text-slate-800 leading-tight">{profile?.name}</p>
                 <p className="text-[10px] text-slate-400 font-bold">
-                  {profile?.role === "manager" ? "مدير عام" :
+                  {(profile?.role === "manager" || profile?.role === "owner") ? "مدير عام" :
                    profile?.role === "supervisor" ? "مشرف" :
                    profile?.role === "sales_rep" ? "مندوب مبيعات" : "موظف"}
                 </p>
@@ -2606,7 +2627,7 @@ function AppContent() {
                 </button>
 
                 {/* 5. Settings */}
-                {profile?.role === "manager" && (
+                {(profile?.role === "manager" || profile?.role === "owner") && (
                   <button
                     onClick={() => {
                       setContextMenu(prev => ({ ...prev, visible: false }));

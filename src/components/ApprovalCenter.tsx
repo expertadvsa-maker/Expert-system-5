@@ -38,12 +38,15 @@ import { getCompanyQuery } from '../lib/firestoreUtils';
 import { logActivity } from '../lib/activity';
 import { sendNotification } from '../lib/notifications';
 import { toast } from 'sonner';
+import { approveReceiptVoucher, rejectReceiptVoucher } from '../lib/vouchersService';
+import VoucherApprovalCard from './ApprovalCenter/VoucherApprovalCard';
 
 export default function ApprovalCenter() {
   const { profile, activeCompanyId } = useAuth();
   const [leaves, setLeaves] = useState<any[]>([]);
   const [adjustments, setAdjustments] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [vouchers, setVouchers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -77,15 +80,22 @@ export default function ApprovalCenter() {
       setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
+    // 4. Pending Receipt Vouchers (Client uploads)
+    const qVouchers = query(collection(db, 'receipt_vouchers'), where('status', '==', 'pending'));
+    const unsubVouchers = onSnapshot(qVouchers, (snapshot) => {
+      setVouchers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
     setLoading(false);
     return () => {
       unsubLeaves();
       unsubAdj();
       unsubTx();
+      unsubVouchers();
     };
   }, [activeCompanyId]);
 
-  const handleApprove = async (collectionName: string, id: string, title: string) => {
+  const handleApprove = async (collectionName: string, id: string, title: string, targetUserId?: string) => {
     try {
       await updateDoc(doc(db, collectionName, id), {
         status: 'approved',
@@ -148,7 +158,8 @@ export default function ApprovalCenter() {
         message: `تمت الموافقة النهائية على: ${title}`,
         type: 'approval',
         category: 'system',
-        targetRole: 'all',
+        targetRole: targetUserId ? ('direct' as any) : 'all',
+        targetUserId: targetUserId,
         tab: 'approvals'
       });
 
@@ -158,7 +169,7 @@ export default function ApprovalCenter() {
     }
   };
 
-  const handleReject = async (collectionName: string, id: string, title: string) => {
+  const handleReject = async (collectionName: string, id: string, title: string, targetUserId?: string) => {
     try {
       await updateDoc(doc(db, collectionName, id), {
         status: 'rejected',
@@ -172,7 +183,8 @@ export default function ApprovalCenter() {
         message: `نأسف، تم رفض طلبك: ${title}. يرجى مراجعة الإدارة للمزيد من التفاصيل.`,
         type: 'error',
         category: 'system',
-        targetRole: 'all', // We could target the specific user if we passed userId
+        targetRole: targetUserId ? ('direct' as any) : 'all',
+        targetUserId: targetUserId,
         tab: 'approvals'
       });
 
@@ -197,15 +209,16 @@ export default function ApprovalCenter() {
         <p className="text-slate-500 font-medium">مراجعة واعتماد الطلبات والقرارات الإدارية الخاصة بالإجازات، الفواتير، والتعديلات المالية</p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-6">
         <StatSummary title="إجازات" count={leaves.length} icon={Plane} color="text-blue-600" />
         <StatSummary title="فواتير" count={transactions.length} icon={FileText} color="text-amber-600" />
         <StatSummary title="مالية" count={adjustments.length} icon={CreditCard} color="text-emerald-600" />
+        <StatSummary title="سندات القبض" count={vouchers.length} icon={CreditCard} color="text-purple-600" />
       </div>
 
       <Tabs defaultValue="leaves" className="w-full">
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
-          <TabsList className="flex w-max sm:grid sm:w-full sm:max-w-md grid-cols-3 rounded-xl p-1 bg-slate-100/80 backdrop-blur-sm shadow-inner min-w-full sm:min-w-0">
+          <TabsList className="flex w-max sm:grid sm:w-full sm:max-w-xl grid-cols-4 rounded-xl p-1 bg-slate-100/80 backdrop-blur-sm shadow-inner min-w-full sm:min-w-0">
             <TabsTrigger value="leaves" className="gap-2 font-black text-[11px] sm:text-xs">
               <Plane className="w-3.5 h-3.5" />
               <span className="whitespace-nowrap">الإجازات ({leaves.length})</span>
@@ -218,6 +231,10 @@ export default function ApprovalCenter() {
               <CreditCard className="w-3.5 h-3.5" />
               <span className="whitespace-nowrap">المالية ({adjustments.length})</span>
             </TabsTrigger>
+            <TabsTrigger value="vouchers" className="gap-2 font-black text-[11px] sm:text-xs">
+              <CreditCard className="w-3.5 h-3.5" />
+              <span className="whitespace-nowrap">سندات القبض ({vouchers.length})</span>
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -229,8 +246,8 @@ export default function ApprovalCenter() {
                 title={leave.type === 'annual' ? 'إجازة سنوية' : 'إجازة مرضية'}
                 user={leave.userName}
                 details={`${leave.startDate} - ${leave.reason}`}
-                onApprove={() => handleApprove('leaveRequests', leave.id, `إجازة ${leave.userName}`)}
-                onReject={() => handleReject('leaveRequests', leave.id, `إجازة ${leave.userName}`)}
+                onApprove={() => handleApprove('leaveRequests', leave.id, `إجازة ${leave.userName}`, leave.userId)}
+                onReject={() => handleReject('leaveRequests', leave.id, `إجازة ${leave.userName}`, leave.userId)}
               />
             ))}
             {leaves.length === 0 && <EmptyState text="لا توجد طلبات إجازة معلقة حالياً" />}
@@ -263,7 +280,15 @@ export default function ApprovalCenter() {
             {adjustments.map((adj) => (
               <ApprovalCard 
                 key={adj.id}
-                title={adj.type === 'bonus' ? 'مكافأة مالية' : 'خصم / سلفة'}
+                title={
+                  adj.type === 'bonus' ? 'مكافأة مالية' :
+                  adj.type === 'deduction' ? 'خصم مالي' :
+                  adj.type === 'loan' ? 'طلب سلفة' :
+                  adj.type === 'custody_deposit' ? 'إيداع عهدة' :
+                  adj.type === 'purchase_expense' ? 'مصروف عهدة' :
+                  adj.type === 'reimbursement_request' ? 'طلب تعويض عجز العهدة (بالسالب)' :
+                  'تعديل مالي'
+                }
                 user={adj.userName}
                 details={`${adj.amount} ر.س - ${adj.reason}`}
                 onApprove={() => handleApprove('financialAdjustments', adj.id, `تعديل مالي ${adj.userName}`)}
@@ -271,6 +296,20 @@ export default function ApprovalCenter() {
               />
             ))}
             {adjustments.length === 0 && <EmptyState text="لا توجد تعديلات مالية تتطلب الاعتماد" />}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="vouchers" className="mt-4 sm:mt-6">
+          <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-6">
+            {vouchers.map((voucher) => (
+              <VoucherApprovalCard 
+                key={voucher.id}
+                voucher={voucher}
+                managerName={profile?.name || 'المدير'}
+                onActionComplete={() => {}}
+              />
+            ))}
+            {vouchers.length === 0 && <EmptyState text="لا توجد سندات قبض بانتظار المراجعة والاعتماد" />}
           </div>
         </TabsContent>
       </Tabs>

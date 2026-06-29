@@ -202,12 +202,15 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
   };
 
   // Locations State
+  const [employees, setEmployees] = useState<any[]>([]);
   const [newOffice, setNewOffice] = useState({
     name: '',
     type: 'office',
     latitude: '',
     longitude: '',
-    address: ''
+    locationLink: '',
+    address: '',
+    assignedEmployees: [] as string[]
   });
 
   // Bank Account State
@@ -327,6 +330,15 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
       }
     );
 
+    // Load Employees
+    const unsubEmployees = onSnapshot(
+      getCompanyQuery('users', activeCompanyId),
+      (snapshot) => {
+        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setEmployees(docs);
+      }
+    );
+
     // Load Global Settings & Active Company Overrides
     const loadSettings = async () => {
       const docRef = doc(db, 'system', 'settings');
@@ -367,6 +379,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
 
     return () => {
       unsubOffices();
+      unsubEmployees();
       unsubBanks();
     };
   }, [activeCompanyId]);
@@ -559,20 +572,51 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      if (!newOffice.latitude || !newOffice.longitude) {
-        throw new Error('يرجى تحديد الإحداثيات');
+      let parsedLat = newOffice.latitude;
+      let parsedLng = newOffice.longitude;
+      
+      if (newOffice.locationLink) {
+        const url = newOffice.locationLink;
+        const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+        const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+        
+        if (atMatch && atMatch.length >= 3) {
+          parsedLat = atMatch[1];
+          parsedLng = atMatch[2];
+        } else if (qMatch && qMatch.length >= 3) {
+          parsedLat = qMatch[1];
+          parsedLng = qMatch[2];
+        }
       }
+
+      if (!parsedLat || !parsedLng) {
+        throw new Error('يرجى إدخال رابط خرائط جوجل صحيح يحتوي على الإحداثيات');
+      }
+      
       await addDoc(collection(db, 'offices'), {
         ...newOffice,
         companyId: activeCompanyId || null,
-        latitude: parseFloat(newOffice.latitude),
-        longitude: parseFloat(newOffice.longitude),
+        latitude: parseFloat(parsedLat),
+        longitude: parseFloat(parsedLng),
         createdAt: new Date().toISOString()
       });
 
+      // Notify the assigned employees
+      for (const empId of newOffice.assignedEmployees) {
+        await sendNotification({
+          title: 'تعيين مقر عمل',
+          message: `تم تعيينك للدوام في المقر الجديد: ${newOffice.name}. يرجى الالتزام بالحضور ضمن النطاق.`,
+          type: 'info',
+          category: 'system',
+          targetRole: 'worker', // Will be ignored if targetUserId is set
+          targetUserId: empId,
+          priority: 'high'
+        });
+      }
+
       await sendNotification({
         title: 'إضافة مقر جديد',
-        message: `تم تسجيل مقر جديد: ${newOffice.name}`,
+        message: `تم تسجيل مقر جديد: ${newOffice.name} وتعيين ${newOffice.assignedEmployees.length} موظفين.`,
         type: 'info',
         category: 'system',
         targetRole: 'manager',
@@ -580,7 +624,7 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
       });
 
       toast.success('تمت إضافة المقر بنجاح');
-      setNewOffice({ name: '', type: 'office', latitude: '', longitude: '', address: '' });
+      setNewOffice({ name: '', type: 'office', latitude: '', longitude: '', locationLink: '', address: '', assignedEmployees: [] });
     } catch (error: any) {
       toast.error(error.message || 'فشل في إضافة المقر');
     } finally {
@@ -1413,6 +1457,133 @@ export default function SystemSettings({ initialTab }: { initialTab?: string }) 
                       >
                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-4 h-4" /> حفظ إعدادات الدوام</>}
                       </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* LOCATIONS TAB */}
+                {activeTab === 'locations' && (
+                  <div className="space-y-8">
+                    <div className="border-b pb-4">
+                      <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                        <MapPin className="w-7 h-7 text-primary" />
+                        المقرات والمواقع الذكية (Smart Zones)
+                      </h2>
+                      <p className="text-xs font-bold text-slate-400 mt-1">إضافة مكاتب ومعارض وربط الموظفين جغرافياً بها لمنع الحضور الوهمي</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <Card className="lg:col-span-1 p-6 rounded-[2.5rem] shadow-sm bg-white border-none space-y-4">
+                        <h3 className="text-lg font-black flex items-center gap-2 text-slate-800">
+                          <Plus className="w-5 h-5 text-primary" />
+                          إضافة مقر جديد
+                        </h3>
+                        <form onSubmit={handleAddOffice} className="space-y-4">
+                          <div className="space-y-1.5">
+                            <Label className="font-bold text-xs text-slate-500">اسم المقر</Label>
+                            <Input 
+                              value={newOffice.name}
+                              onChange={e => setNewOffice({...newOffice, name: e.target.value})}
+                              placeholder="الفرع الرئيسي"
+                              required
+                              className="h-11 rounded-xl text-right bg-slate-50 border-slate-200"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="font-bold text-xs text-slate-500">الموقع الجغرافي (رابط خرائط جوجل) *</Label>
+                            <Input 
+                              value={newOffice.locationLink}
+                              onChange={e => setNewOffice({...newOffice, locationLink: e.target.value})}
+                              placeholder="https://maps.app.goo.gl/..."
+                              required
+                              className="h-11 rounded-xl text-left font-mono text-xs bg-slate-50 border-slate-200"
+                              dir="ltr"
+                            />
+                            <p className="text-[10px] text-slate-400 font-bold pr-1">النظام سيستخرج خطوط الطول والعرض تلقائياً من الرابط.</p>
+                          </div>
+                          
+                          <div className="space-y-1.5 pt-2">
+                            <Label className="font-bold text-xs text-slate-500 mb-2 flex items-center justify-between">
+                              الموظفون المصرح لهم بالدوام هنا
+                              <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                {newOffice.assignedEmployees.length} محدد
+                              </span>
+                            </Label>
+                            <div className="max-h-[150px] overflow-y-auto border rounded-xl p-2 bg-slate-50 space-y-1">
+                              {employees.map(emp => {
+                                const isChecked = newOffice.assignedEmployees.includes(emp.uid || emp.id);
+                                return (
+                                  <label key={emp.id} className="flex items-center gap-2 p-2 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors">
+                                    <input 
+                                      type="checkbox" 
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setNewOffice({...newOffice, assignedEmployees: [...newOffice.assignedEmployees, emp.uid || emp.id]});
+                                        } else {
+                                          setNewOffice({...newOffice, assignedEmployees: newOffice.assignedEmployees.filter(id => id !== (emp.uid || emp.id))});
+                                        }
+                                      }}
+                                      className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700">{emp.name}</span>
+                                    <span className="text-[10px] text-slate-400 mr-auto">{emp.role === 'manager' ? 'مدير' : emp.role === 'supervisor' ? 'مشرف' : 'موظف'}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <Button type="submit" disabled={isSubmitting} className="w-full h-11 rounded-xl bg-primary hover:bg-black font-black text-white mt-4">
+                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'إضافة المقر الجغرافي'}
+                          </Button>
+                        </form>
+                      </Card>
+
+                      <div className="lg:col-span-2 space-y-4">
+                        <h3 className="text-lg font-black text-slate-800">المقرات الحالية ({offices.length})</h3>
+                        {offices.length === 0 ? (
+                          <div className="text-center p-8 text-slate-400 bg-slate-50 rounded-[2.5rem]">لا توجد مقرات مضافة. أضف مقراً جديداً.</div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {offices.map((office: any) => (
+                              <Card key={office.id} className="p-5 rounded-[2rem] border-none bg-slate-50/80 shadow-sm relative group">
+                                <Button 
+                                  variant="destructive" 
+                                  size="icon" 
+                                  className="absolute top-4 left-4 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => handleDeleteOffice(office.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                    <MapPin className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-black text-slate-800">{office.name}</h4>
+                                    <p className="text-[10px] font-bold text-slate-400 font-mono text-left" dir="ltr">{office.latitude}, {office.longitude}</p>
+                                  </div>
+                                </div>
+                                <div className="bg-white rounded-xl p-3 flex flex-wrap gap-1 mt-2">
+                                  <div className="text-[10px] font-bold text-slate-500 w-full mb-1">الموظفين المصرح لهم ({office.assignedEmployees?.length || 0}):</div>
+                                  {office.assignedEmployees?.map((empId: string) => {
+                                    const emp = employees.find(e => (e.uid === empId || e.id === empId));
+                                    return (
+                                      <span key={empId} className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-[10px] font-bold">
+                                        {emp?.name || 'موظف محذوف'}
+                                      </span>
+                                    );
+                                  })}
+                                  {(!office.assignedEmployees || office.assignedEmployees.length === 0) && (
+                                    <span className="text-[10px] text-amber-500 font-bold bg-amber-50 px-2 py-1 rounded-md">مفتوح للجميع (قديم)</span>
+                                  )}
+                                </div>
+                              </Card>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}

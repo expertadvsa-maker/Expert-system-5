@@ -296,39 +296,126 @@ export interface ExtractedProjectData {
   locationLink?: string;
   startDate?: string;
   endDate?: string;
-  projectType?: 'hoardings' | 'signage_printing' | 'cladding_letters' | 'digital_screens' | 'exhibition_booths' | 'megastructures' | 'wrapping_branding' | 'maintenance';
+  projectType?: 'facade_cladding' | '3d_letters' | 'flex_banner' | 'unipole_megastructure' | 'outdoor_led' | 'indoor_led' | 'exhibition_booth' | 'vehicle_wrap' | 'project_hoarding' | 'maintenance_repair';
   supervisor?: string;
   contractNumber?: string;
   engOffice?: string;
   totalArea?: string;
+
+  // New engineering/technical fields
+  claddingThickness?: string;
+  ironStructureType?: string;
+  letterLightingType?: string;
+  ledPixelPitch?: string;
+  ledAccessType?: string;
+  ledBrightness?: string;
+  vehicleType?: string;
+  vinylType?: string;
+  concreteDepth?: string;
+  corrugatedThickness?: string;
+
+  // Real-world dynamic contracting wizard fields
+  installationHeightMeters?: number;
+  requiredEquipment?: string[];
+  highwaySpeedRisk?: boolean;
+
+  materialEstimates?: Array<{
+    name: string;
+    qty: number;
+    unit: string;
+    purpose: string;
+    wastagePercent?: number;
+  }>;
+
+  safetyGaps?: Array<{
+    severity: 'critical' | 'warning';
+    field: string;
+    issue: string;
+    recommendation: string;
+    fallbackValue?: string;
+  }>;
+
+  visualLocationAnalysis?: {
+    estimatedFloors?: number;
+    risksDetected?: string[];
+    equipmentReasoning?: string;
+  };
+
+  historicalPrecedent?: {
+    similarProjectTitle?: string;
+    similarityReasoning?: string;
+    lessonsLearned?: string[];
+  };
+
+  municipalityCompliance?: {
+    isCompliant?: boolean;
+    municipalityName?: string;
+    regulationsApplicable?: string[];
+    violationsDetected?: string[];
+    remedialActions?: string[];
+  };
 }
 
-export const parseProjectFromText = async (text: string): Promise<ExtractedProjectData | null> => {
+export const parseProjectFromText = async (text: string, pastProjects?: any[]): Promise<ExtractedProjectData | null> => {
   const ai = getGeminiClient();
   if (!ai) {
     throw new Error("مفتاح API غير متوفر أو غير صالح. يرجى إعداد مفتاح الذكاء الاصطناعي في الإعدادات.");
   }
 
+  let learningContext = "";
+  if (pastProjects && pastProjects.length > 0) {
+    const samples = pastProjects.slice(0, 12).map(p => ({
+      title: p.title,
+      projectType: p.projectType,
+      description: p.description,
+      budget: p.budget,
+      materialEstimates: p.materialEstimates,
+      safetyGaps: p.safetyGaps,
+      requiredEquipment: p.requiredEquipment,
+      installationHeightMeters: p.installationHeightMeters
+    }));
+    learningContext = `
+**محرك التعلم الذاتي الهندسي (الخبرات والتجارب التشغيلية السابقة للمؤسسة):**
+بصفتك مهندساً حكيماً، ادرس وتعلم من المشاريع والتقديرات السابقة لرفع دقة الحسابات وتقدير المواد والاحتياجات:
+${JSON.stringify(samples, null, 2)}
+`;
+  }
+
   try {
     const prompt = `
-      قم بتحليل النص التالي واستخراج تفاصيل المشروع الهندسية والمالية بدقة وتنسيقها في الكائن المطلوب.
-      
-      النص المراد تحليله:
+      بصفتك مهندساً حقيقياً خبيراً في تقدير وتصميم وتجهيز مشاريع الدعاية والإعلان والمقاولات الإنشائية في المملكة العربية السعودية.
+      قم بتحليل النص المرفق لطلب مشروع جديد، واستخرج منه البيانات المطلوبة بدقة هندسية وتقديرية كاملة.
+
+      ${learningContext}
+
+      النص المدخل:
       "${text}"
-      
-      ملاحظات هامة للاستخراج:
-      1. title: عنوان المشروع (مثال: أسوار دعائية - طريق الملك فهد).
-      2. budget: القيمة المالية للعقد كـ رقم فقط (مثال: 500000).
-      3. clientPhone: رقم الجوال (حاول توحيده بصيغة 05xxxxxxxx إن أمكن).
-      4. startDate & endDate: التواريخ بصيغة YYYY-MM-DD (إذا ذكر مثلاً "تبدأ في يوليو" وكان هذا العام 2026، اجعله 2026-07-01).
-      5. projectType: يجب أن يكون أحد هذه الخيارات فقط: 
-         - 'hoardings' (للأسوار الدعائية وتجهيز مواقع الإعلانات الخارجية).
-         - 'signage_printing' (للوحات الإعلانية المطبوعة، لوحات واجهات المحلات، يوني بول، ميجا، طباعة البنرات والفليكس).
-         - 'cladding_letters' (لأعمال واجهات الكلادينج، الحروف البارزة المضيئة، الاكريليك، الزنكور، والاستيل).
-         - 'digital_screens' (للشاشات الإلكترونية LED الداخلية والخارجية وتجهيز المعارض والمجسمات).
-      6. description: نطاق العمل الفني (تفاصيل إضافية عن العمل أو البنود).
-      
-      أرجع فقط كائن JSON يطابق المواصفات.
+
+      المعايير والاشتراطات الهندسية للتقدير الذكي والتحليل:
+      1. projectType (نوع العمل بدقة): حدد بدقة متناهية واحداً من الأنواع التالية:
+         - 'facade_cladding' (واجهات كلادينج)
+         - '3d_letters' (حروف بارزة مضيئة)
+         - 'flex_banner' (لوحات فليكس وبنر)
+         - 'unipole_megastructure' (يوني بول وميجا ستراكشر)
+         - 'outdoor_led' (شاشات LED خارجية)
+         - 'indoor_led' (شاشات LED داخلية)
+         - 'exhibition_booth' (تجهيز معارض وبوثات)
+         - 'vehicle_wrap' (تغليف مركبات وهويات سيارات)
+         - 'project_hoarding' (أسوار مواقع ومشاريع إنشائية)
+         - 'maintenance_repair' (صيانة لوحات وشاشات)
+      2. التقديرات الفنية الخاصة بنوع العمل:
+         - للكلادينج: claddingThickness (مثال: '4mm' أو '3mm')، ironStructureType (مثال: 'تيوب حديد 40x40 مم').
+         - للحروف: letterLightingType (مثال: 'LED داخلي مقاوم للماء').
+         - للشاشات: ledPixelPitch (مثال: 'P3.91' أو 'P4' أو 'P10')، ledAccessType (مثال: 'صيانة أمامية' أو 'صيانة خلفية').
+         - للسيارات: vehicleType (مثال: 'دينا' أو 'باص')، vinylType (مثال: 'ثيرمال ألماني كاست').
+         - لليوني بول والأعمدة: concreteDepth (عمق القواعد الخرسانية).
+         - للأسوار الإنشائية: corrugatedThickness (سمك الشنكو).
+      3. materialEstimates (جدول كميات المواد التقديري): بصفتك مهندساً حقيقياً، قم بحساب وتقدير المواد المطلوبة للعمل (الحديد، الأسلاك، الإضاءة، المسامير، الكلادينج، الأجهزة، الأسمنت، إلخ) مع تحديد الكمية، الوحدة، والهدف من الاستخدام باللغة العربية بدقة متناهية.
+      4. safetyGaps (رادار فحص السلامة والمخاطر الهندسية): افحص المخاطر مثل قرب الموقع من طريق سريع، ارتفاع شاهق، رياح شديدة، نقص التدعيم الإنشائي وصغها كتوصيات سلامة هندسية.
+      5. municipalityCompliance (رادار الالتزام بالاشتراطات البلدية السعودية): حدد الأمانة المعنية (مثال: أمانة منطقة الرياض) وافحص توافق اللوحة مع شروط البروز، التراخيص، والسلامة العامة لتفادي المخالفات والبلدية.
+      6. historicalPrecedent (الذاكرة التراكمية الذكية): ابحث في المشاريع السابقة الموفرة لك أعلاه عن مشروع مشابه للتعلم منه وتطبيق دروسه المستفادة لتفادي تكرار الأخطاء البرمجية أو الإنشائية.
+
+      أرجع النتيجة بصيغة JSON فقط مطابقة للمخطط تماماً دون أي مقدمات أو تعليقات خارجية.
     `;
 
     const response = await ai.models.generateContent({
@@ -342,6 +429,7 @@ export const parseProjectFromText = async (text: string): Promise<ExtractedProje
             title: { type: Type.STRING },
             description: { type: Type.STRING },
             budget: { type: Type.NUMBER },
+            projectValue: { type: Type.NUMBER },
             clientName: { type: Type.STRING },
             clientPhone: { type: Type.STRING },
             clientEmail: { type: Type.STRING },
@@ -350,12 +438,93 @@ export const parseProjectFromText = async (text: string): Promise<ExtractedProje
             endDate: { type: Type.STRING },
             projectType: { 
               type: Type.STRING,
-              enum: ['hoardings', 'signage_printing', 'cladding_letters', 'digital_screens']
+              enum: ['facade_cladding', '3d_letters', 'flex_banner', 'unipole_megastructure', 'outdoor_led', 'indoor_led', 'exhibition_booth', 'vehicle_wrap', 'project_hoarding', 'maintenance_repair']
             },
-            supervisor: { type: Type.STRING },
-            contractNumber: { type: Type.STRING },
-            engOffice: { type: Type.STRING },
-            totalArea: { type: Type.STRING }
+            claddingThickness: { type: Type.STRING },
+            ironStructureType: { type: Type.STRING },
+            letterLightingType: { type: Type.STRING },
+            ledPixelPitch: { type: Type.STRING },
+            ledAccessType: { type: Type.STRING },
+            ledBrightness: { type: Type.STRING },
+            vehicleType: { type: Type.STRING },
+            vinylType: { type: Type.STRING },
+            concreteDepth: { type: Type.STRING },
+            corrugatedThickness: { type: Type.STRING },
+            installationHeightMeters: { type: Type.NUMBER },
+            requiredEquipment: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            highwaySpeedRisk: { type: Type.BOOLEAN },
+            materialEstimates: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  qty: { type: Type.NUMBER },
+                  unit: { type: Type.STRING },
+                  purpose: { type: Type.STRING },
+                  wastagePercent: { type: Type.NUMBER }
+                },
+                required: ["name", "qty", "unit", "purpose"]
+              }
+            },
+            safetyGaps: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  severity: { type: Type.STRING, enum: ['critical', 'warning'] },
+                  field: { type: Type.STRING },
+                  issue: { type: Type.STRING },
+                  recommendation: { type: Type.STRING },
+                  fallbackValue: { type: Type.STRING }
+                },
+                required: ["severity", "field", "issue", "recommendation"]
+              }
+            },
+            visualLocationAnalysis: {
+              type: Type.OBJECT,
+              properties: {
+                estimatedFloors: { type: Type.NUMBER },
+                risksDetected: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                equipmentReasoning: { type: Type.STRING }
+              }
+            },
+            historicalPrecedent: {
+              type: Type.OBJECT,
+              properties: {
+                similarProjectTitle: { type: Type.STRING },
+                similarityReasoning: { type: Type.STRING },
+                lessonsLearned: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              }
+            },
+            municipalityCompliance: {
+              type: Type.OBJECT,
+              properties: {
+                isCompliant: { type: Type.BOOLEAN },
+                municipalityName: { type: Type.STRING },
+                regulationsApplicable: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                violationsDetected: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                remedialActions: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              }
+            }
           }
         }
       }
@@ -371,7 +540,7 @@ export const parseProjectFromText = async (text: string): Promise<ExtractedProje
   }
 };
 
-export const analyzeProjectDocument = async (dataUrl: string, mimeType: string): Promise<ExtractedProjectData> => {
+export const analyzeProjectDocument = async (dataUrl: string, mimeType: string, pastProjects?: any[]): Promise<ExtractedProjectData> => {
   const ai = getGeminiClient();
   if (!ai) throw new Error("مفتاح API غير متوفر أو غير صالح. يرجى إعداد مفتاح الذكاء الاصطناعي في الإعدادات.");
   
@@ -382,32 +551,60 @@ export const analyzeProjectDocument = async (dataUrl: string, mimeType: string):
     base64Data = dataUrl.split(',')[1];
   }
 
+  let learningContext = "";
+  if (pastProjects && pastProjects.length > 0) {
+    const samples = pastProjects.slice(0, 12).map(p => ({
+      title: p.title,
+      projectType: p.projectType,
+      description: p.description,
+      budget: p.budget,
+      materialEstimates: p.materialEstimates,
+      safetyGaps: p.safetyGaps,
+      requiredEquipment: p.requiredEquipment,
+      installationHeightMeters: p.installationHeightMeters
+    }));
+    learningContext = `
+**محرك التعلم الذاتي الهندسي (الخبرات والتجارب التشغيلية السابقة للمؤسسة):**
+بصفتك مهندساً حكيماً، ادرس وتعلم من المشاريع والتقديرات السابقة لرفع دقة الحسابات وتقدير المواد والاحتياجات:
+${JSON.stringify(samples, null, 2)}
+`;
+  }
+
   try {
     const prompt = `
-      أنت خبير في تحليل مستندات المشاريع والعقود وعروض الأسعار الفنية لشركة مقاولات دعاية وإعلان.
-      قم بتحليل الملف المرفق واستخرج كافة الحقول المتاحة لتأسيس ملف مشروع جديد.
+      أنت مهندس خبير ومستشار فني في تقدير وتحليل مستندات المشاريع والعقود وعروض الأسعار والرسومات الهندسية لشركة مقاولات دعاية وإعلان في المملكة العربية السعودية.
+      قم بتحليل الملف المرفق بدقة متناهية واستخرج منه أو قدر له كافة البيانات الفنية والتقديرية المطلوبة لتأسيس ملف مشروع متكامل.
+
+      ${learningContext}
       
-      البيانات المطلوبة:
-      1. title: عنوان المشروع (مثال: لوحة وجهة محل - فرع السليمانية).
+      البيانات الفنية والهندسية المطلوبة:
+      1. title: عنوان المشروع (مثال: لوحة واجهة محل - فرع السليمانية).
       2. description: وصف تفصيلي لنطاق العمل الفني والمواصفات المذكورة.
       3. budget: القيمة الإجمالية للمشروع كـ رقم فقط (مثال: 45000).
-      4. clientName: اسم العميل أو اسم الشركة.
-      5. clientPhone: رقم الهاتف/الجوال للعميل (بصيغة 05xxxxxxxx إن أمكن).
-      6. clientEmail: البريد الإلكتروني للعميل.
-      7. startDate / endDate: التواريخ المذكورة للبدء أو الانتهاء (بصيغة YYYY-MM-DD).
-      8. contractNumber: رقم العقد أو المرجع.
-      9. totalArea: المساحة الإجمالية أو المقاسات بالكامل (مثال: "لوحة 4x3 م").
-      10. projectType: حدد أحد الأنواع التالية فقط:
-          - 'hoardings' (أسوار دعائية)
-          - 'signage_printing' (لوحات وطباعة)
-          - 'cladding_letters' (كلادينج وحروف بارزة)
-          - 'digital_screens' (شاشات ومجسمات)
-          - 'exhibition_booths' (تجهيز معارض ومؤتمرات)
-          - 'megastructures' (مجسمات ضخمة)
-          - 'wrapping_branding' (تغليف مركبات)
-          - 'maintenance' (صيانة لوحات وشاشات)
+      4. projectType (نوع العمل بدقة): حدد بدقة متناهية واحداً من الأنواع التالية:
+         - 'facade_cladding' (واجهات كلادينج)
+         - '3d_letters' (حروف بارزة مضيئة)
+         - 'flex_banner' (لوحات فليكس وبنر)
+         - 'unipole_megastructure' (يوني بول وميجا ستراكشر)
+         - 'outdoor_led' (شاشات LED خارجية)
+         - 'indoor_led' (شاشات LED داخلية)
+         - 'exhibition_booth' (تجهيز معارض وبوثات)
+         - 'vehicle_wrap' (تغليف مركبات وهويات سيارات)
+         - 'project_hoarding' (أسوار مواقع ومشاريع إنشائية)
+         - 'maintenance_repair' (صيانة لوحات وشاشات)
+      5. التقديرات الفنية الخاصة بنوع العمل:
+         - للكلادينج: claddingThickness (سمك الكلادينج)، ironStructureType (نوع هيكل الحديد).
+         - للحروف: letterLightingType (نوع إضاءة الحروف).
+         - للشاشات: ledPixelPitch (بيكسل بيتش)، ledAccessType (طريقة الصيانة).
+         - للسيارات: vehicleType (نوع السيارة)، vinylType (نوع الفينيل والمطبوعات).
+         - لليوني بول والأعمدة: concreteDepth (عمق القواعد الخرسانية).
+         - للأسوار الإنشائية: corrugatedThickness (سمك الشنكو).
+      6. materialEstimates (جدول كميات المواد التقديري): بصفتك مهندساً حقيقياً، قم بحساب وتقدير المواد المطلوبة للعمل (الحديد، الأسلاك، الإضاءة، المسامير، الكلادينج، الأجهزة، الأسمنت، إلخ) مع تحديد الكمية، الوحدة، والهدف من الاستخدام باللغة العربية بدقة متناهية.
+      7. safetyGaps (رادار فحص السلامة والمخاطر الهندسية): افحص المخاطر وصغها كتوصيات سلامة هندسية.
+      8. municipalityCompliance (رادار الالتزام بالاشتراطات البلدية السعودية): حدد الأمانة المعنية وافحص توافق اللوحة مع الشروط.
+      9. historicalPrecedent (الذاكرة التراكمية الذكية): ابحث في المشاريع السابقة الموفرة لك أعلاه عن مشروع مشابه للتعلم منه وتطبيق دروسه المستفادة.
 
-      أرجع النتيجة بصيغة JSON فقط مطابقة للمخطط بدون أي شرح خارجي.
+      أرجع النتيجة بصيغة JSON فقط مطابقة للمخطط تماماً وبشكل صارم دون أي تعليقات خارجية.
     `;
 
     const response = await ai.models.generateContent({
@@ -433,6 +630,7 @@ export const analyzeProjectDocument = async (dataUrl: string, mimeType: string):
             title: { type: Type.STRING },
             description: { type: Type.STRING },
             budget: { type: Type.NUMBER },
+            projectValue: { type: Type.NUMBER },
             clientName: { type: Type.STRING },
             clientPhone: { type: Type.STRING },
             clientEmail: { type: Type.STRING },
@@ -442,7 +640,92 @@ export const analyzeProjectDocument = async (dataUrl: string, mimeType: string):
             totalArea: { type: Type.STRING },
             projectType: { 
               type: Type.STRING,
-              enum: ['hoardings', 'signage_printing', 'cladding_letters', 'digital_screens', 'exhibition_booths', 'megastructures', 'wrapping_branding', 'maintenance']
+              enum: ['facade_cladding', '3d_letters', 'flex_banner', 'unipole_megastructure', 'outdoor_led', 'indoor_led', 'exhibition_booth', 'vehicle_wrap', 'project_hoarding', 'maintenance_repair']
+            },
+            claddingThickness: { type: Type.STRING },
+            ironStructureType: { type: Type.STRING },
+            letterLightingType: { type: Type.STRING },
+            ledPixelPitch: { type: Type.STRING },
+            ledAccessType: { type: Type.STRING },
+            ledBrightness: { type: Type.STRING },
+            vehicleType: { type: Type.STRING },
+            vinylType: { type: Type.STRING },
+            concreteDepth: { type: Type.STRING },
+            corrugatedThickness: { type: Type.STRING },
+            installationHeightMeters: { type: Type.NUMBER },
+            requiredEquipment: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            highwaySpeedRisk: { type: Type.BOOLEAN },
+            materialEstimates: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  qty: { type: Type.NUMBER },
+                  unit: { type: Type.STRING },
+                  purpose: { type: Type.STRING },
+                  wastagePercent: { type: Type.NUMBER }
+                },
+                required: ["name", "qty", "unit", "purpose"]
+              }
+            },
+            safetyGaps: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  severity: { type: Type.STRING, enum: ['critical', 'warning'] },
+                  field: { type: Type.STRING },
+                  issue: { type: Type.STRING },
+                  recommendation: { type: Type.STRING },
+                  fallbackValue: { type: Type.STRING }
+                },
+                required: ["severity", "field", "issue", "recommendation"]
+              }
+            },
+            visualLocationAnalysis: {
+              type: Type.OBJECT,
+              properties: {
+                estimatedFloors: { type: Type.NUMBER },
+                risksDetected: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                equipmentReasoning: { type: Type.STRING }
+              }
+            },
+            historicalPrecedent: {
+              type: Type.OBJECT,
+              properties: {
+                similarProjectTitle: { type: Type.STRING },
+                similarityReasoning: { type: Type.STRING },
+                lessonsLearned: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              }
+            },
+            municipalityCompliance: {
+              type: Type.OBJECT,
+              properties: {
+                isCompliant: { type: Type.BOOLEAN },
+                municipalityName: { type: Type.STRING },
+                regulationsApplicable: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                violationsDetected: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                remedialActions: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              }
             }
           }
         }

@@ -11,7 +11,9 @@ function Dialog({ ...props }: DialogPrimitive.Root.Props) {
 
 function DialogTrigger({ asChild, children, render, ...props }: DialogPrimitive.Trigger.Props & { asChild?: boolean }) {
   if (asChild && React.isValidElement(children)) {
-    const isButton = children.type === "button";
+    const isButton = children.type === "button" || 
+      typeof children.type === "function" || 
+      (typeof children.type === "object" && children.type !== null);
     return <DialogPrimitive.Trigger data-slot="dialog-trigger" render={children} nativeButton={isButton} {...props} />
   }
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" render={render} {...props}>{children}</DialogPrimitive.Trigger>
@@ -23,7 +25,9 @@ function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
 
 function DialogClose({ asChild, children, render, ...props }: DialogPrimitive.Close.Props & { asChild?: boolean }) {
   if (asChild && React.isValidElement(children)) {
-    const isButton = children.type === "button";
+    const isButton = children.type === "button" || 
+      typeof children.type === "function" || 
+      (typeof children.type === "object" && children.type !== null);
     return <DialogPrimitive.Close data-slot="dialog-close" render={children} nativeButton={isButton} {...props} />
   }
   return <DialogPrimitive.Close data-slot="dialog-close" render={render} {...props}>{children}</DialogPrimitive.Close>
@@ -37,7 +41,7 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/40 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}

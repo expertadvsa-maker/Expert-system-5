@@ -27,14 +27,16 @@ import {
   Briefcase,
   FilePlus,
   Send,
-  Loader2
+  Loader2,
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, query, where, onSnapshot, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import SmartAttendance from '../SmartAttendance';
 
 export default function EmployeeDashboard() {
   const { profile } = useAuth();
@@ -58,6 +60,104 @@ export default function EmployeeDashboard() {
   const [expenseData, setExpenseData] = useState({ amount: '', type: 'petty_cash', description: '', project: '' });
   const [reportData, setReportData] = useState({ title: '', content: '', hours: '8' });
   const [contactData, setContactData] = useState({ message: '', department: 'hr' });
+
+  // Dynamic Features States
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
+  const [cashReqs, setCashReqs] = useState<any[]>([]);
+  const [perfStats, setPerfStats] = useState({ score: 100, absences: 0, lateDays: 0, status: 'ممتاز' });
+  const [payrollData, setPayrollData] = useState({ base: 0, bonus: 0, deductions: 0, net: 0, isCalculated: false });
+
+  // Fetch Dynamic Data
+  useEffect(() => {
+    if (!profile?.uid) return;
+
+    // 1. Tasks
+    const qTasks = query(collection(db, 'tasks'), where('assignedTo', '==', profile.uid));
+    const unsubTasks = onSnapshot(qTasks, snap => {
+      setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // 2. Leave Requests
+    const qLeaves = query(collection(db, 'leave_requests'), where('employeeId', '==', profile.uid));
+    const unsubLeaves = onSnapshot(qLeaves, snap => {
+      setLeaveReqs(snap.docs.map(doc => ({ id: doc.id, _type: 'إجازة', ...doc.data() })));
+    });
+
+    // 3. Petty Cash Requests
+    const qCash = query(collection(db, 'petty_cash_requests'), where('employeeId', '==', profile.uid));
+    const unsubCash = onSnapshot(qCash, snap => {
+      setCashReqs(snap.docs.map(doc => ({ id: doc.id, _type: 'عهدة/سلفة', ...doc.data() })));
+    });
+
+    // 4. Performance Score
+    const fetchPerf = async () => {
+      const sixtyDaysAgo = new Date();
+      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+      const attQ = query(collection(db, 'attendance'), where('userId', '==', profile.uid));
+      const snap = await getDocs(attQ);
+      const userAtt = snap.docs.map(d => d.data()).filter(a => new Date(a.date) >= sixtyDaysAgo);
+      
+      const presentDays = userAtt.filter(a => a.status === 'present').length;
+      const lateDays = userAtt.filter(a => a.status === 'late').length;
+      let score = (presentDays / 44) * 100;
+      if (score > 100) score = 100;
+      const absences = 44 - presentDays;
+      
+      let status = 'ممتاز';
+      if (score < 50) status = 'ضعيف';
+      else if (score < 75) status = 'يحتاج تحسين';
+      else if (score < 90) status = 'جيد جداً';
+
+      setPerfStats({ score: Math.round(score), absences: absences > 0 ? absences : 0, lateDays, status });
+    };
+    fetchPerf();
+
+    // 5. Payroll Data
+    const fetchPayroll = async () => {
+      // Query adjustments for this user
+      const q1 = query(collection(db, 'financialAdjustments'), where('workerId', '==', profile.uid), where('status', 'in', ['approved', 'applied', 'applied_manually']));
+      const q2 = query(collection(db, 'financialAdjustments'), where('userId', '==', profile.uid), where('status', 'in', ['approved', 'applied', 'applied_manually']));
+      
+      const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+      
+      const adjsMap = new Map();
+      snap1.docs.forEach(doc => adjsMap.set(doc.id, doc.data()));
+      snap2.docs.forEach(doc => adjsMap.set(doc.id, doc.data()));
+      const adjs = Array.from(adjsMap.values());
+
+      const base = Number(profile.salary) || Number(profile.baseSalary) || 0;
+      const bonus = adjs.filter(a => a.type === 'bonus').reduce((acc, curr) => acc + Number(curr.amount), 0);
+      const deductions = adjs.filter(a => ['deduction', 'advance'].includes(a.type)).reduce((acc, curr) => acc + Number(curr.amount), 0);
+      
+      setPayrollData({ base, bonus, deductions, net: base + bonus - deductions, isCalculated: true });
+    };
+    fetchPayroll();
+
+    return () => {
+      unsubTasks();
+      unsubLeaves();
+      unsubCash();
+    };
+  }, [profile?.uid]);
+
+  const handleCompleteTask = async (taskId: string) => {
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), {
+        status: 'completed',
+        completedAt: serverTimestamp()
+      });
+      toast.success('تم إنجاز المهمة بنجاح ✅');
+    } catch (e) {
+      toast.error('حدث خطأ أثناء تحديث المهمة');
+    }
+  };
+
+  const allRequests = [...leaveReqs, ...cashReqs].sort((a, b) => {
+    const da = a.createdAt?.seconds || 0;
+    const dbTime = b.createdAt?.seconds || 0;
+    return dbTime - da;
+  }).slice(0, 5); // Last 5 requests
 
   // Synchronize Sticky Notes
   useEffect(() => {
@@ -94,17 +194,7 @@ export default function EmployeeDashboard() {
   const themeClasses = getGlassStyle();
 
   // Handlers
-  const handleAttendanceIn = () => {
-    toast.success('تم تسجيل الحضور بنجاح عبر نظام GPS المعتمد 📡', {
-      description: `تم تحديد موقعك بدقة في النطاق الجغرافي للعمل (${new Date().toLocaleTimeString('ar-SA')})`,
-    });
-  };
-
-  const handleAttendanceOut = () => {
-    toast.info('تم تسجيل الانصراف بنجاح 📋', {
-      description: `شكراً لجهودك اليوم! تم حفظ بيانات الدوام بالكامل.`,
-    });
-  };
+  // Fake attendance handlers removed.
 
   const handleLeaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -341,18 +431,9 @@ export default function EmployeeDashboard() {
         </div>
         
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <ActionBtn 
-            icon={LogIn} 
-            label="تسجيل حضور" 
-            color="bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-black shadow-lg shadow-emerald-500/15" 
-            onClick={handleAttendanceIn} 
-          />
-          <ActionBtn 
-            icon={LogOut} 
-            label="تسجيل انصراف" 
-            color="bg-gradient-to-br from-rose-500 to-orange-500 text-white font-black shadow-lg shadow-rose-500/15" 
-            onClick={handleAttendanceOut} 
-          />
+          <div className="col-span-2 sm:col-span-3 lg:col-span-6 mb-4">
+            <SmartAttendance />
+          </div>
           <ActionBtn 
             icon={Calendar} 
             label="طلب إجازة" 
@@ -380,77 +461,148 @@ export default function EmployeeDashboard() {
         </div>
       </div>
 
-      {/* Interactive Core Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <DashboardCard title="طلبات الإجازة" value="رصيد: 21 يوم" subtitle="تقديم أو متابعة طلب" icon={Calendar} color="from-purple-500 to-indigo-600 font-black" onClick={() => setIsLeaveModalOpen(true)} />
-        <DashboardCard title="مسير الرواتب" value="الراتب القادم" subtitle="طلب سلفة أو كشف حساب" icon={Wallet} color="from-emerald-500 to-teal-600 font-black" onClick={() => setIsExpenseModalOpen(true)} />
-        <DashboardCard title="المهام المسندة" value="3 مهام نشطة" subtitle="عرض تفاصيل المهام" icon={CheckSquare} color="from-amber-500 to-orange-600 font-black" />
-        <DashboardCard title="التعاميم الإدارية" value="1 رسالة جديدة" subtitle="قرارات وتعاميم الإدارة" icon={FileText} color="from-blue-500 to-indigo-600 font-black" onClick={() => setIsContactModalOpen(true)} />
-      </div>
-
-      {/* Sections Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6 relative z-20">
         
-        {/* Assigned Tasks */}
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          className={`rounded-3xl ${themeClasses} overflow-hidden`}
-        >
-          <CardContent className="p-6 md:p-8 space-y-6">
-            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <CheckSquare className="w-5 h-5 text-orange-500" />
-              أحدث المهام المطلوبة
+        {/* Left Column: Tasks, Payroll, Performance */}
+        <div className="space-y-4">
+          
+          {/* Performance & Payroll Banner */}
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className={`rounded-3xl ${themeClasses} overflow-hidden p-6 relative`}
+          >
+            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
+              <TrendingUp className="w-5 h-5 text-emerald-500" />
+              الأداء والتقييم المالي
             </h3>
-            <div className="space-y-4">
-              <div className="p-4.5 bg-slate-50/50 dark:bg-slate-800/25 rounded-2xl border border-slate-100/60 dark:border-slate-800/60 flex justify-between items-center group hover:border-orange-200/50 dark:hover:border-orange-950/40 transition-all">
-                <div className="space-y-1">
-                  <h4 className="font-black text-slate-800 dark:text-slate-100 text-sm">مراجعة كشوفات التسليم</h4>
-                  <p className="text-[10px] text-slate-400 font-bold">بواسطة: الإدارة المالية</p>
-                </div>
-                <Button size="sm" className="rounded-xl h-9 px-4 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs shadow-lg shadow-orange-500/10">
-                  إنجاز المهمة
-                </Button>
+            
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+                <span className="text-[10px] text-slate-400 font-bold block mb-1">التقييم الشهري</span>
+                <span className={`text-lg font-black ${perfStats.score >= 90 ? 'text-emerald-500' : perfStats.score >= 75 ? 'text-blue-500' : 'text-rose-500'}`}>
+                  {perfStats.status}
+                </span>
+                <span className="text-[10px] text-slate-500 block mt-1">مؤشر الحضور: {perfStats.score}%</span>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+                <span className="text-[10px] text-slate-400 font-bold block mb-1">صافي الراتب المستحق</span>
+                <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                  {payrollData.isCalculated ? `${payrollData.net} ر.س` : <Loader2 className="w-4 h-4 animate-spin mx-auto text-indigo-500" />}
+                </span>
+                <span className="text-[10px] text-slate-500 block mt-1">
+                  أساسي: {payrollData.base} | حوافز: {payrollData.bonus}
+                </span>
               </div>
             </div>
-          </CardContent>
-        </motion.div>
+            {payrollData.deductions > 0 && (
+              <div className="bg-rose-50 dark:bg-rose-950/30 p-3 rounded-xl border border-rose-100 dark:border-rose-900/50 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-rose-600">إجمالي الخصومات المسجلة هذا الشهر:</span>
+                <span className="text-xs font-black text-rose-700">-{payrollData.deductions} ر.س</span>
+              </div>
+            )}
+          </motion.div>
 
-        {/* Attendance Log */}
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          className={`rounded-3xl ${themeClasses} overflow-hidden`}
-        >
-          <CardContent className="p-6 md:p-8 space-y-6">
-            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <Clock className="w-5 h-5 text-blue-500" />
-              سجل الدوام الأخير
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4.5 bg-slate-50/50 dark:bg-slate-800/25 rounded-2xl border border-slate-100/60 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-11 h-11 bg-emerald-100/60 dark:bg-emerald-950/40 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-inner">
-                    <LogIn className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="font-black text-slate-800 dark:text-slate-100 text-sm">تسجيل حضور تلقائي</p>
-                    <p className="text-[10px] text-slate-400 font-bold">اليوم - عبر الموقع الميداني</p>
-                  </div>
+          {/* Tasks */}
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className={`rounded-3xl ${themeClasses} overflow-hidden`}
+          >
+            <CardContent className="p-6 md:p-8 space-y-6">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <CheckSquare className="w-5 h-5 text-orange-500" />
+                أحدث المهام المطلوبة
+              </h3>
+              <div className="space-y-4">
+                {tasks.filter(t => t.status !== 'completed').length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 italic text-xs font-bold">لا يوجد مهام نشطة حالياً</div>
+                ) : (
+                  tasks.filter(t => t.status !== 'completed').map(task => (
+                    <div key={task.id} className="p-4.5 bg-slate-50/50 dark:bg-slate-800/25 rounded-2xl border border-slate-100/60 dark:border-slate-800/60 flex justify-between items-center group hover:border-orange-200/50 dark:hover:border-orange-950/40 transition-all">
+                      <div className="space-y-1">
+                        <h4 className="font-black text-slate-800 dark:text-slate-100 text-sm">{task.title}</h4>
+                        <p className="text-[10px] text-slate-400 font-bold">{task.description}</p>
+                        <p className="text-[9px] text-orange-500 font-bold mt-1">بواسطة: {task.createdByDetails?.name || 'المشرف'}</p>
+                      </div>
+                      <Button size="sm" onClick={() => handleCompleteTask(task.id)} className="rounded-xl h-9 px-4 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs shadow-lg shadow-orange-500/10 shrink-0">
+                        إنجاز المهمة
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </motion.div>
+        </div>
+
+        {/* Right Column: Requests, Documents */}
+        <div className="space-y-4">
+          
+          {/* Documents Wallet */}
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className={`rounded-3xl ${themeClasses} overflow-hidden`}
+          >
+            <CardContent className="p-6 md:p-8 space-y-6">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <Briefcase className="w-5 h-5 text-amber-500" />
+                محفظة المستندات والصلاحيات
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[9px] text-slate-400 font-bold block">رقم الهوية / الإقامة</span>
+                  <span className="text-xs font-black text-slate-700 dark:text-slate-200">{profile?.iqamaNumber || 'غير مسجل'}</span>
+                  {profile?.iqamaExpiry && <span className="text-[9px] text-emerald-500 font-bold block mt-1">ينتهي في: {profile.iqamaExpiry}</span>}
                 </div>
-                <div className="text-left">
-                  <span className="font-black font-mono text-sm block text-emerald-600 dark:text-emerald-400">08:00 AM</span>
-                  <span className="text-[9px] text-slate-400 font-bold flex items-center gap-1 mt-0.5 justify-end">
-                    <CheckCircle2 className="w-3 h-3" />
-                    مؤكد بالكامل
-                  </span>
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[9px] text-slate-400 font-bold block">رخصة القيادة</span>
+                  <span className="text-xs font-black text-slate-700 dark:text-slate-200">{profile?.drivingLicenseNumber || 'غير مسجل'}</span>
+                  {profile?.drivingLicenseExpiry && <span className="text-[9px] text-amber-500 font-bold block mt-1">ينتهي في: {profile.drivingLicenseExpiry}</span>}
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </motion.div>
+            </CardContent>
+          </motion.div>
+
+          {/* Attendance Log / Requests */}
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className={`rounded-3xl ${themeClasses} overflow-hidden`}
+          >
+            <CardContent className="p-6 md:p-8 space-y-6">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <Clock className="w-5 h-5 text-blue-500" />
+                متابعة حالة طلباتي
+              </h3>
+              <div className="space-y-4">
+                {allRequests.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 italic text-xs font-bold">لم تقم برفع أي طلبات مؤخراً</div>
+                ) : (
+                  allRequests.map(req => (
+                    <div key={req.id} className="flex items-center justify-between p-4.5 bg-slate-50/50 dark:bg-slate-800/25 rounded-2xl border border-slate-100/60 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-11 h-11 bg-blue-100/60 dark:bg-blue-950/40 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-inner">
+                          {req._type === 'إجازة' ? <Calendar className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />}
+                        </div>
+                        <div>
+                          <p className="font-black text-slate-800 dark:text-slate-100 text-sm">طلب {req._type}</p>
+                          <p className="text-[10px] text-slate-400 font-bold">{req.reason || req.description}</p>
+                        </div>
+                      </div>
+                      <div className="text-left">
+                        {req.status === 'pending' && <span className="font-black text-[10px] block text-amber-500 bg-amber-50 px-2 py-1 rounded-lg">قيد المراجعة ⏳</span>}
+                        {req.status === 'approved' && <span className="font-black text-[10px] block text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg">معتمد ✅</span>}
+                        {req.status === 'rejected' && <span className="font-black text-[10px] block text-rose-500 bg-rose-50 px-2 py-1 rounded-lg">مرفوض ❌</span>}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </motion.div>
+        </div>
 
       </div>
 

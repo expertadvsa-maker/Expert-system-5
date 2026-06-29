@@ -70,8 +70,10 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function Employees({ onSelectEmployee, filterRole }: { onSelectEmployee?: (id: string) => void; filterRole?: string }) {
   const { profile, activeCompanyId } = useAuth();
   const isOwner = profile?.email?.toLowerCase().trim() === 'expertadvsa@gmail.com';
+  const canManageEmployees = profile?.role !== 'supervisor';
   const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState<UserProfile[]>([]);
+  const [warnings, setWarnings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -218,11 +220,28 @@ export default function Employees({ onSelectEmployee, filterRole }: { onSelectEm
       setLoading(false);
     }, (error) => console.error("Employees List Listen Error:", error));
 
-    return () => unsubscribe();
-  }, []);
+    const qWarnings = activeCompanyId ? query(collection(db, 'warnings'), where('companyId', '==', activeCompanyId)) : query(collection(db, 'warnings'));
+    const unsubWarnings = onSnapshot(qWarnings, (snapshot) => {
+      setWarnings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => {
+      unsubscribe();
+      unsubWarnings();
+    };
+  }, [activeCompanyId]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter(emp => {
+      // Exclude manager, owner, sales reps, and administrative departments/accounts for supervisors
+      if (profile?.role === 'supervisor') {
+        const isOwnerEmail = emp.email?.toLowerCase().trim() === 'expertadvsa@gmail.com';
+        const isAdminDept = emp.department === 'الإدارة' || emp.department?.toLowerCase() === 'admin' || emp.department?.toLowerCase() === 'administration';
+        if (emp.role === 'manager' || emp.role === 'sales_rep' || isOwnerEmail || isAdminDept) {
+          return false;
+        }
+      }
+
       const matchesSearch = 
         emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
         emp.role?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -233,7 +252,7 @@ export default function Employees({ onSelectEmployee, filterRole }: { onSelectEm
       }
       return matchesSearch;
     });
-  }, [searchTerm, employees, filterRole]);
+  }, [searchTerm, employees, filterRole, profile]);
 
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -799,59 +818,61 @@ export default function Employees({ onSelectEmployee, filterRole }: { onSelectEm
                       <p className="text-xs text-slate-400 truncate mt-0.5">{emp.email}</p>
                       {emp.phone && <p className="text-[10px] text-slate-500 font-bold font-mono mt-0.5" dir="ltr">📞 {emp.phone}</p>}
                     </div>
-                    <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 rounded-lg hover:bg-slate-100">
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                          }
-                        />
-                        <DropdownMenuContent align="end" className="text-right">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedEmployee(emp);
-                              setFormData({
-                                name: emp.name,
-                                email: emp.email,
-                                role: emp.role,
-                                dept: emp.department || 'الإنتاج',
-                                photoURL: emp.photoURL || '',
-                                salary: emp.salary || 0,
-                                phone: emp.phone || '',
-                                isSponsored: emp.isSponsored || false,
-                                iqamaNumber: emp.iqamaNumber || '',
-                                iqamaExpiry: emp.iqamaExpiry || '',
-                                iqamaPhotoURL: emp.iqamaPhotoURL || '',
-                                drivingLicenseNumber: emp.drivingLicenseNumber || '',
-                                drivingLicenseExpiry: emp.drivingLicenseExpiry || '',
-                                drivingLicensePhotoURL: emp.drivingLicensePhotoURL || '',
-                                passportNumber: emp.passportNumber || '',
-                                passportExpiry: emp.passportExpiry || '',
-                                passportPhotoURL: emp.passportPhotoURL || '',
-                                contractURL: emp.contractURL || ''
-                              });
-                              setIsEditDialogOpen(true);
-                            }}
-                            className="flex items-center justify-end gap-2 text-xs"
-                          >
-                            <span>تعديل البيانات</span>
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedEmployee(emp);
-                              setIsDeleteConfirmOpen(true);
-                            }}
-                            className="flex items-center justify-end gap-2 text-xs text-red-600"
-                          >
-                            <span>حذف الموظف</span>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                     {canManageEmployees && (
+                      <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 rounded-lg hover:bg-slate-100">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align="end" className="text-right">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedEmployee(emp);
+                                setFormData({
+                                  name: emp.name,
+                                  email: emp.email,
+                                  role: emp.role,
+                                  dept: emp.department || 'الإنتاج',
+                                  photoURL: emp.photoURL || '',
+                                  salary: emp.salary || 0,
+                                  phone: emp.phone || '',
+                                  isSponsored: emp.isSponsored || false,
+                                  iqamaNumber: emp.iqamaNumber || '',
+                                  iqamaExpiry: emp.iqamaExpiry || '',
+                                  iqamaPhotoURL: emp.iqamaPhotoURL || '',
+                                  drivingLicenseNumber: emp.drivingLicenseNumber || '',
+                                  drivingLicenseExpiry: emp.drivingLicenseExpiry || '',
+                                  drivingLicensePhotoURL: emp.drivingLicensePhotoURL || '',
+                                  passportNumber: emp.passportNumber || '',
+                                  passportExpiry: emp.passportExpiry || '',
+                                  passportPhotoURL: emp.passportPhotoURL || '',
+                                  contractURL: emp.contractURL || ''
+                                });
+                                setIsEditDialogOpen(true);
+                              }}
+                              className="flex items-center justify-end gap-2 text-xs"
+                            >
+                              <span>تعديل البيانات</span>
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedEmployee(emp);
+                                setIsDeleteConfirmOpen(true);
+                              }}
+                              className="flex items-center justify-end gap-2 text-xs text-red-600"
+                            >
+                              <span>حذف الموظف</span>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                     )}
                   </div>
 
                   {/* الدور والقسم */}
@@ -868,6 +889,11 @@ export default function Employees({ onSelectEmployee, filterRole }: { onSelectEm
                     <span className="text-[10px] text-slate-400 font-medium">
                       {emp.department || 'الإنتاج'}
                     </span>
+                    {warnings.filter(w => w.userId === emp.id).length > 0 && (
+                      <Badge variant="destructive" className="text-[9px] px-1.5 h-4 ml-2 animate-pulse">
+                        ⚠️ إنذارات ({warnings.filter(w => w.userId === emp.id).length})
+                      </Badge>
+                    )}
                     {isOwner && emp.salary ? (
                       <span className="text-[10px] font-bold text-slate-500 mr-auto">
                         {emp.salary.toLocaleString()} ر.س

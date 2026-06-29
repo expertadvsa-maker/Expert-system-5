@@ -52,7 +52,8 @@ import {
   Receipt,
   X,
   FileCheck,
-  Download
+  Download,
+  ClipboardList
 } from 'lucide-react';
 import { 
   doc, 
@@ -152,6 +153,7 @@ import ProjectOverviewTab from './ProjectView/ProjectOverviewTab';
 import ProjectFinancialsTab from './ProjectView/ProjectFinancialsTab';
 import ProjectTeamTab from './ProjectView/ProjectTeamTab';
 import ProjectFilesTab from './ProjectView/ProjectFilesTab';
+import DynamicMaterialsForm from './ProjectWizard/DynamicMaterialsForm';
 
 export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props) {
   const { profile, activeCompanyId } = useAuth();
@@ -573,8 +575,24 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
 
     const unsubUsers = onSnapshot(
       query(collection(db, 'users'), orderBy('name', 'asc')),
-      (snapshot) => {
-        setUsersList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Worker)));
+      async (snapshot) => {
+        try {
+          const leavesSnap = await getDocs(query(collection(db, 'leaveRequests'), where('status', '==', 'approved')));
+          const today = new Date().toISOString().split('T')[0];
+          const activeLeavesUserIds = new Set(
+            leavesSnap.docs
+              .map(d => d.data())
+              .filter(l => l.startDate <= today && l.endDate >= today)
+              .map(l => l.userId)
+          );
+
+          setUsersList(snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as Worker))
+            .filter(user => !activeLeavesUserIds.has(user.id) && !activeLeavesUserIds.has(user.uid))
+          );
+        } catch (err) {
+          console.error("Failed to load users in ProjectView", err);
+        }
       },
       (err) => {
         console.error("Failed to load users in ProjectView", err);
@@ -648,7 +666,27 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
 
   const teamCandidates = useMemo(() => {
     const productionEmployees = usersList
-      .filter(u => u.department === 'الإنتاج' || u.dept === 'الإنتاج' || u.role === 'worker')
+      .filter(u => {
+        const role = u.role?.toLowerCase() || '';
+        const dept = (u.department || u.dept || '').trim();
+        
+        // Strictly exclude administrative and sales representatives
+        if (['manager', 'admin', 'sales_rep'].includes(role)) {
+          return false;
+        }
+        if (['المالية', 'الإدارة', 'الرئيسي'].includes(dept)) {
+          return false;
+        }
+        
+        // Only allow technicians, supervisors, or general employees who are in production/design
+        return (
+          role === 'worker' ||
+          role === 'supervisor' ||
+          dept === 'الإنتاج' ||
+          dept === 'التصميم' ||
+          role === 'employee'
+        );
+      })
       .map(u => ({ ...u, isDailyWage: false }));
       
     const dailyWageWorkers = workers.map(w => ({
@@ -909,6 +947,7 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
   const tabs = [
     { id: 'overview', label: 'نظرة عامة', icon: <LayoutDashboard /> },
     { id: 'milestones', label: 'مراحل المشروع', icon: <Layers /> },
+    { id: 'materials', label: 'المواد والمشتريات', icon: <ClipboardList /> },
     { id: 'team', label: 'الفريق الفني', icon: <Users /> },
     { id: 'financials', label: 'الحسابات', icon: <DollarSign /> },
     { id: 'monitoring', label: 'التوثيق', icon: <Camera /> },
@@ -1122,9 +1161,24 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                      deleteConfirmationName={deleteConfirmationName}
                      setDeleteConfirmationName={setDeleteConfirmationName}
                      handleDeleteProject={handleDeleteProject}
-                     setActiveTab={setActiveTab}
-                  />
-               )}
+                      setActiveTab={setActiveTab}
+                   />
+                )}
+
+                {activeTab === 'materials' && (
+                   <motion.div 
+                      key="materials"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                   >
+                      <DynamicMaterialsForm
+                         projectId={projectId}
+                         projectType={project.type || 'سياج مخصص'}
+                         projectTitle={project.title}
+                      />
+                   </motion.div>
+                )}
 
                {activeTab === 'milestones' && (
                   <ProjectTeamTab
@@ -1146,7 +1200,8 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                      setActiveTab={setActiveTab}
                      activeSubTab={activeSubTab}
                      setActiveSubTab={setActiveSubTab}
-                  />
+                      activeTab={activeTab}
+                   />
                )}
                {activeTab === 'team' && (
                   <ProjectTeamTab
@@ -1168,7 +1223,8 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                      setActiveTab={setActiveTab}
                      activeSubTab={activeSubTab}
                      setActiveSubTab={setActiveSubTab}
-                  />
+                      activeTab={activeTab}
+                   />
                )}
 
                {activeTab === 'financials' && (

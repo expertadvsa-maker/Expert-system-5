@@ -79,6 +79,22 @@ export interface PaymentInstallment {
   paidAt?: string;
 }
 
+export interface MaterialEstimateItem {
+  name: string;
+  qty: number;
+  unit: string;
+  purpose: string;
+  wastagePercent?: number;
+}
+
+export interface EngineeringGap {
+  severity: 'critical' | 'warning';
+  field: string;
+  issue: string;
+  recommendation: string;
+  fallbackValue: any;
+}
+
 export interface Project {
   id: string;
   title: string;
@@ -113,6 +129,7 @@ export interface Project {
   milestones?: ProjectMilestone[];
   payments?: PaymentInstallment[];
   createdAt: string;
+  assignedEmployees?: string[]; // Smart Zones specific employees
   approvalDate?: string;
   projectType?: string;
   supervisor?: string;
@@ -125,6 +142,29 @@ export interface Project {
   timestamp?: any;
   fileAttachments?: { name: string; url: string; uploadedAt?: string }[];
   companyId?: string;
+  materialEstimates?: MaterialEstimateItem[];
+  safetyGaps?: EngineeringGap[];
+  gapAnalysisApproved?: boolean;
+  installationHeightMeters?: number;
+  requiredEquipment?: string[];
+  highwaySpeedRisk?: boolean;
+  visualLocationAnalysis?: {
+    estimatedFloors?: number;
+    risksDetected?: string[];
+    equipmentReasoning?: string;
+  };
+  historicalPrecedent?: {
+    similarProjectTitle?: string;
+    similarityReasoning?: string;
+    lessonsLearned?: string[];
+  };
+  municipalityCompliance?: {
+    isCompliant?: boolean;
+    municipalityName?: string;
+    regulationsApplicable?: string[];
+    violationsDetected?: string[];
+    remedialActions?: string[];
+  };
 }
 
 export interface MaintenanceRequest {

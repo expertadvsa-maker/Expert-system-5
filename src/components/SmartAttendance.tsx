@@ -28,6 +28,7 @@ import {
   setDoc
 } from 'firebase/firestore';
 import { sendNotification } from '@/lib/notifications';
+import { sendWhatsappMessage } from '../lib/whatsapp';
 import { useAuth } from '../lib/AuthContext';
 import { toast } from 'sonner';
 
@@ -71,59 +72,137 @@ export default function SmartAttendance() {
       }
     }, (err) => console.error("SmartAttendance Stats Listen Error:", err));
 
-    // 2. Fetch authorized locations based on profile
-    const initLocations = async () => {
-      const locations: any[] = [];
-      const types = (profile as any).allowedLocationTypes || ['office'];
+    // 2. Real-time authorized locations listener based on profile (Smart Zones logic)
+    let unsubscribeOffices: () => void;
+    let unsubscribeProjects: () => void;
+    let unsubscribeLeaves: () => void;
 
-      // Fetch official offices/galleries
-      const officeQ = query(collection(db, 'offices'));
-      const officeSnap = await getDocs(officeQ);
-      officeSnap.docs.forEach(d => {
-        const data = d.data();
-        if (types.includes(data.type)) {
-          locations.push({
-            name: data.name,
-            lat: data.latitude,
-            lng: data.longitude,
-            type: data.type
-          });
-        }
+    // 2.5 Active leave listener
+    let isOnLeaveToday = false;
+    const leaveQ = query(collection(db, 'leaveRequests'), where('userId', '==', user.uid), where('status', '==', 'approved'));
+    unsubscribeLeaves = onSnapshot(leaveQ, (snap) => {
+      const todayDate = new Date().toISOString().split('T')[0];
+      isOnLeaveToday = snap.docs.some(doc => {
+        const data = doc.data();
+        return data.startDate <= todayDate && data.endDate >= todayDate;
       });
+    });
 
-      // Fetch projects if authorized
-      if (types.includes('project')) {
-        const projQ = query(collection(db, 'projects'), where('status', '==', 'active'));
-        const projSnap = await getDocs(projQ);
-        projSnap.docs.forEach(d => {
+    const setupLocationListeners = () => {
+      // Arrays to hold latest data before merging
+      let currentOffices: any[] = [];
+      let currentProjects: any[] = [];
+
+      const mergeAndCheck = () => {
+        const locations = [...currentOffices, ...currentProjects];
+        setAuthorizedLocations(locations);
+        setLoading(false);
+        
+        // Attempt Auto-Check-In if in range, not checked in yet, and not on leave
+        if (!todayStatus?.checkIn && locations.length > 0 && !isOnLeaveToday) {
+          attemptAutoCheckIn(locations);
+        }
+      };
+
+      // Listen to official offices
+      const officeQ = query(collection(db, 'offices'));
+      unsubscribeOffices = onSnapshot(officeQ, (snap) => {
+        const offLocations: any[] = [];
+        snap.docs.forEach(d => {
           const data = d.data();
-          if (data.latitude && data.longitude) {
-            locations.push({
-              name: `مشروع: ${data.title}`,
+          // Check if the user is explicitly assigned, or if the office is legacy (open to all)
+          const isManagerOrOwner = profile?.role === 'manager' || profile?.role === 'owner';
+          const isAssigned = isManagerOrOwner || (data.assignedEmployees && Array.isArray(data.assignedEmployees) 
+            ? (data.assignedEmployees.includes(user.uid) || data.assignedEmployees.includes(profile?.id))
+            : true); // Legacy fallback
+            
+          if (isAssigned && data.latitude && data.longitude) {
+            offLocations.push({
+              name: data.name,
               lat: parseFloat(data.latitude),
               lng: parseFloat(data.longitude),
+              type: 'office'
+            });
+          }
+        });
+        currentOffices = offLocations;
+        mergeAndCheck();
+      });
+
+      // Listen to active projects
+      const projQ = activeCompanyId 
+        ? query(collection(db, 'projects'), where('status', '==', 'active'), where('companyId', '==', activeCompanyId))
+        : query(collection(db, 'projects'), where('status', '==', 'active'));
+        
+      unsubscribeProjects = onSnapshot(projQ, (snap) => {
+        const projLocations: any[] = [];
+        snap.docs.forEach(d => {
+          const data = d.data();
+          const isManagerOrOwner = profile?.role === 'manager' || profile?.role === 'owner';
+          const isAssigned = isManagerOrOwner || (data.assignedEmployees && Array.isArray(data.assignedEmployees) 
+            ? (data.assignedEmployees.includes(user.uid) || data.assignedEmployees.includes(profile?.id))
+            : false); // Projects are strict by default unless assigned
+            
+          if (isAssigned && data.locationCoords?.lat && data.locationCoords?.lng) {
+            projLocations.push({
+              name: `مشروع: ${data.title}`,
+              lat: data.locationCoords.lat,
+              lng: data.locationCoords.lng,
               type: 'project',
               projectId: d.id
             });
           }
         });
-      }
-
-      setAuthorizedLocations(locations);
-      setLoading(false);
-      
-      // Attempt Auto-Check-In if in range and not checked in yet
-      if (!todayStatus?.checkIn && locations.length > 0) {
-        attemptAutoCheckIn(locations);
-      }
+        currentProjects = projLocations;
+        mergeAndCheck();
+      });
     };
-    initLocations();
+
+    setupLocationListeners();
 
     return () => {
       unsubSettings();
       unsubAtt();
+      if (unsubscribeOffices) unsubscribeOffices();
+      if (unsubscribeProjects) unsubscribeProjects();
+      if (unsubscribeLeaves) unsubscribeLeaves();
     };
-  }, [user, profile]);
+  }, [user, profile, todayStatus?.checkIn]);
+
+  // Auto Checkout Interval
+  useEffect(() => {
+    let checkoutInterval: any;
+    if (todayStatus?.checkIn && !todayStatus?.checkOut && authorizedLocations.length > 0) {
+      // Check every 3 minutes
+      checkoutInterval = setInterval(() => {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            let minD = Infinity;
+            let closest = null;
+            authorizedLocations.forEach(loc => {
+              const dist = calculateDistance(latitude, longitude, loc.lat, loc.lng);
+              if (dist < minD) {
+                minD = dist;
+                closest = loc;
+              }
+            });
+            const radius = sysSettings.attendanceRadius || 100;
+            if (minD > radius) {
+              // Out of bounds -> Auto checkout!
+              handleAction('checkOut', false, { latitude, longitude, closest, distance: minD });
+            }
+          },
+          () => {},
+          { enableHighAccuracy: true }
+        );
+      }, 3 * 60000);
+    }
+    return () => {
+      if (checkoutInterval) clearInterval(checkoutInterval);
+    };
+  }, [todayStatus, authorizedLocations, sysSettings.attendanceRadius]);
 
   const attemptAutoCheckIn = (locations: any[]) => {
     if (!navigator.geolocation) return;
@@ -266,15 +345,56 @@ export default function SmartAttendance() {
         });
 
         toast.success(`تم تسجيل ${isManual ? 'الحضور اليدوي' : 'الحضور تلقائياً'} في: ${locationLabel}`);
+
+        // Welcome back from leave check
+        try {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const leavesQ = query(
+            collection(db, 'leaveRequests'),
+            where('userId', '==', user?.uid),
+            where('status', '==', 'approved')
+          );
+          const leavesSnap = await getDocs(leavesQ);
+          for (const docSnap of leavesSnap.docs) {
+            const data = docSnap.data();
+            if (data.endDate < todayStr && !data.welcomedBack) {
+              if (profile?.phone) {
+                const msg = `أهلاً بعودتك يا ${profile.name}! نتمنى أن تكون إجازتك ممتعة ومريحة 🌴. سعداء جداً برؤيتك مجدداً في العمل اليوم.`;
+                await sendWhatsappMessage(profile.phone, msg);
+              }
+              await updateDoc(docSnap.ref, { welcomedBack: true });
+            }
+          }
+        } catch (err) {
+          console.error("Failed to check return from leave", err);
+        }
       } else {
         if (!attendanceDocId) throw new Error('No doc id');
+        
+        // Calculate worked minutes and overtime
+        const now = new Date();
+        const checkInDate = new Date(todayStatus?.checkIn || now);
+        let workedMinutes = Math.floor((now.getTime() - checkInDate.getTime()) / 60000);
+        if (workedMinutes < 0) workedMinutes = 0;
+
+        const [startH, startM] = (sysSettings.workingHoursStart || '08:00').split(':').map(Number);
+        const [endH, endM] = (sysSettings.workingHoursEnd || '17:00').split(':').map(Number);
+        const expectedMinutes = ((endH * 60) + endM) - ((startH * 60) + startM);
+        
+        let overtimeMinutes = 0;
+        if (workedMinutes > expectedMinutes) {
+          overtimeMinutes = workedMinutes - expectedMinutes;
+        }
+
         await updateDoc(doc(db, 'attendance', attendanceDocId), {
           checkOut: timestamp,
           checkOutLocationName: locationLabel,
           checkOutLocation: { lat, lng },
-          checkOutManual: isManual
+          checkOutManual: isManual,
+          workedMinutes: workedMinutes,
+          overtimeMinutes: overtimeMinutes
         });
-        toast.success('تم تسجيل الانصراف من: ' + locationLabel);
+        toast.success(`تم تسجيل ${isManual ? 'الانصراف اليدوي' : 'الانصراف تلقائياً'} من: ${locationLabel}`);
       }
 
       // Fetch real battery safely
@@ -386,15 +506,13 @@ export default function SmartAttendance() {
 
           <div className="space-y-3">
             {todayStatus?.checkIn && !todayStatus?.checkOut ? (
-              <Button 
-                onClick={() => handleAction('checkOut')} 
-                disabled={checking}
-                variant="outline"
-                className="w-full bg-transparent border-white/20 text-white hover:bg-white/10 font-black h-11 md:h-12 rounded-xl transition-all active:scale-95"
-              >
-                {checking ? <Loader2 className="w-5 h-5 animate-spin ml-2" /> : <LogOut className="w-5 h-5 ml-2" />}
-                تسجيل الانصراف
-              </Button>
+              <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between">
+                <div>
+                   <p className="text-[10px] opacity-70 uppercase font-black">حالة الانصراف</p>
+                   <p className="font-black text-sm text-emerald-300">يتم تسجيله تلقائياً عند المغادرة</p>
+                </div>
+                <LogOut className="w-5 h-5 opacity-30" />
+              </div>
             ) : todayStatus?.checkOut ? (
               <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between">
                 <div>

@@ -193,6 +193,20 @@ export default function ClientPortal() {
           status: 'pending'
         });
 
+        // Also write to the root collection receipt_vouchers for easy admin review and automatic voucher generation
+        await addDoc(collection(db, 'receipt_vouchers'), {
+          voucherNumber: `REC-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+          clientId: project.clientId || '',
+          clientName: project.clientName || 'عميل بوابة العميل',
+          projectId: project.id,
+          projectTitle: project.name || project.title || '',
+          amount: Number(project.nextPaymentAmount || project.contractValue || 0),
+          paymentMethod: 'تحويل بنكي',
+          receiptImgUrl: base64String,
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        });
+
         // Send notification to Admin
         await addDoc(collection(db, 'notifications'), {
           title: 'إيصال تحويل جديد',
@@ -203,7 +217,7 @@ export default function ClientPortal() {
           timestamp: new Date().toISOString()
         });
 
-        toast.success('تم رفع إيصال التحويل بنجاح، سيتم مراجعته من قبل الإدارة.');
+        toast.success('تم رفع إيصال التحويل بنجاح، سيتم مراجعته من قبل الإدارة لتوليد سند القبض تلقائياً 🧾');
       };
       reader.readAsDataURL(file);
     } catch (err) {

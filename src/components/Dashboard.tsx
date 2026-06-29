@@ -805,8 +805,8 @@ export default function Dashboard({ goToTab }: { goToTab: (tabId: string) => voi
           </div>
         </div>
 
-        {/* ══ EMPLOYEE VIEW ══ */}
-        {!isElevated && <SmartAttendance />}
+        {/* ══ ATTENDANCE VIEW ══ */}
+        {profile?.role !== 'sales_rep' && <SmartAttendance />}
 
         {/* ══ ALERTS ══ */}
         {isManager && alerts.length > 0 && (

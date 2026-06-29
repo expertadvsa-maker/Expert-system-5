@@ -5,8 +5,24 @@ const ALIPHIA_API_URL = '/api_public';
 // Unified fetch helper with automatic direct fallback to bypass Google Cloud IP block (403) or offline backend (404)
 const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Response> => {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  
+  // 🔄 كسر التخزين المؤقت (Cache Busting) لضمان جلب أحدث البيانات فوراً من ألف ياء دون الاعتماد على كاش المتصفح أو البروكسي
+  const hasQuery = cleanPath.includes('?');
+  const cacheBustedPath = `${cleanPath}${hasQuery ? '&' : '?'}_t=${Date.now()}`;
+
+  // إضافة هيدرز تمنع الكاش
+  const finalOptions = {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  };
+
   try {
-    const response = await fetch(`${ALIPHIA_API_URL}${cleanPath}`, options);
+    const response = await fetch(`${ALIPHIA_API_URL}${cacheBustedPath}`, finalOptions);
     // 403 = Server IP is blocked by Aliphia. 
     // 404 = Express backend is not running on App Hosting.
     if (response.status === 403 || response.status === 404) {
@@ -17,7 +33,7 @@ const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Re
   } catch (error) {
     const isGuest = cleanPath.startsWith('/guest/') || cleanPath.startsWith('guest/');
     const baseDirectUrl = isGuest ? 'https://aliphia.com/v1' : 'https://aliphia.com/v1/api_public';
-    const directUrl = `${baseDirectUrl}${cleanPath}`;
+    const directUrl = `${baseDirectUrl}${cacheBustedPath}`;
     
     // Support custom Cloudflare Worker CORS proxy if set, with fallback to your deployed Cloudflare Worker
     const customProxy = import.meta.env.VITE_ALIPHIA_CORS_PROXY || 'https://aliphia-proxy.expertadvsa.workers.dev';
@@ -33,7 +49,7 @@ const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Re
     }
     
     // Clone options to prevent mutation issues
-    const directOptions = { ...options };
+    const directOptions = { ...finalOptions };
     return await fetch(proxiedUrl, directOptions);
   }
 };

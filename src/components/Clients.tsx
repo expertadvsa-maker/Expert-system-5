@@ -137,16 +137,42 @@ export default function Clients({ onNavigate }: { onNavigate?: (tab: string) => 
     }
   }, [profile]);
 
-  const getClientFinancials = (clientId: string) => {
-    const clientInvoices = invoices.filter(inv => String(inv.client_id) === String(clientId));
-    const clientQuotes = quotes.filter(q => String(q.client_id) === String(clientId));
+  // 🚀 تحسين فائق للأداء وسرعة التصفح: بناء فهارس سريعة للبحث الفوري O(1) بدلاً من البحث المتكرر O(N*M)
+  const invoicesByClientId = React.useMemo(() => {
+    const map = new Map<string, any[]>();
+    invoices.forEach(inv => {
+      const cid = String(inv.client_id || inv.clientId || '');
+      if (cid) {
+        if (!map.has(cid)) map.set(cid, []);
+        map.get(cid)!.push(inv);
+      }
+    });
+    return map;
+  }, [invoices]);
+
+  const quotesByClientId = React.useMemo(() => {
+    const map = new Map<string, any[]>();
+    quotes.forEach(q => {
+      const cid = String(q.client_id || q.clientId || '');
+      if (cid) {
+        if (!map.has(cid)) map.set(cid, []);
+        map.get(cid)!.push(q);
+      }
+    });
+    return map;
+  }, [quotes]);
+
+  const getClientFinancials = React.useCallback((clientId: string) => {
+    const cid = String(clientId);
+    const clientInvoices = invoicesByClientId.get(cid) || [];
+    const clientQuotes = quotesByClientId.get(cid) || [];
     
     const totalInvoiced = clientInvoices.reduce((sum, inv) => sum + parseFloat(inv.invoice_total || inv.total || 0), 0);
     const totalPaid = clientInvoices.reduce((sum, inv) => sum + parseFloat(inv.invoice_paid || inv.paid || 0), 0);
     const balance = clientInvoices.reduce((sum, inv) => sum + parseFloat(inv.invoice_balance || inv.balance || 0), 0);
 
     return { clientInvoices, clientQuotes, totalInvoiced, totalPaid, balance };
-  };
+  }, [invoicesByClientId, quotesByClientId]);
 
   const filteredClients = clients.filter(c => {
     const name = String(c.name || '');
