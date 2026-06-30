@@ -2,7 +2,6 @@
 
 const ALIPHIA_API_URL = '/api_public';
 
-// Unified fetch helper with automatic direct fallback to bypass Google Cloud IP block (403) or offline backend (404)
 const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Response> => {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   
@@ -21,12 +20,10 @@ const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Re
     }
   };
 
+  // 1. محاولة الاتصال عبر البروكسي المحلي أولاً (إذا كان شغالاً في التطبيق المحلي)
   try {
     const response = await fetch(`${ALIPHIA_API_URL}${cacheBustedPath}`, finalOptions);
-    // 403 = Server IP is blocked by Aliphia. 
-    // 404 = Express backend is not running on App Hosting.
     if (response.status === 403 || response.status === 404) {
-      console.warn(`⚠️ Aliphia proxy returned status ${response.status}. Attempting direct browser connection to bypass...`);
       throw new Error(`Proxy status: ${response.status}`);
     }
     return response;
@@ -35,22 +32,37 @@ const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Re
     const baseDirectUrl = isGuest ? 'https://aliphia.com/v1' : 'https://aliphia.com/v1/api_public';
     const directUrl = `${baseDirectUrl}${cacheBustedPath}`;
     
-    // Support custom Cloudflare Worker CORS proxy if set, with fallback to your deployed Cloudflare Worker
-    const customProxy = import.meta.env.VITE_ALIPHIA_CORS_PROXY || 'https://aliphia-proxy.expertadvsa.workers.dev';
-    let proxiedUrl = '';
-    
-    if (customProxy) {
-      const cleanProxy = customProxy.endsWith('/') ? customProxy.slice(0, -1) : customProxy;
-      proxiedUrl = `${cleanProxy}?${encodeURIComponent(directUrl)}`;
-      console.log(`🔌 [Aliphia Fallback] Calling direct via Worker CORS Proxy: ${proxiedUrl}`);
-    } else {
-      proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(directUrl)}`;
-      console.log(`🔌 [Aliphia Fallback] Calling direct via Public CORS proxy: ${proxiedUrl}`);
+    // قائمة بالبروكسيات البديلة لتفادي الحظر المحلي للـ Cloudflare Workers في بعض الدول
+    const proxies = [
+      // 1. البروكسي المخصص للمشروع (قد يكون محظوراً في بعض الشبكات المحلية)
+      () => {
+        const customProxy = import.meta.env.VITE_ALIPHIA_CORS_PROXY || 'https://aliphia-proxy.expertadvsa.workers.dev';
+        const cleanProxy = customProxy.endsWith('/') ? customProxy.slice(0, -1) : customProxy;
+        return `${cleanProxy}?${encodeURIComponent(directUrl)}`;
+      },
+      // 2. البروكسي العام المجاني corsproxy.io (مستقر ومفتوح في السعودية)
+      () => `https://corsproxy.io/?${encodeURIComponent(directUrl)}`,
+      // 3. البروكسي العام المجاني allorigins (كاحتياطي أخير)
+      () => `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`
+    ];
+
+    let lastError: any = error;
+    for (let i = 0; i < proxies.length; i++) {
+      try {
+        const proxiedUrl = proxies[i]();
+        console.log(`🔌 [Aliphia Fallback] Attempting connection via proxy #${i + 1}: ${proxiedUrl}`);
+        const response = await fetch(proxiedUrl, { ...finalOptions });
+        if (response.ok || response.status < 500) {
+          return response;
+        }
+        throw new Error(`Proxy returned status ${response.status}`);
+      } catch (proxyErr) {
+        lastError = proxyErr;
+        console.warn(`⚠️ Proxy #${i + 1} failed, trying next... Error:`, proxyErr);
+      }
     }
     
-    // Clone options to prevent mutation issues
-    const directOptions = { ...finalOptions };
-    return await fetch(proxiedUrl, directOptions);
+    throw lastError;
   }
 };
 
