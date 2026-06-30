@@ -126,7 +126,6 @@ class _TodayDashboardState extends State<TodayDashboard> {
           setState(() {
             _companyName = data['companyName'] ?? 'خبراء الرسم';
             _announcement = data['generalAnnouncement'] ?? '';
-            _gpsRadius = int.tryParse(data['attendanceRadius']?.toString() ?? '100') ?? 100;
           });
         }
       }
