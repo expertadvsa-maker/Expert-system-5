@@ -46,7 +46,30 @@ class ExpertSystemApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        scaffoldBackgroundColor: const Color(0xFFF4F7FA), // Light grey background
+        primaryColor: const Color(0xFF0F172A), // Dark slate
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF2C7A7D), // Primary accent (Teal)
+          primary: const Color(0xFF2C7A7D),
+          secondary: const Color(0xFF38BDF8), // Light blue accent
+          surface: Colors.white,
+          background: const Color(0xFFF4F7FA),
+        ),
+        cardTheme: CardTheme(
+          elevation: 0,
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: Colors.grey.withOpacity(0.1), width: 1),
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: false,
+          iconTheme: IconThemeData(color: Color(0xFF0F172A)),
+        ),
         textTheme: GoogleFonts.cairoTextTheme(
           Theme.of(context).textTheme,
         ),

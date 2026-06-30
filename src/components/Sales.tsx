@@ -12,8 +12,9 @@ import {
   UserCheck, Receipt, FileSpreadsheet, Ban, Clock, Users, Percent, Calculator,
   Wallet, Trash2, Printer, Filter
 } from "lucide-react";
-import { db } from "../lib/firebase";
-import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, where, deleteDoc } from "firebase/firestore";
+import { db, functions } from "../lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, where, deleteDoc, writeBatch, setDoc } from "firebase/firestore";
 import { toast } from "sonner";
 import { useAuth } from "../lib/AuthContext";
 import { sendNotification } from "../lib/notifications";
@@ -584,6 +585,30 @@ export default function Sales() {
       setAliphiaInvoices(invoices || []);
       setAliphiaQuotes(quotes || []);
       setAliphiaClients(clients || []);
+
+      // مزامنة بيانات ألف ياء مع Firestore حتى يقرأها تطبيق الجوال مباشرة
+      try {
+        const batch = writeBatch(db);
+        // Sync invoices
+        (invoices || []).slice(0, 100).forEach((inv: any) => {
+          const id = String(inv.id || inv.invoice_id || inv.number || Math.random());
+          batch.set(doc(db, 'aliphia_invoices', id), { ...inv, syncedAt: serverTimestamp() }, { merge: true });
+        });
+        // Sync clients
+        (clients || []).slice(0, 100).forEach((cl: any) => {
+          const id = String(cl.id || cl.client_id || Math.random());
+          batch.set(doc(db, 'aliphia_clients', id), { ...cl, syncedAt: serverTimestamp() }, { merge: true });
+        });
+        // Sync quotes
+        (quotes || []).slice(0, 100).forEach((qt: any) => {
+          const id = String(qt.id || qt.quote_id || qt.number || Math.random());
+          batch.set(doc(db, 'aliphia_quotes', id), { ...qt, syncedAt: serverTimestamp() }, { merge: true });
+        });
+        await batch.commit();
+        console.log('✅ Aliphia data synced to Firestore for mobile app');
+      } catch (syncErr) {
+        console.warn('⚠️ Aliphia Firestore sync failed (non-critical):', syncErr);
+      }
     } catch (error) {
       console.error("Error fetching Aliphia data", error);
       toast.error("فشل جلب البيانات من ألف ياء. يرجى التحقق من مفاتيح الاتصال.");
@@ -633,7 +658,8 @@ export default function Sales() {
 
       const parsedDate = formData.customDate ? new Date(formData.customDate) : new Date();
 
-      await addDoc(collection(db, "transactions"), {
+      const createTransaction = httpsCallable(functions, 'createTransaction');
+      await createTransaction({
         type: 'income',
         amount: parseFloat(formData.amount),
         description: txDescription,
@@ -642,10 +668,7 @@ export default function Sales() {
         paymentMethod: formData.paymentMethod,
         bankAccountId: formData.paymentMethod === 'transfer' ? formData.bankAccountId : null,
         status: 'approved', // Manual income is auto-approved by default for transactions
-        customerName: clientOrProjectName,
-        date: parsedDate,
-        createdAt: serverTimestamp(),
-        createdBy: profile?.uid || 'unknown'
+        companyId: activeCompanyId || null
       });
 
       await logActivity(
@@ -1156,7 +1179,8 @@ export default function Sales() {
           parsedDate = new Date();
         }
 
-        await addDoc(collection(db, 'transactions'), {
+        const createTransaction = httpsCallable(functions, 'createTransaction');
+        await createTransaction({
           type: 'income',
           amount: parseFloat(inv.invoice_total || inv.total || 0),
           description: `دفعة فاتورة مبيعات رقم ${invNum} للعميل ${inv.client_name || 'غير معروف'}`,
@@ -1165,9 +1189,7 @@ export default function Sales() {
           bankAccountId: null,
           invoiceNumber: invNum,
           status: 'approved',
-          date: parsedDate,
-          createdBy: profile?.uid || 'system',
-          createdAt: serverTimestamp()
+          companyId: activeCompanyId || null
         });
 
         syncedCount++;

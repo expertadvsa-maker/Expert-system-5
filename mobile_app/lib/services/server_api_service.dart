@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class ServerApiService {
   ServerApiService();
@@ -25,7 +26,6 @@ class ServerApiService {
     }
 
     return {
-      'baseUrl': prefs.getString('baseUrl') ?? 'http://127.0.0.1:3000',
       'geminiKey': geminiKey,
       'aliphiaUser': prefs.getString('aliphiaUser') ?? '',
       'aliphiaPass': prefs.getString('aliphiaPass') ?? '',
@@ -40,25 +40,36 @@ class ServerApiService {
     Map<String, dynamic>? context,
   }) async {
     final config = await _getApiConfig();
-    final baseUrl = config['baseUrl']!;
-    final url = Uri.parse('$baseUrl/api/chat');
+    final geminiKey = config['geminiKey']!;
+    
+    if (geminiKey.isEmpty) throw Exception('مفتاح Gemini غير متوفر');
+
+    final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$geminiKey');
     
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'message': message,
-          'history': history,
-          'context': context,
-          'customKey': config['geminiKey'], // حقن المفتاح الخاص بالذكاء
+          'contents': [
+            {
+              'parts': [
+                {'text': 'أنت خبير في إدارة المشاريع: \nسياق: ${jsonEncode(context)}\nرسالة: $message'}
+              ]
+            }
+          ]
         }),
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final data = jsonDecode(response.body);
+        final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? 'لا يوجد رد';
+        return {
+          'text': text,
+          'sources': [],
+        };
       } else {
-        throw Exception('فشل في الاتصال بالمساعد بشرى: ${response.statusCode}');
+        throw Exception('فشل في الاتصال بالمساعد: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('خطأ في شبكة الاتصال بالمساعد: $e');
@@ -70,31 +81,7 @@ class ServerApiService {
     required Map<String, dynamic> stats,
     String voiceFocus = 'all',
   }) async {
-    final config = await _getApiConfig();
-    final baseUrl = config['baseUrl']!;
-    final url = Uri.parse('$baseUrl/api/tts');
-    
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'stats': stats,
-          'voiceFocus': voiceFocus,
-          'customKey': config['geminiKey'], // حقن المفتاح
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final String base64Audio = data['audio'];
-        return base64.decode(base64Audio);
-      } else {
-        throw Exception('فشل توليد التقرير المسموع: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('خطأ أثناء توليد الصوت: $e');
-    }
+    throw Exception('التوليد الصوتي يحتاج إلى إعداد خدمة خارجية (TTS API).');
   }
 
   /// إرسال الصورة لاستخراج نصوص الفاتورة عبر Gemini OCR
@@ -103,41 +90,39 @@ class ServerApiService {
     required String mimeType,
   }) async {
     final config = await _getApiConfig();
-    final baseUrl = config['baseUrl']!;
-    final url = Uri.parse('$baseUrl/api/chat');
+    final geminiKey = config['geminiKey']!;
+    if (geminiKey.isEmpty) throw Exception('مفتاح Gemini غير متوفر');
+    
+    final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$geminiKey');
     
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'message': 'من فضلك قم بقراءة هذه الفاتورة المرفقة واستخراج المورد والمبلغ الإجمالي والتاريخ وتفاصيل المواد. أجب بتنسيق JSON حصراً دون أي نصوص خارجية بالصيغة التالية: {"vendor": "...", "amount": 0.0, "date": "YYYY-MM-DD", "items": "..."}',
-          'image': {
-            'data': base64Image,
-            'mimeType': mimeType,
-          },
-          'customKey': config['geminiKey'],
+          'contents': [
+            {
+              'parts': [
+                { 'text': 'من فضلك قم بقراءة هذه الصورة المرفقة. إذا لم تكن الصورة فاتورة حقيقية واضحة (كأن تكون صورة شخصية أو منظر طبيعي أو غير متعلقة بالمشتريات)، يجب عليك إرجاع الاستجابة التالية حصراً: {"error": "not_an_invoice"}. أما إذا كانت فاتورة، فاستخرج المورد والمبلغ الإجمالي والتاريخ وتفاصيل المواد، وأجب بتنسيق JSON حصراً بالصيغة التالية: {"vendor": "...", "amount": 0.0, "date": "YYYY-MM-DD", "items": "..."}' },
+                {
+                  'inlineData': {
+                    'data': base64Image,
+                    'mimeType': mimeType,
+                  }
+                }
+              ]
+            }
+          ],
+          'generationConfig': {
+            'responseMimeType': 'application/json',
+          }
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final String text = data['text'] ?? '';
-        
-        String cleanJson = text.trim();
-        if (cleanJson.contains('```json')) {
-          cleanJson = cleanJson.split('```json')[1].split('```')[0].trim();
-        } else if (cleanJson.contains('```')) {
-          cleanJson = cleanJson.split('```')[1].split('```')[0].trim();
-        }
-        
-        final startIndex = cleanJson.indexOf('{');
-        final endIndex = cleanJson.lastIndexOf('}');
-        if (startIndex != -1 && endIndex != -1) {
-          cleanJson = cleanJson.substring(startIndex, endIndex + 1);
-        }
-
-        return jsonDecode(cleanJson);
+        final String text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+        return jsonDecode(text.trim());
       } else {
         throw Exception('فشل قراءة الفاتورة من السيرفر: ${response.statusCode}');
       }
@@ -160,8 +145,7 @@ class ServerApiService {
   /// فحص حالة الاتصال بـ ألف ياء ERP
   Future<Map<String, dynamic>> checkAliphiaConnection() async {
     final config = await _getApiConfig();
-    final baseUrl = config['baseUrl']!;
-    final url = Uri.parse('$baseUrl/test-aliphia-connection');
+    final url = Uri.parse('https://aliphia.com/v1/api_public/clients/active?limit=1');
     
     try {
       final response = await http.get(
@@ -169,7 +153,7 @@ class ServerApiService {
         headers: _getAliphiaHeaders(config),
       );
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return {'status': 'connected', 'message': 'تم الاتصال بنجاح'};
       } else {
         throw Exception('فشل فحص الاتصال: ${response.statusCode}');
       }
@@ -181,8 +165,7 @@ class ServerApiService {
   /// جلب الفواتير من ألف ياء
   Future<List<dynamic>> fetchAliphiaInvoices() async {
     final config = await _getApiConfig();
-    final baseUrl = config['baseUrl']!;
-    final url = Uri.parse('$baseUrl/api_public/invoices');
+    final url = Uri.parse('https://aliphia.com/v1/api_public/invoices');
     
     try {
       final response = await http.get(
@@ -212,8 +195,7 @@ class ServerApiService {
   /// جلب العملاء النشطين من ألف ياء
   Future<List<dynamic>> fetchAliphiaClients() async {
     final config = await _getApiConfig();
-    final baseUrl = config['baseUrl']!;
-    final url = Uri.parse('$baseUrl/api_public/clients/active');
+    final url = Uri.parse('https://aliphia.com/v1/api_public/clients/active');
     
     try {
       final response = await http.get(
@@ -241,8 +223,7 @@ class ServerApiService {
   /// جلب عروض الأسعار من ألف ياء
   Future<List<dynamic>> fetchAliphiaQuotes() async {
     final config = await _getApiConfig();
-    final baseUrl = config['baseUrl']!;
-    final url = Uri.parse('$baseUrl/api_public/quotes');
+    final url = Uri.parse('https://aliphia.com/v1/api_public/quotes');
     
     try {
       final response = await http.get(
@@ -269,33 +250,27 @@ class ServerApiService {
     }
   }
 
-  /// رفع صورة حقيقية من الكاميرا/المعرض إلى الخادم
+  /// رفع صورة حقيقية من الكاميرا/المعرض مباشرة إلى Firebase Storage
   Future<String> uploadImage({
     required Uint8List imageBytes,
     required String fileName,
   }) async {
-    final config = await _getApiConfig();
-    final baseUrl = config['baseUrl']!;
-    final url = Uri.parse('$baseUrl/api/upload');
-    
+    // رفع مباشر لـ Firebase Storage بدون الحاجة لخادم وسيط
     try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'fileData': base64Encode(imageBytes),
-          'fileName': fileName,
-        }),
-      ).timeout(const Duration(seconds: 4));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['url'];
-      } else {
-        throw Exception('فشل رفع الملف إلى الخادم: ${response.statusCode}');
-      }
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('uploads/$fileName');
+      
+      final uploadTask = storageRef.putData(
+        imageBytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      
+      final snapshot = await uploadTask;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      return downloadUrl;
     } catch (e) {
-      throw Exception('خطأ في شبكة الاتصال أثناء الرفع: $e');
+      throw Exception('خطأ في رفع الصورة إلى Firebase Storage: $e');
     }
   }
 }

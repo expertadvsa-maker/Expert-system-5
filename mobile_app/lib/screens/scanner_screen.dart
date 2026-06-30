@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/firebase_service.dart';
 import '../services/server_api_service.dart';
@@ -65,6 +65,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
         base64Image: base64Image,
         mimeType: mimeType,
       );
+
+      if (data['error'] == 'not_an_invoice') {
+        throw Exception('الصورة المرفقة لا يبدو أنها فاتورة صحيحة. الرجاء تصوير فاتورة واضحة.');
+      }
 
       setState(() {
         _isScanning = false;
@@ -201,19 +205,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
     }
 
     try {
-      final db = widget.firebaseService.db;
-      if (db != null) {
-        await db.collection('transactions').add({
-          'amount': amount,
-          'type': _invoiceType,
-          'description': 'فاتورة ممسوحة ضوئياً: $items',
-          'status': 'pending', // المدير العام يعتمدها لاحقاً
-          'date': DateTime.now().toIso8601String(),
-          'createdAt': DateTime.now().toIso8601String(),
-          'vendorName': vendor,
-          'createdBy': 'mobile_ocr_scanner',
-        });
-      }
+      final HttpsCallable createTransaction = FirebaseFunctions.instance.httpsCallable('createTransaction');
+      await createTransaction.call({
+        'amount': amount,
+        'type': _invoiceType,
+        'description': 'فاتورة ممسوحة ضوئياً: $items',
+        'status': 'pending', // المدير العام يعتمدها لاحقاً
+        'date': DateTime.now().toIso8601String(),
+        'createdAt': DateTime.now().toIso8601String(),
+        'vendorName': vendor,
+        'createdBy': 'mobile_ocr_scanner',
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

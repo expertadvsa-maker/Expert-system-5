@@ -19,6 +19,7 @@ import {
   MapPin,
   ExternalLink
 } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
   query, 
@@ -32,7 +33,7 @@ import {
   addDoc,
   increment
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, functions } from '../lib/firebase';
 import { useAuth } from '../lib/AuthContext';
 import { getCompanyQuery } from '../lib/firestoreUtils';
 import { logActivity } from '../lib/activity';
@@ -97,11 +98,17 @@ export default function ApprovalCenter() {
 
   const handleApprove = async (collectionName: string, id: string, title: string, targetUserId?: string) => {
     try {
-      await updateDoc(doc(db, collectionName, id), {
-        status: 'approved',
-        approvedBy: profile?.uid,
-        approvedAt: serverTimestamp()
-      });
+      if (collectionName === 'transactions') {
+        const approveTransaction = httpsCallable(functions, 'approveTransaction');
+        await approveTransaction({ transactionId: id });
+      } else {
+        const processApproval = httpsCallable(functions, 'processApproval');
+        await processApproval({
+          collectionName,
+          documentId: id,
+          status: 'approved'
+        });
+      }
 
       // ---- PROCUREMENT AUTOMATION: INVENTORY SYNC ----
       if (collectionName === 'transactions') {
@@ -171,10 +178,11 @@ export default function ApprovalCenter() {
 
   const handleReject = async (collectionName: string, id: string, title: string, targetUserId?: string) => {
     try {
-      await updateDoc(doc(db, collectionName, id), {
-        status: 'rejected',
-        rejectedBy: profile?.uid,
-        rejectedAt: serverTimestamp()
+      const processApproval = httpsCallable(functions, 'processApproval');
+      await processApproval({
+        collectionName,
+        documentId: id,
+        status: 'rejected'
       });
       await logActivity('رفض طلب', `تم رفض: ${title}`, 'warning', 'system', profile?.uid || 'system');
       

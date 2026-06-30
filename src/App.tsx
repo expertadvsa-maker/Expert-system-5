@@ -1089,13 +1089,23 @@ function AppContent() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const docs = snapshot.docs.map((doc) => {
+        let docs = snapshot.docs.map((doc) => {
           const data = doc.data();
           return {
             id: doc.id,
             ...data,
           };
         });
+
+        // Deduplicate header notifications
+        const seen = new Set();
+        docs = docs.filter((doc: any) => {
+          const key = `${doc.title}-${doc.message}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
         setHeaderNotifications(docs);
       },
       (error: Error) => console.error("Header Notifications Listen Error:", error),

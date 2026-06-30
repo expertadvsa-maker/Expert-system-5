@@ -1,4 +1,4 @@
-import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
 export type NotificationType = 'success' | 'warning' | 'info' | 'error' | 'approval' | 'financial' | 'project' | 'inventory' | 'system' | 'hr';
@@ -29,16 +29,33 @@ export interface AppNotification {
   priority?: 'low' | 'medium' | 'high';
   actions?: NotificationAction[];
   createdBy?: string;
+  dedupKey?: string;
 }
 
 export const sendNotification = async (notif: Omit<AppNotification, 'timestamp' | 'read'>): Promise<void> => {
   try {
+    // منع تكرار الإشعارات المتشابهة خلال 5 دقائق
+    const dedupKey = `${notif.title}-${notif.message}-${notif.targetRole}`;
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    const existingQ = query(
+      collection(db, 'notifications'),
+      where('dedupKey', '==', dedupKey),
+      where('timestamp', '>=', Timestamp.fromDate(fiveMinutesAgo))
+    );
+    const existingSnap = await getDocs(existingQ);
+    if (!existingSnap.empty) {
+      console.log('⚠️ Notification deduplicated (same event within 5 min):', dedupKey);
+      return;
+    }
+
     await addDoc(collection(db, 'notifications'), {
       ...notif,
       read: false,
       timestamp: serverTimestamp(),
       priority: notif.priority || 'medium',
-      createdBy: notif.createdBy || auth.currentUser?.uid || 'system'
+      createdBy: notif.createdBy || auth.currentUser?.uid || 'system',
+      dedupKey,
     });
   } catch (error) {
     console.error("Failed to send notification:", error);

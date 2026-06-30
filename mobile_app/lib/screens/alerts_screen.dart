@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
+import '../services/server_api_service.dart';
 
 class AlertsScreen extends StatefulWidget {
   final FirebaseService firebaseService;
+  final ServerApiService apiService;
   final Function(int) onNavigateToTab;
   const AlertsScreen({
     Key? key,
     required this.firebaseService,
+    required this.apiService,
     required this.onNavigateToTab,
   }) : super(key: key);
 
@@ -132,22 +135,47 @@ class _AlertsScreenState extends State<AlertsScreen> {
                     });
                   }
 
-                  // تنبيه افتراضي للمظهر الرائع
-                  alertsList.add({
-                    'id': 'system_stable',
-                    'title': 'خدمات الربط السحابي مستقرة',
-                    'desc': 'منصة الويب وتطبيق الجوال متزامنان بشكل كامل مع خوادم Firebase.',
-                    'type': 'blue',
-                    'icon': Icons.cloud_done_outlined,
-                    'actionText': null,
-                    'targetTab': null,
-                  });
-
+                  // سيتم دمج تنبيهات حالة الربط السحابي في ListView عن طريق إضافة بطاقة خاصة بالأسفل
+                  // سنكتفي حالياً بإظهار التنبيهات الأخرى في الـ ListView ونضيف حالة السيرفر في نهاية القائمة.
+                  
                   return ListView.builder(
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    itemCount: alertsList.length,
+                    itemCount: alertsList.length + 1,
                     itemBuilder: (context, index) {
+                      if (index == alertsList.length) {
+                        return FutureBuilder<Map<String, dynamic>>(
+                          future: widget.apiService.checkAliphiaConnection(),
+                          builder: (context, connectionSnapshot) {
+                            if (connectionSnapshot.connectionState == ConnectionState.waiting) {
+                              return _buildAlertTile({
+                                'id': 'system_stable',
+                                'title': 'جاري التحقق من الربط السحابي...',
+                                'desc': 'يتم الآن فحص الاتصال مع خوادم ألف ياء.',
+                                'type': 'grey',
+                                'icon': Icons.sync,
+                                'actionText': null,
+                                'targetTab': null,
+                              });
+                            }
+                            
+                            bool isConnected = false;
+                            if (connectionSnapshot.hasData && connectionSnapshot.data != null) {
+                               isConnected = connectionSnapshot.data!['connected'] == true;
+                            }
+
+                            return _buildAlertTile({
+                              'id': 'system_stable',
+                              'title': isConnected ? 'خدمات الربط السحابي مستقرة' : 'انقطاع في الربط السحابي',
+                              'desc': isConnected ? 'منصة الويب وتطبيق الجوال متزامنان بشكل كامل مع الخوادم.' : 'لا يمكن الاتصال بخادم ألف ياء. يرجى التحقق من إعدادات الربط.',
+                              'type': isConnected ? 'blue' : 'red',
+                              'icon': isConnected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                              'actionText': isConnected ? null : 'تحديث الإعدادات',
+                              'targetTab': isConnected ? null : 0, // 0 for MoreScreen/Settings
+                            });
+                          },
+                        );
+                      }
                       final alert = alertsList[index];
                       return _buildAlertTile(alert);
                     },

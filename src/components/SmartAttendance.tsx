@@ -12,7 +12,8 @@ import {
   LogOut,
   Clock
 } from 'lucide-react';
-import { db } from '../lib/firebase';
+import { db, functions } from '../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
   addDoc, 
@@ -319,17 +320,18 @@ export default function SmartAttendance() {
       
       if (type === 'checkIn') {
         const status = checkIsLate() ? 'late' : 'present';
-        await addDoc(collection(db, 'attendance'), {
-          companyId: activeCompanyId || null,
+        
+        const logAttendance = httpsCallable(functions, 'logAttendance');
+        await logAttendance({
+          type: 'check-in',
           userId: user?.uid,
-          userName: profile?.name,
-          date: new Date().toISOString().split('T')[0],
-          checkIn: timestamp,
+          companyId: activeCompanyId || null,
+          location: { lat, lng },
           status: status,
+          userName: profile?.name,
           isManual: isManual,
           department: profile?.department,
           locationName: locationLabel,
-          location: { lat, lng },
           distanceFromTarget: loc ? Math.round(dist) : -1,
           projectId: loc?.projectId || null
         });
@@ -386,14 +388,17 @@ export default function SmartAttendance() {
           overtimeMinutes = workedMinutes - expectedMinutes;
         }
 
-        await updateDoc(doc(db, 'attendance', attendanceDocId), {
-          checkOut: timestamp,
-          checkOutLocationName: locationLabel,
-          checkOutLocation: { lat, lng },
-          checkOutManual: isManual,
+        const logAttendance = httpsCallable(functions, 'logAttendance');
+        await logAttendance({
+          type: 'check-out',
+          userId: user?.uid,
+          location: { lat, lng },
+          locationName: locationLabel,
+          isManual: isManual,
           workedMinutes: workedMinutes,
           overtimeMinutes: overtimeMinutes
         });
+
         toast.success(`تم تسجيل ${isManual ? 'الانصراف اليدوي' : 'الانصراف تلقائياً'} من: ${locationLabel}`);
       }
 

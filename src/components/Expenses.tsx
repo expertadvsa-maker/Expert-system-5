@@ -35,7 +35,8 @@ import {
   updateDoc,
   getDoc
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, functions } from '../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../lib/AuthContext';
 import { logActivity } from '../lib/activity';
 import {
@@ -133,7 +134,8 @@ export default function Expenses() {
     setIsSubmitting(true);
     try {
       const isManager = profile.role === 'manager';
-      await addDoc(collection(db, 'transactions'), {
+      const createTransaction = httpsCallable(functions, 'createTransaction');
+      await createTransaction({
         companyId: activeCompanyId || null,
         type: 'expense',
         amount: parseFloat(formData.amount),
@@ -143,10 +145,7 @@ export default function Expenses() {
         paymentMethod: formData.paymentMethod,
         bankAccountId: formData.bankAccountId || null,
         invoiceNumber: formData.invoiceNumber || null,
-        status: 'pending', // All manual invoices require approval now
-        date: serverTimestamp(),
-        createdBy: profile.uid,
-        createdAt: serverTimestamp()
+        status: 'pending' // All manual invoices require approval now
       });
 
       // No longer auto-deducting since it's pending approval

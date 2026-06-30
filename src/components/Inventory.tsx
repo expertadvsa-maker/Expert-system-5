@@ -17,6 +17,8 @@ import {
   Layers,
   ShoppingBag
 } from 'lucide-react';
+import { db, functions } from '../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { 
   collection, 
   query, 
@@ -30,7 +32,6 @@ import {
   where,
   increment
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { getCompanyQuery } from '../lib/firestoreUtils';
 import { useAuth } from '../lib/AuthContext';
 import { logActivity } from '../lib/activity';
@@ -100,13 +101,18 @@ export default function Inventory() {
     if (!profile) return;
     try {
       const qty = parseFloat(newItem.quantity);
-      await addDoc(collection(db, 'inventory'), {
-        ...newItem,
-        companyId: activeCompanyId || null,
-        quantity: qty,
-        reorderLevel: parseFloat(newItem.reorderLevel),
-        lastUpdated: new Date().toISOString()
+      const manageInventory = httpsCallable(functions, 'manageInventory');
+      await manageInventory({
+        action: 'add',
+        itemData: {
+          ...newItem,
+          companyId: activeCompanyId || null,
+          quantity: qty,
+          reorderLevel: parseFloat(newItem.reorderLevel)
+        },
+        notes: `إضافة مادة جديدة: ${newItem.name}`
       });
+
       await logActivity('إضافة مخزون', `تمت إضافة مادة جديدة: ${newItem.name}`, 'info', 'system', profile.uid);
       
       await sendNotification({
@@ -135,19 +141,12 @@ export default function Inventory() {
         return;
       }
 
-      await updateDoc(doc(db, 'inventory', itemId), {
-        quantity: increment(change),
-        lastUpdated: new Date().toISOString()
-      });
-
-      await addDoc(collection(db, 'inventoryLogs'), {
-        companyId: activeCompanyId || null,
+      const manageInventory = httpsCallable(functions, 'manageInventory');
+      await manageInventory({
+        action: 'adjust',
         itemId,
-        change,
-        reason,
-        userId: profile.uid,
-        userName: profile.name || 'موظف',
-        timestamp: new Date().toISOString()
+        quantity: change,
+        notes: reason
       });
 
       toast.success('تم تحديث المخزون بنجاح');

@@ -54,7 +54,8 @@ import {
   updateDoc,
   increment
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, functions } from '../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../lib/AuthContext';
 import { logActivity } from '../lib/activity';
 import PrintableReport from './PrintableReport';
@@ -266,7 +267,8 @@ export default function Purchases() {
     setIsSubmitting(true);
     try {
       // Create return transaction
-      const returnData: any = {
+      const createTransaction = httpsCallable(functions, 'createTransaction');
+      await createTransaction({
         type: 'purchase_return',
         amount: p.amount,
         taxAmount: p.taxAmount || 0,
@@ -274,23 +276,12 @@ export default function Purchases() {
         supplierName: p.supplierName || 'غير محدد',
         description: `إرجاع فاتورة شراء: ${p.description}`,
         category: p.category,
-        date: serverTimestamp(),
-        createdBy: profile?.uid,
         status: 'approved',
         projectId: p.projectId || null,
         originalPaymentMethod: p.paymentMethod || 'cash',
-        bankAccountId: p.bankAccountId || null,
-      };
-      
-      await addDoc(collection(db, 'transactions'), returnData);
-
-      // Refund bank if applicable
-      if (p.bankAccountId && p.paymentMethod !== 'credit') {
-        const bankRef = doc(db, 'bankAccounts', p.bankAccountId);
-        await updateDoc(bankRef, {
-          balance: increment(p.amount)
-        });
-      }
+        bankAccountId: p.paymentMethod !== 'credit' ? p.bankAccountId : null,
+        companyId: activeCompanyId || null
+      });
 
       toast.success('تم تسجيل المرتجع بنجاح');
       setIsReturnConfirmOpen(false);
@@ -471,12 +462,15 @@ export default function Purchases() {
         transactionData.approvedBy = profile.uid;
       }
 
-      const docRef = await addDoc(collection(db, 'transactions'), transactionData);
+      const createTransaction = httpsCallable(functions, 'createTransaction');
+      const docRefResult = await createTransaction(transactionData);
+      const docRef = { id: (docRefResult.data as any).transactionId };
 
       // ---- PROCUREMENT AUTOMATION: INVENTORY SYNC (AUTO-APPROVE) ----
       if (isAutoApproved) {
         try {
           const items = formData.items || [];
+          const manageInventory = httpsCallable(functions, 'manageInventory');
           for (const item of items) {
             const itemName = typeof item === 'string' ? item : (item.name || 'مادة غير معروفة');
             const qty = typeof item === 'object' && item.quantity ? Number(item.quantity) : 1;
@@ -491,19 +485,24 @@ export default function Purchases() {
             const matchedDoc = invSnap.docs.find(d => !d.data().companyId || d.data().companyId === activeCompanyId);
             
             if (matchedDoc) {
-              await updateDoc(doc(db, 'inventory', matchedDoc.id), {
-                quantity: increment(qty),
-                lastUpdated: new Date().toISOString()
+              await manageInventory({
+                action: 'adjust',
+                itemId: matchedDoc.id,
+                quantity: qty,
+                notes: `شراء مباشر آلي - فاتورة ${formData.invoiceNumber || 'بدون رقم'}`
               });
             } else {
-              await addDoc(collection(db, 'inventory'), {
-                name: itemName,
-                category: 'مواد مضافة آلياً',
-                quantity: qty,
-                unit: itemUnit,
-                reorderLevel: 5,
-                companyId: activeCompanyId || null,
-                lastUpdated: new Date().toISOString()
+              await manageInventory({
+                action: 'add',
+                itemData: {
+                  name: itemName,
+                  category: 'مواد مضافة آلياً',
+                  quantity: qty,
+                  unit: itemUnit,
+                  reorderLevel: 5,
+                  companyId: activeCompanyId || null
+                },
+                notes: `تمت إضافتها آلياً من فاتورة شراء - ${formData.invoiceNumber || 'بدون رقم'}`
               });
             }
           }

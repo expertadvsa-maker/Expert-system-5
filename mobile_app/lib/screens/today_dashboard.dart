@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../services/firebase_service.dart';
 import '../services/server_api_service.dart';
 import 'projects_screen.dart';
@@ -18,6 +20,7 @@ import 'settings_screen.dart';
 import 'employee_profile_screen.dart';
 import 'subcontractors_screen.dart';
 import 'assets_screen.dart';
+import '../widgets/floating_assistant.dart';
 
 class TodayDashboard extends StatefulWidget {
   const TodayDashboard({Key? key}) : super(key: key);
@@ -56,7 +59,6 @@ class _TodayDashboardState extends State<TodayDashboard> {
   // قيم الإعدادات العامة
   String _companyName = 'خبراء الرسم';
   String _announcement = '';
-  int _gpsRadius = 100;
 
   // التبويب النشط حالياً في الشريط السفلي
   int _currentTabIndex = 2;
@@ -375,71 +377,40 @@ class _TodayDashboardState extends State<TodayDashboard> {
 
     // قائمة الشاشات الخاصة بالتبويبات
     final List<Widget> screens = [
-      MoreScreen(firebaseService: _firebaseService, apiService: _apiService),
-      AlertsScreen(
+      MoreScreen(firebaseService: _firebaseService, apiService: _apiService), // 0
+      ProjectsScreen(firebaseService: _firebaseService), // 1
+      _buildTodayTabBody(status), // 2
+      AlertsScreen( // 3
         firebaseService: _firebaseService,
+        apiService: _apiService,
         onNavigateToTab: (index) {
           setState(() {
             _currentTabIndex = index;
           });
         },
       ),
-      _buildTodayTabBody(status),
-      ProjectsScreen(firebaseService: _firebaseService),
-      SalesScreen(firebaseService: _firebaseService, apiService: _apiService),
-      PurchasesScreen(firebaseService: _firebaseService, apiService: _apiService),
-      const SizedBox(), // Menu tab handled via openEndDrawer()
     ];
 
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF1F5F9), // Lighter background for floating effect
-      appBar: _buildAppBar(),
-      endDrawer: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.45, // Reduced by ~40%
-        child: _buildSideDrawer(context),
-      ),
-      body: Stack(
-        children: [
-          screens[_currentTabIndex],
-          // Swipe Hint for hidden drawer
-          Positioned(
-            right: 0,
-            top: MediaQuery.of(context).size.height / 3,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2C7A7D).withOpacity(0.9),
-                borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(-2, 0))],
-              ),
-              child: RotatedBox(
-                quarterTurns: 3,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.keyboard_double_arrow_up, color: Colors.white, size: 12),
-                    const SizedBox(width: 4),
-                    Text('اسحب للقائمة', style: GoogleFonts.cairo(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-            ),
+    return Stack(
+      children: [
+        Scaffold(
+          key: _scaffoldKey,
+          backgroundColor: const Color(0xFFF4F7FA), // Lighter background for floating effect
+          appBar: _buildAppBar(),
+          endDrawer: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.75, // Better drawer width
+            child: _buildSideDrawer(context),
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: null,
-        onPressed: () {
-          setState(() => _currentTabIndex = 2);
-          Navigator.push(context, MaterialPageRoute(builder: (context) => ScannerScreen(firebaseService: _firebaseService, apiService: _apiService)));
-        },
-        backgroundColor: const Color(0xFF2C7A7D),
-        elevation: 8,
-        child: const Icon(Icons.qr_code_scanner, color: Colors.white),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      bottomNavigationBar: _buildBottomNavBar(),
+          body: screens[_currentTabIndex],
+          extendBody: true, // Needed for floating bottom app bar
+          bottomNavigationBar: _buildModernBottomNavBar(),
+        ),
+        Positioned(
+          left: 16,
+          bottom: 110,
+          child: FloatingAssistant(apiService: _apiService),
+        ),
+      ],
     );
   }
 
@@ -453,14 +424,14 @@ class _TodayDashboardState extends State<TodayDashboard> {
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none, color: Color(0xFF0F172A), size: 24),
-              onPressed: () {
-                setState(() {
-                  _currentTabIndex = 1; // Switches to AlertsScreen tab
-                });
-              },
-            ),
+              IconButton(
+                icon: const Icon(Icons.notifications_none, color: Color(0xFF0F172A), size: 26),
+                onPressed: () {
+                  setState(() {
+                    _currentTabIndex = 3; // Switches to AlertsScreen tab
+                  });
+                },
+              ),
             if (_pendingApprovals + _criticalAlerts > 0)
               Positioned(
                 right: 6,
@@ -640,9 +611,11 @@ class _TodayDashboardState extends State<TodayDashboard> {
                     }),
                     _buildDrawerItem(Icons.star_outline, 'المقاولات الخاصة', () {
                       Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('سيتم تفعيل هذه الشاشة قريباً')));
                     }),
                     _buildDrawerItem(Icons.support_agent_outlined, 'إدارة المناديب', () {
                       Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('سيتم تفعيل هذه الشاشة قريباً')));
                     }),
                     _buildDrawerItem(Icons.shopping_cart_outlined, 'المشتريات', () {
                       Navigator.pop(context);
@@ -650,6 +623,7 @@ class _TodayDashboardState extends State<TodayDashboard> {
                     }),
                     _buildDrawerItem(Icons.local_shipping_outlined, 'الموردين', () {
                       Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('سيتم تفعيل هذه الشاشة قريباً')));
                     }),
                     _buildDrawerItem(Icons.qr_code_scanner, 'الماسح الذكي', () {
                       Navigator.pop(context);
@@ -940,117 +914,74 @@ class _TodayDashboardState extends State<TodayDashboard> {
   }
 
   Widget _buildSmartSummaryCard(Map<String, dynamic> status) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.white.withOpacity(0.6), Colors.white.withOpacity(0.2)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2C7A7D).withOpacity(0.05),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              )
-            ],
-          ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'الموجز الذكي الصباحي',
-                style: GoogleFonts.cairo(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[450],
-                ),
-              ),
-              GestureDetector(
-                onTap: _playVoiceReport,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0F172A),
-                    shape: BoxShape.circle,
-                  ),
-                  child: _isAudioLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : Icon(
-                          _isAudioPlaying ? Icons.pause : Icons.volume_up,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            status['title'],
-            style: GoogleFonts.cairo(
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            status['desc'],
-            style: GoogleFonts.cairo(
-              fontSize: 12,
-              color: Colors.grey[500],
-              height: 1.4,
-            ),
-          ),
-          if (_isAudioPlaying) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: List.generate(
-                8,
-                (index) => Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  width: 3,
-                  height: 10.0 + (index % 3) * 6,
-                  decoration: BoxDecoration(
-                    color: status['color'],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ),
+    return GestureDetector(
+      onTap: _playVoiceReport,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _isAudioPlaying ? const Color(0xFF2C7A7D) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: (_isAudioPlaying ? const Color(0xFF2C7A7D) : Colors.black).withOpacity(0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            )
           ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildTag('مالي حقيقي', status['color'], status['bgColor']),
-              const SizedBox(width: 8),
-              _buildTag('تحضير GPS', const Color(0xFF475569), const Color(0xFFF1F5F9)),
-              const SizedBox(width: 8),
-              _buildTag('ألف ياء ERP', const Color(0xFF475569), const Color(0xFFF1F5F9)),
-            ],
-          )
-        ],
-      ),
+          border: Border.all(color: _isAudioPlaying ? Colors.transparent : Colors.grey.withOpacity(0.1)),
         ),
-      ),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: _isAudioPlaying ? Colors.white.withOpacity(0.2) : const Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+              ),
+              child: _isAudioLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(14.0),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2C7A7D)),
+                    )
+                  : Icon(
+                      _isAudioPlaying ? Icons.multitrack_audio_rounded : Icons.play_arrow_rounded,
+                      color: _isAudioPlaying ? Colors.white : const Color(0xFF2C7A7D),
+                      size: 28,
+                    ),
+            ).animate(target: _isAudioPlaying ? 1 : 0).scale(begin: const Offset(1,1), end: const Offset(1.1, 1.1)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _isAudioPlaying ? 'جاري التحدث...' : 'الموجز الذكي الصباحي',
+                    style: GoogleFonts.cairo(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: _isAudioPlaying ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _isAudioPlaying ? 'انقر للإيقاف' : 'اضغط للاستماع لموجز أعمالك',
+                    style: GoogleFonts.cairo(
+                      fontSize: 11,
+                      color: _isAudioPlaying ? Colors.white70 : Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!_isAudioPlaying && !_isAudioLoading)
+              Icon(Icons.auto_awesome, color: const Color(0xFFF59E0B).withOpacity(0.8), size: 20)
+                  .animate(onPlay: (controller) => controller.repeat())
+                  .shimmer(duration: 2000.ms, color: Colors.white),
+          ],
+        ),
+      ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOut),
     );
   }
 
@@ -1137,69 +1068,74 @@ class _TodayDashboardState extends State<TodayDashboard> {
           ),
         ),
         const SizedBox(height: 8),
-        // المؤشرات المالية
-        Row(
-          children: [
-            _buildIndicatorCard('الواردات', _formatCurrency(_income), const Color(0xFF10B981), const Color(0xFFECFDF5)),
-            _buildIndicatorCard('المصاريف', _formatCurrency(totalExpenses), const Color(0xFFEF4444), const Color(0xFFFEF2F2)),
-            _buildIndicatorCard('صافي الربح', netText, netColor, netColor.withOpacity(0.08)),
-            _buildIndicatorCard('طلبات معلقة', '$_pendingApprovals', const Color(0xFFF59E0B), const Color(0xFFFEF3C7)),
-          ],
-        ),
-        const SizedBox(height: 6),
-        // المؤشرات التشغيلية
-        Row(
-          children: [
-            _buildIndicatorCard('المشاريع النشطة', '$_activeProjects', const Color(0xFF6366F1), const Color(0xFFEEF2FF)),
-            _buildIndicatorCard('عمال اليومية', '$_activeWorkers', const Color(0xFF14B8A6), const Color(0xFFF0FDF4)),
-            _buildIndicatorCard('الفريق الكلي', '$_employeesCount', const Color(0xFF64748B), const Color(0xFFF8FAFC)),
-            _buildIndicatorCard('الحضور اليوم', '$_todayAttendance', const Color(0xFF3B82F6), const Color(0xFFEFF6FF)),
-          ],
+        // المؤشرات المالية والتشغيلية بتمرير أفقي لتقليل الزحام
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: [
+              _buildIndicatorCard('الواردات', _formatCurrency(_income), const Color(0xFF10B981), const Color(0xFFECFDF5)),
+              _buildIndicatorCard('المصاريف', _formatCurrency(totalExpenses), const Color(0xFFEF4444), const Color(0xFFFEF2F2)),
+              _buildIndicatorCard('صافي الربح', netText, netColor, netColor.withOpacity(0.08)),
+              _buildIndicatorCard('طلبات معلقة', '$_pendingApprovals', const Color(0xFFF59E0B), const Color(0xFFFEF3C7)),
+              _buildIndicatorCard('المشاريع النشطة', '$_activeProjects', const Color(0xFF6366F1), const Color(0xFFEEF2FF)),
+              _buildIndicatorCard('عمال اليومية', '$_activeWorkers', const Color(0xFF14B8A6), const Color(0xFFF0FDF4)),
+              _buildIndicatorCard('الفريق الكلي', '$_employeesCount', const Color(0xFF64748B), const Color(0xFFF8FAFC)),
+              _buildIndicatorCard('الحضور اليوم', '$_todayAttendance', const Color(0xFF3B82F6), const Color(0xFFEFF6FF)),
+            ],
+          ),
         ),
       ],
     );
   }
 
   Widget _buildIndicatorCard(String title, String value, Color color, Color bgColor) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.grey.withOpacity(0.06)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: bgColor,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.circle, color: color, size: 6),
+    return Container(
+      width: 105, // Fixed width for horizontal scrolling
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.grey.withOpacity(0.06)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: bgColor,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 6),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.cairo(
-                fontSize: 9,
-                color: Colors.grey[500],
-                fontWeight: FontWeight.bold,
-              ),
+            child: Icon(Icons.circle, color: color, size: 8),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(
+              fontSize: 10,
+              color: Colors.grey[500],
+              fontWeight: FontWeight.bold,
             ),
-            Text(
-              value,
-              style: GoogleFonts.cairo(
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF0F172A),
-              ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: GoogleFonts.cairo(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -2651,9 +2587,9 @@ class _TodayDashboardState extends State<TodayDashboard> {
                     final amount = double.tryParse(amountController.text) ?? 0.0;
                     if (desc.isEmpty || amount <= 0) return;
 
-                    final firestore = _firebaseService.db;
-                    if (firestore != null) {
-                      await firestore.collection('transactions').add({
+                    try {
+                      final HttpsCallable createTransaction = FirebaseFunctions.instance.httpsCallable('createTransaction');
+                      await createTransaction.call({
                         'description': desc,
                         'amount': amount,
                         'type': type,
@@ -2661,6 +2597,8 @@ class _TodayDashboardState extends State<TodayDashboard> {
                         'date': DateTime.now().toIso8601String(),
                         'createdAt': DateTime.now().toIso8601String(),
                       });
+                    } catch (e) {
+                      print('Error creating transaction: $e');
                     }
 
                     Navigator.pop(context);
@@ -2764,9 +2702,8 @@ class _TodayDashboardState extends State<TodayDashboard> {
                               child: const Icon(Icons.check, color: Colors.white, size: 24),
                             ),
                             onDismissed: (dir) async {
-                              await _firebaseService.db?.collection('transactions').doc(doc.id).update({
-                                'status': 'approved',
-                              });
+                              final HttpsCallable approveTransaction = FirebaseFunctions.instance.httpsCallable('approveTransaction');
+                              await approveTransaction.call({'transactionId': doc.id});
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('✅ تم اعتماد الطلب: "$desc" بنجاح!', textDirection: TextDirection.rtl, style: GoogleFonts.cairo()),
@@ -2802,9 +2739,8 @@ class _TodayDashboardState extends State<TodayDashboard> {
                                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                                               ),
                                               onPressed: () async {
-                                                await _firebaseService.db?.collection('transactions').doc(doc.id).update({
-                                                  'status': 'approved',
-                                                });
+                                                final HttpsCallable approveTransaction = FirebaseFunctions.instance.httpsCallable('approveTransaction');
+                                                await approveTransaction.call({'transactionId': doc.id});
                                               },
                                               child: Text('اعتماد التوريد', style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.bold)),
                                             ),
@@ -2817,8 +2753,11 @@ class _TodayDashboardState extends State<TodayDashboard> {
                                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                                               ),
                                               onPressed: () async {
-                                                await _firebaseService.db?.collection('transactions').doc(doc.id).update({
-                                                  'status': 'rejected',
+                                                final HttpsCallable processApproval = FirebaseFunctions.instance.httpsCallable('processApproval');
+                                                await processApproval.call({
+                                                  'collectionName': 'transactions',
+                                                  'documentId': doc.id,
+                                                  'status': 'rejected'
                                                 });
                                               },
                                               child: Text('رفض الطلب', style: GoogleFonts.cairo(fontSize: 9.5)),
@@ -3211,70 +3150,144 @@ class _TodayDashboardState extends State<TodayDashboard> {
 
 
 
-  Widget _buildBottomNavBar() {
-    return Container(
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          )
-        ],
-      ),
-      child: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFF2C7A7D),
-        unselectedItemColor: Colors.grey[400],
-        selectedLabelStyle: GoogleFonts.cairo(fontSize: 9, fontWeight: FontWeight.bold),
-        unselectedLabelStyle: GoogleFonts.cairo(fontSize: 9),
-        currentIndex: _currentTabIndex,
-        onTap: (index) {
-          setState(() {
-            _currentTabIndex = index;
-          });
-        },
-        items: [
-          const BottomNavigationBarItem(icon: Icon(Icons.more_horiz, size: 22), label: 'المزيد'),
-          BottomNavigationBarItem(
-            icon: Stack(
+  Widget _buildModernBottomNavBar() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2C7A7D).withOpacity(0.15),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+            )
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: BottomAppBar(
+              color: Colors.transparent,
+              elevation: 0,
+              shape: const CircularNotchedRectangle(),
+              notchMargin: 8,
+              child: SizedBox(
+                height: 75,
+                child: Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildNavItem(2, Icons.home_rounded, 'الرئيسية'),
+                      _buildNavItem(1, Icons.grid_view_rounded, 'مشاريع'),
+                      _buildScannerButton(),
+                      _buildNavItem(3, Icons.notifications_rounded, 'تنبيهات', badge: _pendingApprovals + _criticalAlerts),
+                      _buildNavItem(0, Icons.more_horiz_rounded, 'المزيد'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ).animate().fadeIn(duration: 600.ms).slideY(begin: 1.0, end: 0.0, curve: Curves.easeOutBack),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label, {int badge = 0}) {
+    final isSelected = _currentTabIndex == index;
+    final color = isSelected ? const Color(0xFF2C7A7D) : Colors.grey[400]!;
+    
+    return InkWell(
+      onTap: () => setState(() => _currentTabIndex = index),
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.symmetric(horizontal: isSelected ? 10.0 : 6.0, vertical: 4.0),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF2C7A7D).withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
               clipBehavior: Clip.none,
               children: [
-                const Icon(Icons.notifications_none, size: 22),
-                if (_pendingApprovals + _criticalAlerts > 0)
+                Icon(icon, color: color, size: isSelected ? 24 : 22).animate(target: isSelected ? 1 : 0).scaleXY(end: 1.05),
+                if (badge > 0)
                   Positioned(
                     right: -4,
                     top: -4,
                     child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEF4444),
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
                         shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 14,
-                        minHeight: 14,
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFFEF4444).withOpacity(0.4), blurRadius: 4, offset: const Offset(0,2))
+                        ]
                       ),
                       child: Text(
-                        '${_pendingApprovals + _criticalAlerts}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
+                        '$badge',
+                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
                       ),
-                    ),
+                    ).animate().scale(delay: 200.ms),
                   ),
               ],
             ),
-            label: 'تنبيهات',
-          ),
-          const BottomNavigationBarItem(icon: Icon(Icons.home_outlined, size: 22), label: 'اليوم'),
-          const BottomNavigationBarItem(icon: Icon(Icons.grid_view_outlined, size: 21), label: 'مشاريع'),
-          const BottomNavigationBarItem(icon: Icon(Icons.qr_code_scanner, size: 21), label: 'ماسح'),
-        ],
+            if (isSelected) ...[
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: GoogleFonts.cairo(
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ).animate().fadeIn(duration: 200.ms).slideY(begin: 0.5, end: 0),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScannerButton() {
+    return InkWell(
+      onTap: () {
+        Navigator.push(context, MaterialPageRoute(builder: (context) => ScannerScreen(firebaseService: _firebaseService, apiService: _apiService)));
+      },
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2C7A7D).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.qr_code_scanner, color: Color(0xFF2C7A7D), size: 22),
+            const SizedBox(height: 2),
+            Text(
+              'مسح',
+              style: GoogleFonts.cairo(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF2C7A7D),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

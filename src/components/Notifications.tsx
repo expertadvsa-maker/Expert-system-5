@@ -68,13 +68,22 @@ export default function Notifications() {
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({
+      let docs = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         timeStr: doc.data().timestamp?.toDate?.()?.toLocaleString('ar-SA', {
           month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         }) || 'منذ قليل'
       } as AppNotification & { timeStr: string }));
+
+      // Deduplicate notifications with the same title and message
+      const seen = new Set();
+      docs = docs.filter(doc => {
+        const key = `${doc.title}-${doc.message}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
       setNotifications(docs);
       setLoading(false);

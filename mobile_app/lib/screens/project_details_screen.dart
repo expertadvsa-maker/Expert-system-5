@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
@@ -184,6 +185,52 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> with Single
                         valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFBBF24)),
                         minHeight: 8,
                       ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // Project Status Sync Control
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.sync_alt, color: Color(0xFF2C7A7D), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Text('حالة المشروع:', style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A))),
+                    const Spacer(),
+                    DropdownButton<String>(
+                      value: data['status'] ?? 'active',
+                      underline: const SizedBox(),
+                      icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF2C7A7D)),
+                      style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF2C7A7D)),
+                      onChanged: (String? newValue) {
+                        if (newValue != null) {
+                          FirebaseFirestore.instance.collection('projects').doc(widget.projectId).update({'status': newValue});
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('تم تحديث حالة المشروع بنجاح', style: GoogleFonts.cairo()),
+                            backgroundColor: const Color(0xFF2C7A7D),
+                          ));
+                        }
+                      },
+                      items: const [
+                        DropdownMenuItem(value: 'active', child: Text('قيد التنفيذ')),
+                        DropdownMenuItem(value: 'completed', child: Text('مكتمل')),
+                        DropdownMenuItem(value: 'on-hold', child: Text('متوقف مؤقتاً')),
+                      ],
                     ),
                   ],
                 ),
@@ -618,6 +665,152 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> with Single
     );
   }
 
+  void _showMilestoneTasksBottomSheet(List<dynamic> milestones, int mIndex, Map<String, String> workerNames) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final milestone = milestones[mIndex] as Map<String, dynamic>;
+            final tasks = List<dynamic>.from(milestone['tasks'] ?? []);
+            final mTitle = milestone['title'] ?? 'المرحلة';
+
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.all(24),
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+              child: Directionality(
+                textDirection: TextDirection.rtl,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text('مهام المرحلة: $mTitle', style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A))),
+                    const Divider(height: 24),
+                    Expanded(
+                      child: tasks.isEmpty
+                          ? Center(child: Text('لا توجد مهام حالياً.', style: GoogleFonts.cairo(color: Colors.grey[500])))
+                          : ListView.builder(
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: tasks.length,
+                              itemBuilder: (context, tIndex) {
+                                final task = tasks[tIndex] as Map<String, dynamic>;
+                                final isTaskCompleted = task['status'] == 'completed';
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                                  ),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                                    leading: InkWell(
+                                      onTap: () {
+                                        setModalState(() {
+                                          task['status'] = isTaskCompleted ? 'pending' : 'completed';
+                                          milestone['tasks'] = tasks;
+                                          FirebaseFirestore.instance.collection('projects').doc(widget.projectId).update({'milestones': milestones});
+                                        });
+                                      },
+                                      child: Icon(
+                                        isTaskCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+                                        color: isTaskCompleted ? const Color(0xFF10B981) : Colors.grey[400],
+                                      ),
+                                    ),
+                                    title: Text(
+                                      task['title'] ?? 'بدون عنوان',
+                                      style: GoogleFonts.cairo(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        decoration: isTaskCompleted ? TextDecoration.lineThrough : null,
+                                        color: isTaskCompleted ? Colors.grey[500] : const Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                                      onPressed: () {
+                                        setModalState(() {
+                                          tasks.removeAt(tIndex);
+                                          milestone['tasks'] = tasks;
+                                          FirebaseFirestore.instance.collection('projects').doc(widget.projectId).update({'milestones': milestones});
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        // Quick add task
+                        final tc = TextEditingController();
+                        showDialog(
+                          context: context,
+                          builder: (c) => Directionality(
+                            textDirection: TextDirection.rtl,
+                            child: AlertDialog(
+                              title: Text('إضافة مهمة جديدة', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16)),
+                              content: TextField(
+                                controller: tc,
+                                decoration: InputDecoration(hintText: 'عنوان المهمة', hintStyle: GoogleFonts.cairo(fontSize: 13)),
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(c), child: Text('إلغاء', style: GoogleFonts.cairo(color: Colors.grey))),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    if (tc.text.trim().isNotEmpty) {
+                                      setModalState(() {
+                                        tasks.add({
+                                          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+                                          'title': tc.text.trim(),
+                                          'status': 'pending',
+                                        });
+                                        milestone['tasks'] = tasks;
+                                        FirebaseFirestore.instance.collection('projects').doc(widget.projectId).update({'milestones': milestones});
+                                      });
+                                    }
+                                    Navigator.pop(c);
+                                  },
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C7A7D)),
+                                  child: Text('إضافة', style: GoogleFonts.cairo(color: Colors.white)),
+                                )
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add, size: 18, color: Colors.white),
+                      label: Text('مهمة جديدة', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2C7A7D),
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildMilestonesTab(Map<String, dynamic> data) {
     final milestones = data['milestones'] as List<dynamic>? ?? [];
     
@@ -807,13 +1000,31 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> with Single
                               ],
                               const SizedBox(height: 12),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
                                     onPressed: () => _deleteMilestone(milestones, index),
                                   ),
-                                  const SizedBox(width: 10),
+                                  const SizedBox(width: 4),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _showMilestoneTasksBottomSheet(milestones, index, workerNames),
+                                    icon: const Icon(Icons.list_alt, size: 14, color: Color(0xFF2C7A7D)),
+                                    label: Text(
+                                      'المهام (${(milestone['tasks'] as List?)?.length ?? 0})',
+                                      style: GoogleFonts.cairo(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF2C7A7D),
+                                      ),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFE6F4F4),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    ),
+                                  ),
+                                  const Spacer(),
                                   ElevatedButton.icon(
                                     onPressed: () => _toggleMilestone(milestones, index),
                                     icon: Icon(
@@ -822,7 +1033,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> with Single
                                       color: isCompleted ? Colors.white : const Color(0xFF0F172A),
                                     ),
                                     label: Text(
-                                      isCompleted ? 'مكتملة معتمدة' : 'اعتماد المرحلة',
+                                      isCompleted ? 'معتمدة' : 'اعتماد',
                                       style: GoogleFonts.cairo(
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
@@ -936,27 +1147,81 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> with Single
           return bTime.compareTo(aTime);
         });
 
+        double totalIncome = 0;
+        double totalExpense = 0;
+        for (var doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final amount = double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0;
+          if (data['type'] == 'income') {
+            totalIncome += amount;
+          } else {
+            totalExpense += amount;
+          }
+        }
+        final profit = totalIncome - totalExpense;
+
         return Column(
           children: [
+            Container(
+              margin: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(20.0),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2C7A7D), Color(0xFF1E5658)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFF2C7A7D).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Text('صافي الأرباح', style: GoogleFonts.cairo(color: Colors.white70, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Text('${profit.toStringAsFixed(0)} ر.س', style: GoogleFonts.cairo(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        children: [
+                          Text('المدخولات', style: GoogleFonts.cairo(color: Colors.white70, fontSize: 10)),
+                          Text('${totalIncome.toStringAsFixed(0)} ر.س', style: GoogleFonts.cairo(color: const Color(0xFF34D399), fontSize: 14, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      Container(height: 30, width: 1, color: Colors.white30),
+                      Column(
+                        children: [
+                          Text('المصروفات', style: GoogleFonts.cairo(color: Colors.white70, fontSize: 10)),
+                          Text('${totalExpense.toStringAsFixed(0)} ر.س', style: GoogleFonts.cairo(color: const Color(0xFFF87171), fontSize: 14, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () => _showAddTransactionDialog(context, widget.projectId, 'income'),
-                      icon: const Icon(Icons.add, size: 16),
-                      label: Text('دفعة عميل', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                      icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                      label: Text('دفعة عميل', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () => _showAddTransactionDialog(context, widget.projectId, 'expense'),
-                      icon: const Icon(Icons.remove, size: 16),
-                      label: Text('تسجيل مصروف', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      icon: const Icon(Icons.remove, size: 16, color: Colors.white),
+                      label: Text('تسجيل مصروف', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                     ),
                   ),
                 ],
@@ -1339,7 +1604,6 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> with Single
   }
 
   Widget _buildChatTab(Map<String, dynamic> projectData) {
-    final clientName = projectData['clientName'] ?? 'العميل';
     final clientPhone = projectData['clientPhone'] ?? '';
     final clientEmail = projectData['clientEmail'] ?? '';
     final clientRating = projectData['clientRating'] ?? 0;
@@ -2344,11 +2608,13 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> with Single
               style: ElevatedButton.styleFrom(backgroundColor: type == 'income' ? Colors.green : Colors.red),
               onPressed: () async {
                 if (amountCtrl.text.isEmpty || descCtrl.text.isEmpty) return;
-                await FirebaseFirestore.instance.collection('transactions').add({
+                final HttpsCallable createTransaction = FirebaseFunctions.instance.httpsCallable('createTransaction');
+                await createTransaction.call({
                   'projectId': projectId,
                   'amount': double.tryParse(amountCtrl.text) ?? 0.0,
                   'description': descCtrl.text,
                   'type': type,
+                  'status': 'pending', // المدير يعتمدها
                   'createdAt': DateTime.now().toIso8601String(),
                   'date': DateTime.now().toIso8601String(),
                 });

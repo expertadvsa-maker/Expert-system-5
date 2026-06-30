@@ -497,7 +497,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                           'clientName': clientNameCtrl.text.trim(),
                           'clientPhone': clientPhoneCtrl.text.trim(),
                           'contractValue': double.tryParse(budgetCtrl.text.trim()) ?? 0.0,
+                          'budget': double.tryParse(budgetCtrl.text.trim()) ?? 0.0, // Web expects budget
                           'startDate': startDateCtrl.text.trim().isNotEmpty ? startDateCtrl.text.trim() : DateTime.now().toIso8601String().split('T')[0],
+                          'status': 'active', // Web sync
+                          'priority': 'medium', // Web sync
+                          'progress': 0, // Web sync
+                          'phases': [], // Web sync
+                          'description': '', // Web sync
+                          'createdAt': DateTime.now().toIso8601String(),
                         });
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم إضافة المشروع بنجاح', style: GoogleFonts.cairo()), backgroundColor: const Color(0xFF2C7A7D)));
                       },

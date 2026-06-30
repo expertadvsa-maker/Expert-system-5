@@ -17,6 +17,35 @@
       ]
     },
     {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dedupKey", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "aliphia_invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "syncedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "aliphia_clients",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "syncedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "aliphia_quotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "syncedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "quotations",
       "queryScope": "COLLECTION",
       "fields": [

@@ -219,6 +219,8 @@ class _AssetsScreenState extends State<AssetsScreen> with SingleTickerProviderSt
         ),
       ],
     );
+  }
+
   Widget _buildInventoryTab() {
     return Column(
       children: [

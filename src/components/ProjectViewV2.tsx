@@ -73,8 +73,9 @@ import {
   deleteDoc,
   getDocs
 } from 'firebase/firestore';
-import { db, auth, storage } from '../lib/firebase';
+import { db, auth, storage, functions } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
 import { sendWhatsappMessage } from '../lib/whatsapp';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 import { toast } from 'sonner';
@@ -899,10 +900,21 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
       const allCompleted = newMilestones.length > 0 && newMilestones.every(m => m.status === 'completed');
       const nextStatus = allCompleted ? 'completed' : 'active';
 
-      await updateDoc(doc(db, 'projects', projectId), {
-        milestones: newMilestones,
-        status: nextStatus
-      });
+      if (nextStatus !== project.status) {
+        const updateLifecycle = httpsCallable(functions, 'updateProjectLifecycle');
+        await updateLifecycle({
+          projectId: projectId,
+          newStatus: nextStatus,
+          materialsUsed: nextStatus === 'completed' ? (project.materialsList || []) : []
+        });
+        await updateDoc(doc(db, 'projects', projectId), {
+          milestones: newMilestones
+        });
+      } else {
+        await updateDoc(doc(db, 'projects', projectId), {
+          milestones: newMilestones
+        });
+      }
       
       const newlyCompleted = newMilestones.find(m => m.title === stageTitle)?.status === 'completed';
       if (newlyCompleted) {
@@ -1007,7 +1019,12 @@ export default function ProjectViewV2({ projectId, onBack }: ProjectViewV2Props)
                  <button 
                     onClick={async () => {
                        try {
-                          await updateDoc(doc(db, 'projects', project.id), { status: 'active' });
+                          const updateLifecycle = httpsCallable(functions, 'updateProjectLifecycle');
+                          await updateLifecycle({
+                            projectId: project.id,
+                            newStatus: 'active',
+                            materialsUsed: []
+                          });
                           toast.success('تم تحويل المشروع إلى قيد التنفيذ وبدء العمل!');
                        } catch(err) {
                           toast.error('حدث خطأ أثناء تفعيل المشروع');
