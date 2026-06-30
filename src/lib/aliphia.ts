@@ -46,12 +46,23 @@ const aliphiaFetch = async (path: string, options: RequestInit = {}): Promise<Re
       () => `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`
     ];
 
+    // إزالة هيدرز الكاش لتجنب فشل CORS Preflight على البروكسي الخارجي
+    const cleanHeaders = { ...(finalOptions.headers || {}) } as Record<string, string>;
+    delete cleanHeaders['Cache-Control'];
+    delete cleanHeaders['Pragma'];
+    delete cleanHeaders['Expires'];
+    
+    const fallbackOptions = {
+      ...finalOptions,
+      headers: cleanHeaders
+    };
+
     let lastError: any = error;
     for (let i = 0; i < proxies.length; i++) {
       try {
         const proxiedUrl = proxies[i]();
         console.log(`🔌 [Aliphia Fallback] Attempting connection via proxy #${i + 1}: ${proxiedUrl}`);
-        const response = await fetch(proxiedUrl, { ...finalOptions });
+        const response = await fetch(proxiedUrl, fallbackOptions);
         if (response.ok || response.status < 500) {
           return response;
         }
